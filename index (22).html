@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consultoria Express 4D — ENEDES Rota Empreendedora</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #2d6a4f;
+    --green-light: #74c69d;
+    --navy: #1d3557;
+    --navy2: #2d4a8a;
+    --amber: #e07a5f;
+    --purple: #7b2d8b;
+    --blue: #457b9d;
+    --bg: #f0f4f8;
+    --card: #ffffff;
+    --border: #dde3ec;
+    --text: #1a2035;
+    --muted: #6b7c93;
+    --soft: #f8fafd;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* HEADER */
+  header {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy2) 100%);
+    padding: 0 24px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.2);
+  }
+  .header-inner {
+    max-width: 860px; margin: 0 auto; padding: 18px 0;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  }
+  .header-tag { color: var(--green-light); font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 3px; }
+  .header-title { color: #fff; font-family: 'DM Serif Display', serif; font-size: 22px; }
+  .header-sub { color: #a8b8d8; font-size: 12px; margin-top: 2px; }
+  .header-btns { display: flex; gap: 8px; }
+  .btn-primary {
+    padding: 9px 18px; border-radius: 8px; border: none;
+    background: var(--green); color: #fff; cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 700;
+    transition: background 0.2s;
+  }
+  .btn-primary:hover { background: #1f4d38; }
+  .btn-outline {
+    padding: 9px 18px; border-radius: 8px;
+    border: 1.5px solid rgba(255,255,255,0.25); background: transparent;
+    color: #fff; cursor: pointer; font-family: inherit; font-size: 13px;
+    transition: background 0.2s;
+  }
+  .btn-outline:hover { background: rgba(255,255,255,0.1); }
+  .badge-count {
+    background: var(--amber); color: #fff; border-radius: 10px;
+    font-size: 11px; padding: 1px 7px; margin-left: 4px;
+  }
+
+  /* MAIN */
+  .main { max-width: 860px; margin: 0 auto; padding: 28px 16px; }
+
+  /* STEP BAR */
+  .stepbar { display: flex; align-items: center; margin-bottom: 28px; overflow-x: auto; padding-bottom: 4px; }
+  .step-item { display: flex; flex-direction: column; align-items: center; min-width: 64px; }
+  .step-circle {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; transition: all 0.3s;
+    background: #e8edf5; color: #a0aec0;
+  }
+  .step-circle.active { color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
+  .step-circle.done { background: var(--green) !important; color: #fff; }
+  .step-label { font-size: 10px; margin-top: 4px; color: #a0aec0; font-weight: 400; text-align: center; white-space: nowrap; transition: color 0.3s; }
+  .step-label.active { font-weight: 700; }
+  .step-line { flex: 1; height: 2px; background: #e8edf5; margin: 0 6px; margin-bottom: 18px; transition: background 0.3s; }
+  .step-line.done { background: var(--green); }
+
+  /* CARD */
+  .card {
+    background: var(--card); border-radius: 16px; padding: 28px;
+    border: 1px solid var(--border); box-shadow: 0 2px 20px rgba(0,0,0,0.05);
+    margin-bottom: 20px; animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  .step-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .step-icon { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .step-title { font-family: 'DM Serif Display', serif; font-size: 20px; }
+  .step-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+  /* FORM FIELDS */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .full { grid-column: 1 / -1; }
+  .fg { margin-bottom: 16px; }
+  label.lbl {
+    display: block; font-size: 11px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 6px;
+  }
+  input[type=text], input[type=email], input[type=date], select, textarea {
+    width: 100%; padding: 9px 13px; border: 1.5px solid var(--border);
+    border-radius: 8px; font-size: 14px; font-family: inherit;
+    background: var(--soft); color: var(--text); outline: none;
+    transition: border-color 0.2s;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--green); }
+  select { appearance: none; cursor: pointer; }
+  textarea { resize: vertical; line-height: 1.6; }
+
+  .radio-group, .check-group { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .radio-item, .check-item {
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer; padding: 5px 0; font-size: 14px; color: #2d3748;
+  }
+  .radio-item input, .check-item input { width: 16px; height: 16px; accent-color: var(--green); cursor: pointer; }
+
+  /* PILARES */
+  .pilar-card {
+    background: var(--soft); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+  }
+  .pilar-name { font-weight: 700; font-size: 14px; color: var(--navy); margin-bottom: 10px; }
+  .pilar-stars { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .pilar-stars span { font-size: 12px; color: var(--muted); min-width: 40px; }
+  .star-btn {
+    width: 34px; height: 34px; border-radius: 6px; border: 1.5px solid var(--border);
+    cursor: pointer; font-weight: 700; font-size: 13px; font-family: inherit;
+    background: #fff; color: var(--muted); transition: all 0.15s;
+  }
+  .star-btn.active { background: var(--purple); border-color: var(--purple); color: #fff; }
+  .pilar-obs { width: 100%; padding: 7px 11px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff; color: var(--text); outline: none; }
+
+  /* AÇÕES */
+  .acao-card {
+    background: #fef8f5; border: 1px solid #f0d5c8;
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+  }
+  .acao-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .acao-label { font-size: 12px; font-weight: 700; color: var(--amber); letter-spacing: 1px; }
+  .acao-remove { background: none; border: none; color: #a0aec0; cursor: pointer; font-size: 18px; padding: 0; line-height: 1; }
+  .acao-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .acao-full { grid-column: 1 / -1; }
+  .acao-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff; color: var(--text); outline: none; }
+  .acao-lbl { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .add-acao {
+    width: 100%; padding: 10px; border: 1.5px dashed var(--green);
+    border-radius: 8px; background: transparent; color: var(--green);
+    cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700;
+    transition: background 0.2s;
+  }
+  .add-acao:hover { background: #f0f9f4; }
+
+  /* NPS */
+  .nps-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .nps-btn {
+    width: 36px; height: 36px; border-radius: 8px; border: 1.5px solid var(--border);
+    cursor: pointer; font-weight: 700; font-size: 13px; font-family: inherit;
+    background: var(--soft); color: var(--muted); transition: all 0.15s;
+  }
+  .nps-btn.active { background: var(--green); border-color: var(--green); color: #fff; }
+
+  /* NAVIGATION */
+  .nav { display: flex; justify-content: space-between; align-items: center; }
+  .btn-back {
+    padding: 10px 24px; border-radius: 8px; border: 1.5px solid var(--border);
+    background: #fff; color: var(--muted); cursor: pointer;
+    font-family: inherit; font-size: 14px; transition: background 0.2s;
+  }
+  .btn-back:hover { background: var(--bg); }
+  .btn-next {
+    padding: 10px 28px; border-radius: 8px; border: none;
+    color: #fff; cursor: pointer; font-family: inherit;
+    font-size: 14px; font-weight: 700; transition: opacity 0.2s;
+  }
+  .btn-next:hover { opacity: 0.88; }
+  .btn-save {
+    padding: 10px 32px; border-radius: 8px; border: none;
+    background: var(--green); color: #fff; cursor: pointer;
+    font-family: inherit; font-size: 15px; font-weight: 700; transition: background 0.3s;
+  }
+  .btn-save:disabled { opacity: 0.7; cursor: default; }
+  .btn-save.success { background: #27ae60; }
+
+  /* PROGRESS */
+  .progress { display: flex; gap: 6px; margin-top: 16px; }
+  .progress-bar { height: 4px; flex: 1; border-radius: 4px; background: var(--border); transition: background 0.3s; }
+
+  /* ALERTS */
+  .alert-err { margin-top: 12px; color: #e53e3e; font-size: 13px; background: #fff5f5; border: 1px solid #fed7d7; border-radius: 8px; padding: 10px 14px; }
+  .alert-ok { margin-top: 12px; color: var(--green); font-size: 13px; background: #f0f9f4; border: 1px solid #b7e4c7; border-radius: 8px; padding: 10px 14px; }
+  .alert-info { background: #fffbea; border: 1px solid #f6e05e; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #744210; }
+  .alert-pos { background: #f0f9f4; border: 1px solid #b7e4c7; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: var(--green); }
+
+  /* LIST */
+  .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+  .list-title { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--navy); }
+  .list-total { font-size: 13px; color: var(--muted); }
+  .empty-state { background: #fff; border-radius: 16px; padding: 56px; text-align: center; color: #a0aec0; border: 1px solid var(--border); }
+  .empty-icon { font-size: 44px; margin-bottom: 12px; }
+  .empty-title { font-size: 16px; font-weight: 600; color: #6b7c93; }
+  .empty-sub { font-size: 13px; margin-top: 6px; }
+  .record-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; cursor: pointer; margin-bottom: 10px;
+    transition: all 0.2s;
+  }
+  .record-card:hover { box-shadow: 0 6px 20px rgba(45,106,79,0.12); transform: translateY(-1px); }
+  .record-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .record-name { font-weight: 700; font-size: 16px; color: var(--text); margin-bottom: 2px; }
+  .record-sub { font-size: 13px; color: var(--muted); }
+  .record-date { background: #e8f0fe; color: var(--navy); font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+  .record-meta { font-size: 12px; color: #a0aec0; margin-top: 6px; }
+
+  /* DETAIL */
+  .detail-back { background: none; border: none; color: var(--green); cursor: pointer; font-family: inherit; font-size: 14px; margin-bottom: 16px; padding: 0; font-weight: 700; }
+  .detail-name { font-family: 'DM Serif Display', serif; font-size: 24px; margin-bottom: 4px; }
+  .detail-meta { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .detail-section { margin-bottom: 22px; }
+  .detail-section-title {
+    font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--green); border-bottom: 2px solid rgba(45,106,79,0.15);
+    padding-bottom: 6px; margin-bottom: 12px;
+  }
+  .detail-field { margin-bottom: 10px; }
+  .detail-field-label { font-size: 11px; color: #a0aec0; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px; }
+  .detail-field-value { font-size: 14px; color: var(--text); line-height: 1.6; }
+
+  @media (max-width: 600px) {
+    .grid2 { grid-template-columns: 1fr; }
+    .full { grid-column: auto; }
+    .radio-group, .check-group { grid-template-columns: 1fr; }
+    .acao-grid { grid-template-columns: 1fr; }
+    .acao-full { grid-column: auto; }
+    .header-inner { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div>
+      <div class="header-tag">ENEDES · Rota Empreendedora</div>
+      <div class="header-title">Consultoria Express 4D</div>
+      <div class="header-sub">Ceilândia · 17 e 18 de março de 2025</div>
+    </div>
+    <div class="header-btns">
+      <button class="btn-primary" onclick="showScreen('form')">+ Novo Atendimento</button>
+      <button class="btn-outline" onclick="showScreen('list')">Registros <span class="badge-count" id="badge">0</span></button>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+  <!-- LIST -->
+  <div id="screen-list">
+    <div class="list-header">
+      <div class="list-title">Atendimentos Registrados</div>
+      <div class="list-total">Total: <strong id="total-count">0</strong></div>
+    </div>
+    <div class="alert-info">
+      <strong>📊 Google Sheets:</strong> Cada atendimento salvo é enviado automaticamente para a planilha <strong>"Rota Enedes"</strong>.
+    </div>
+    <div id="records-container">
+      <div class="empty-state">
+        <div class="empty-icon">🚀</div>
+        <div class="empty-title">Nenhum atendimento ainda</div>
+        <div class="empty-sub">Clique em "Novo Atendimento" para começar.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FORM -->
+  <div id="screen-form" style="display:none">
+    <!-- Step Bar -->
+    <div class="stepbar" id="stepbar"></div>
+
+    <div class="card" id="form-card">
+      <div class="step-header">
+        <div class="step-icon" id="step-icon"></div>
+        <div>
+          <div class="step-title" id="step-title"></div>
+          <div class="step-sub" id="step-sub"></div>
+        </div>
+      </div>
+      <div id="step-content"></div>
+      <div id="alert-err" class="alert-err" style="display:none"></div>
+      <div id="alert-ok" class="alert-ok" style="display:none"></div>
+    </div>
+
+    <div class="nav">
+      <button class="btn-back" id="btn-back" onclick="navBack()">Cancelar</button>
+      <button class="btn-next" id="btn-next" onclick="navNext()">Próximo →</button>
+    </div>
+    <div class="progress" id="progress-bar"></div>
+  </div>
+
+  <!-- DETAIL -->
+  <div id="screen-detail" style="display:none">
+    <button class="detail-back" onclick="showScreen('list')">← Voltar</button>
+    <div class="card" id="detail-content"></div>
+  </div>
+</div>
+
+<script>
+// ===================== CONFIG =====================
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxv8DqJeJENCHC3ffiSLyih-rhdygjdx6rkE3lPPaz3jjY0_PJu5BUK1OUc8TyFl0DQ/exec";
+const LOCAL_KEY = "rota_enedes_v1";
+
+// ===================== STATE =====================
+const STEPS = [
+  { label: "Identificação", icon: "📋", color: "#2d6a4f" },
+  { label: "Diagnosticar",  icon: "🔎", color: "#1d3557" },
+  { label: "Direcionar",    icon: "🎯", color: "#7b2d8b" },
+  { label: "Desenvolver",   icon: "🛠",  color: "#e07a5f" },
+  { label: "Resultados",    icon: "📊", color: "#457b9d" },
+];
+
+const SEGMENTOS = ["Alimentação e Bebidas","Moda e Vestuário","Beleza e Estética","Saúde e Bem-estar","Tecnologia","Educação","Construção e Reforma","Comércio Varejista","Serviços Gerais","Artesanato","Transporte e Logística","Outro"];
+const ESTAGIOS = ["Ideação","Início de operação","Até 2 anos de mercado","Mais de 2 anos"];
+const DESAFIOS = ["Baixo faturamento","Falta de clientes","Dificuldade em precificação","Organização financeira","Marketing digital","Gestão de tempo","Processos internos"];
+const PILARES = ["Produto/Serviço","Vendas/Marketing","Finanças","Gestão/Processos"];
+const COMPROMISSOS = ["Compromete-se a executar o plano","Participará do encontro de acompanhamento","Monitorará os indicadores definidos"];
+
+let currentStep = 0;
+let records = [];
+let form = newForm();
+let selectedRecord = null;
+
+function newForm() {
+  return {
+    nomeEmpreendedor:"", nomeNegocio:"", cnpj:"", segmento:"", data:"", formato:"", nomeMentor:"",
+    estagio:"", desafios:[], desafioOutro:"",
+    pilares:{ "Produto/Serviço":{nota:"",obs:""}, "Vendas/Marketing":{nota:"",obs:""}, "Finanças":{nota:"",obs:""}, "Gestão/Processos":{nota:"",obs:""} },
+    problemaCentral:"", causaPrincipal:"", metaSMART:"", kpi:"", prazoFoco:"",
+    acoes:[{acao:"",como:"",responsavel:"",prazo:"",indicador:""}],
+    compromissos:[], obsAdicionais:"",
+    dataRetorno:"", resultados:"", ajustes:"", proximosPassos:"", nps:"", comentarioNPS:""
+  };
+}
+
+// ===================== STORAGE =====================
+function loadRecords() {
+  try { records = JSON.parse(localStorage.getItem(LOCAL_KEY) || "[]"); } catch { records = []; }
+}
+function saveRecord(rec) {
+  records.push(rec);
+  try { localStorage.setItem(LOCAL_KEY, JSON.stringify(records)); } catch {}
+}
+
+// ===================== SCREENS =====================
+function showScreen(name) {
+  document.getElementById("screen-list").style.display = name === "list" ? "block" : "none";
+  document.getElementById("screen-form").style.display = name === "form" ? "block" : "none";
+  document.getElementById("screen-detail").style.display = name === "detail" ? "block" : "none";
+  if (name === "list") renderList();
+  if (name === "form") { form = newForm(); currentStep = 0; renderForm(); }
+  if (name === "detail") renderDetail();
+}
+
+// ===================== RENDER LIST =====================
+function renderList() {
+  loadRecords();
+  document.getElementById("badge").textContent = records.length;
+  document.getElementById("total-count").textContent = records.length;
+  const c = document.getElementById("records-container");
+  if (records.length === 0) {
+    c.innerHTML = `<div class="empty-state"><div class="empty-icon">🚀</div><div class="empty-title">Nenhum atendimento ainda</div><div class="empty-sub">Clique em "Novo Atendimento" para começar.</div></div>`;
+    return;
+  }
+  c.innerHTML = records.map((r, i) => `
+    <div class="record-card" onclick="openDetail(${i})">
+      <div class="record-top">
+        <div>
+          <div class="record-name">${r.nomeEmpreendedor || "—"}</div>
+          <div class="record-sub">${r.nomeNegocio ? r.nomeNegocio + " · " : ""}${r.segmento || ""}</div>
+        </div>
+        <div class="record-date">${r.data || r.savedAt || ""}</div>
+      </div>
+      <div class="record-meta">Consultor: ${r.nomeMentor || "—"} · ${r.estagio || ""}</div>
+    </div>
+  `).join("");
+}
+
+function openDetail(i) {
+  selectedRecord = records[i];
+  showScreen("detail");
+}
+
+// ===================== RENDER DETAIL =====================
+function renderDetail() {
+  const r = selectedRecord;
+  if (!r) return;
+  const el = document.getElementById("detail-content");
+  const row = (lbl, val) => val ? `<div class="detail-field"><div class="detail-field-label">${lbl}</div><div class="detail-field-value">${val}</div></div>` : "";
+  el.innerHTML = `
+    <div class="detail-name">${r.nomeEmpreendedor}</div>
+    <div class="detail-meta">${r.nomeNegocio || ""} · Mentor: ${r.nomeMentor || "—"} · ${r.savedAt || ""}</div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">1. Identificação</div>
+      ${row("Segmento", r.segmento)} ${row("Estágio", r.estagio)} ${row("Formato", r.formato)} ${row("CNPJ", r.cnpj)}
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">2. Diagnóstico</div>
+      ${row("Desafios", (r.desafios||[]).join(", "))}
+      ${PILARES.map(p => row(`Pilar ${p}`, r.pilares?.[p]?.nota ? `${r.pilares[p].nota}/5${r.pilares[p].obs ? " — " + r.pilares[p].obs : ""}` : "")).join("")}
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">3. Direcionar</div>
+      ${row("Problema central", r.problemaCentral)} ${row("Causa principal", r.causaPrincipal)}
+      ${row("Meta SMART", r.metaSMART)} ${row("KPI", r.kpi)} ${row("Prazo", r.prazoFoco)}
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">4. Plano de Ação</div>
+      ${(r.acoes||[]).filter(a=>a.acao).map((a,i) => row(`Ação ${i+1}`, [a.acao,a.como,a.responsavel,a.prazo,a.indicador].filter(Boolean).join(" | "))).join("")}
+      ${row("Compromissos", (r.compromissos||[]).join("; "))}
+      ${row("Observações", r.obsAdicionais)}
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">5. Resultados</div>
+      ${row("Data retorno", r.dataRetorno)} ${row("Resultados", r.resultados)}
+      ${row("Ajustes", r.ajustes)} ${row("Próximos passos", r.proximosPassos)}
+      ${row("NPS", r.nps)}
+    </div>
+  `;
+}
+
+// ===================== RENDER FORM =====================
+function renderForm() {
+  renderStepBar();
+  renderStepContent();
+  renderNav();
+  renderProgress();
+  hideAlerts();
+}
+
+function renderStepBar() {
+  const el = document.getElementById("stepbar");
+  el.innerHTML = STEPS.map((s, i) => {
+    const done = i < currentStep;
+    const active = i === currentStep;
+    const lineClass = i < currentStep ? "done" : "";
+    const circleStyle = active ? `background:${s.color};color:#fff;box-shadow:0 4px 14px ${s.color}55` : done ? "background:#2d6a4f;color:#fff" : "";
+    const labelClass = active ? "active" : "";
+    const labelColor = active ? s.color : done ? "#2d6a4f" : "#a0aec0";
+    return `
+      <div class="step-item">
+        <div class="step-circle ${active?'active':''} ${done?'done':''}" style="${circleStyle}">${done ? "✓" : s.icon}</div>
+        <div class="step-label ${labelClass}" style="color:${labelColor}">${s.label}</div>
+      </div>
+      ${i < STEPS.length - 1 ? `<div class="step-line ${lineClass}"></div>` : ""}
+    `;
+  }).join("");
+}
+
+function renderNav() {
+  const s = STEPS[currentStep];
+  document.getElementById("step-icon").innerHTML = s.icon;
+  document.getElementById("step-icon").style.background = s.color;
+  document.getElementById("step-title").textContent = s.label;
+  document.getElementById("step-title").style.color = s.color;
+  document.getElementById("step-sub").textContent = `Etapa ${currentStep + 1} de ${STEPS.length}`;
+
+  const back = document.getElementById("btn-back");
+  back.textContent = currentStep === 0 ? "Cancelar" : "← Anterior";
+
+  const next = document.getElementById("btn-next");
+  if (currentStep < STEPS.length - 1) {
+    const ns = STEPS[currentStep + 1];
+    next.textContent = `Próximo → ${ns.icon}`;
+    next.style.background = ns.color;
+    next.className = "btn-next";
+    next.onclick = navNext;
+  } else {
+    next.textContent = "Salvar Mentoria";
+    next.style.background = "#2d6a4f";
+    next.className = "btn-save";
+    next.onclick = salvar;
+  }
+}
+
+function renderProgress() {
+  const el = document.getElementById("progress-bar");
+  el.innerHTML = STEPS.map((s, i) => `<div class="progress-bar" style="background:${i <= currentStep ? s.color : "#dde3ec"}"></div>`).join("");
+}
+
+function hideAlerts() {
+  document.getElementById("alert-err").style.display = "none";
+  document.getElementById("alert-ok").style.display = "none";
+}
+
+// ===================== STEP CONTENTS =====================
+function renderStepContent() {
+  const el = document.getElementById("step-content");
+  switch(currentStep) {
+    case 0: el.innerHTML = renderStep0(); break;
+    case 1: el.innerHTML = renderStep1(); break;
+    case 2: el.innerHTML = renderStep2(); break;
+    case 3: el.innerHTML = renderStep3(); break;
+    case 4: el.innerHTML = renderStep4(); break;
+  }
+  bindStep();
+}
+
+function renderStep0() {
+  return `
+    <div class="grid2">
+      <div class="fg full"><label class="lbl">Nome do(a) Empreendedor(a) *</label><input type="text" id="f-nome" value="${form.nomeEmpreendedor}" placeholder="Nome completo"></div>
+      <div class="fg full"><label class="lbl">Nome do Negócio</label><input type="text" id="f-negocio" value="${form.nomeNegocio}" placeholder="Nome do negócio ou marca"></div>
+      <div class="fg"><label class="lbl">CNPJ (se houver)</label><input type="text" id="f-cnpj" value="${form.cnpj}" placeholder="00.000.000/0001-00"></div>
+      <div class="fg"><label class="lbl">Segmento</label><select id="f-segmento"><option value="">Selecione</option>${SEGMENTOS.map(s=>`<option ${form.segmento===s?"selected":""}>${s}</option>`).join("")}</select></div>
+      <div class="fg"><label class="lbl">Data da Mentoria</label><input type="date" id="f-data" value="${form.data}"></div>
+      <div class="fg"><label class="lbl">Nome do(a) Mentor(a)</label><input type="text" id="f-mentor" value="${form.nomeMentor}" placeholder="Seu nome"></div>
+      <div class="fg full"><label class="lbl">Formato</label>
+        <div style="display:flex;gap:24px;margin-top:4px">
+          ${["Presencial","Online","Híbrido"].map(f=>`<label class="radio-item"><input type="radio" name="formato" value="${f}" ${form.formato===f?"checked":""}>${f}</label>`).join("")}
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderStep1() {
+  return `
+    <div class="fg"><label class="lbl">Estágio atual do negócio</label>
+      <div class="radio-group" style="margin-top:6px">
+        ${ESTAGIOS.map(e=>`<label class="radio-item"><input type="radio" name="estagio" value="${e}" ${form.estagio===e?"checked":""}>${e}</label>`).join("")}
+      </div>
+    </div>
+    <div class="fg"><label class="lbl">Principais desafios relatados</label>
+      <div class="check-group" style="margin-top:6px">
+        ${DESAFIOS.map(d=>`<label class="check-item"><input type="checkbox" value="${d}" ${form.desafios.includes(d)?"checked":""}>${d}</label>`).join("")}
+      </div>
+      <div style="margin-top:10px"><label class="lbl">Outro desafio</label><input type="text" id="f-desafioOutro" value="${form.desafioOutro}" placeholder="Descreva..."></div>
+    </div>
+    <div class="fg"><label class="lbl">Avaliação dos 4 Pilares (1 a 5)</label>
+      ${PILARES.map(p=>`
+        <div class="pilar-card">
+          <div class="pilar-name">${p}</div>
+          <div class="pilar-stars">
+            <span>Nota:</span>
+            ${[1,2,3,4,5].map(n=>`<button class="star-btn ${form.pilares[p].nota===String(n)?"active":""}" onclick="setPilarNota('${p}',${n})" type="button">${n}</button>`).join("")}
+          </div>
+          <input class="pilar-obs" id="pilar-obs-${p.replace(/\//g,'-')}" value="${form.pilares[p].obs}" placeholder="Observações...">
+        </div>
+      `).join("")}
+    </div>`;
+}
+
+function renderStep2() {
+  return `
+    <div class="fg"><label class="lbl">Problema central identificado</label><textarea id="f-problema" rows="2" placeholder="Qual é o principal problema?">${form.problemaCentral}</textarea></div>
+    <div class="fg"><label class="lbl">Causa principal (5 Porquês)</label><textarea id="f-causa" rows="2" placeholder="Por que esse problema existe?">${form.causaPrincipal}</textarea></div>
+    <div class="fg"><label class="lbl">Meta SMART</label><textarea id="f-meta" rows="2" placeholder="Ex: Aumentar faturamento em 20% em 60 dias via Instagram">${form.metaSMART}</textarea></div>
+    <div class="fg"><label class="lbl">KPI — Indicador de acompanhamento</label><input type="text" id="f-kpi" value="${form.kpi}" placeholder="Ex: Faturamento mensal, clientes novos..."></div>
+    <div class="fg"><label class="lbl">Prazo para resultado inicial</label><input type="date" id="f-prazo" value="${form.prazoFoco}"></div>`;
+}
+
+function renderStep3() {
+  return `
+    <div class="fg"><label class="lbl">Plano de Ação (até 90 dias)</label>
+      <div id="acoes-container">
+        ${form.acoes.map((a,i) => renderAcao(a,i)).join("")}
+      </div>
+      <button class="add-acao" type="button" onclick="addAcao()">+ Adicionar ação</button>
+    </div>
+    <div class="fg"><label class="lbl">Compromissos do(a) empreendedor(a)</label>
+      <div style="margin-top:6px">
+        ${COMPROMISSOS.map(c=>`<label class="check-item"><input type="checkbox" class="comp-check" value="${c}" ${form.compromissos.includes(c)?"checked":""}>${c}</label>`).join("")}
+      </div>
+    </div>
+    <div class="fg"><label class="lbl">Observações adicionais</label><textarea id="f-obs" rows="3" placeholder="Encaminhamentos, orientações finais...">${form.obsAdicionais}</textarea></div>`;
+}
+
+function renderAcao(a, i) {
+  return `<div class="acao-card" id="acao-${i}">
+    <div class="acao-header">
+      <span class="acao-label">AÇÃO ${i+1}</span>
+      ${form.acoes.length > 1 ? `<button class="acao-remove" onclick="removeAcao(${i})" type="button">✕</button>` : ""}
+    </div>
+    <div class="acao-grid">
+      <div class="acao-full"><div class="acao-lbl">O que será feito</div><input class="acao-input" id="a${i}-acao" value="${a.acao}" placeholder="O que será feito"></div>
+      <div><div class="acao-lbl">Como será feito</div><input class="acao-input" id="a${i}-como" value="${a.como}" placeholder="Como..."></div>
+      <div><div class="acao-lbl">Responsável</div><input class="acao-input" id="a${i}-resp" value="${a.responsavel}" placeholder="Quem..."></div>
+      <div><div class="acao-lbl">Prazo</div><input class="acao-input" id="a${i}-prazo" value="${a.prazo}" placeholder="Ex: 30 dias"></div>
+      <div><div class="acao-lbl">Indicador</div><input class="acao-input" id="a${i}-ind" value="${a.indicador}" placeholder="Como medir..."></div>
+    </div>
+  </div>`;
+}
+
+function renderStep4() {
+  const npsButtons = Array.from({length:11},(_,i)=>`<button class="nps-btn ${form.nps===String(i)?"active":""}" onclick="setNPS(${i})" type="button">${i}</button>`).join("");
+  return `
+    <div class="alert-pos"><strong>📊 Acompanhamento Pós-Mentoria</strong> — Preencha no retorno (30/60/90 dias)</div>
+    <div class="fg"><label class="lbl">Data prevista do retorno</label><input type="date" id="f-retorno" value="${form.dataRetorno}"></div>
+    <div class="fg"><label class="lbl">Resultados observados</label><textarea id="f-resultados" rows="3" placeholder="O que foi implementado? O que funcionou?">${form.resultados}</textarea></div>
+    <div class="fg"><label class="lbl">Ajustes realizados</label><textarea id="f-ajustes" rows="2" placeholder="O que precisou ser ajustado?">${form.ajustes}</textarea></div>
+    <div class="fg"><label class="lbl">Próximos passos</label><textarea id="f-proximos" rows="2" placeholder="Quais os encaminhamentos?">${form.proximosPassos}</textarea></div>
+    <div class="fg"><label class="lbl">NPS — Probabilidade de recomendar (0 a 10)</label><div class="nps-row" style="margin-top:6px">${npsButtons}</div></div>
+    ${form.nps !== "" ? `<div class="fg"><label class="lbl">Comentário</label><input type="text" id="f-comentario" value="${form.comentarioNPS}" placeholder="Opcional..."></div>` : ""}`;
+}
+
+// ===================== BIND INPUTS =====================
+function bindStep() {
+  if (currentStep === 0) {
+    bind("f-nome", v => form.nomeEmpreendedor = v);
+    bind("f-negocio", v => form.nomeNegocio = v);
+    bind("f-cnpj", v => form.cnpj = v);
+    bind("f-segmento", v => form.segmento = v);
+    bind("f-data", v => form.data = v);
+    bind("f-mentor", v => form.nomeMentor = v);
+    document.querySelectorAll("[name=formato]").forEach(r => r.addEventListener("change", e => form.formato = e.target.value));
+  }
+  if (currentStep === 1) {
+    document.querySelectorAll("[name=estagio]").forEach(r => r.addEventListener("change", e => form.estagio = e.target.value));
+    document.querySelectorAll(".check-item input[type=checkbox]").forEach(c => c.addEventListener("change", e => {
+      if (e.target.checked) { if (!form.desafios.includes(e.target.value)) form.desafios.push(e.target.value); }
+      else { form.desafios = form.desafios.filter(d => d !== e.target.value); }
+    }));
+    bind("f-desafioOutro", v => form.desafioOutro = v);
+    PILARES.forEach(p => {
+      const obs = document.getElementById(`pilar-obs-${p.replace(/\//g,"-")}`);
+      if (obs) obs.addEventListener("input", e => form.pilares[p].obs = e.target.value);
+    });
+  }
+  if (currentStep === 2) {
+    bind("f-problema", v => form.problemaCentral = v);
+    bind("f-causa", v => form.causaPrincipal = v);
+    bind("f-meta", v => form.metaSMART = v);
+    bind("f-kpi", v => form.kpi = v);
+    bind("f-prazo", v => form.prazoFoco = v);
+  }
+  if (currentStep === 3) {
+    bindAcoes();
+    document.querySelectorAll(".comp-check").forEach(c => c.addEventListener("change", e => {
+      if (e.target.checked) { if (!form.compromissos.includes(e.target.value)) form.compromissos.push(e.target.value); }
+      else { form.compromissos = form.compromissos.filter(x => x !== e.target.value); }
+    }));
+    bind("f-obs", v => form.obsAdicionais = v);
+  }
+  if (currentStep === 4) {
+    bind("f-retorno", v => form.dataRetorno = v);
+    bind("f-resultados", v => form.resultados = v);
+    bind("f-ajustes", v => form.ajustes = v);
+    bind("f-proximos", v => form.proximosPassos = v);
+    bind("f-comentario", v => form.comentarioNPS = v);
+  }
+}
+
+function bind(id, fn) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", e => fn(e.target.value));
+}
+
+function bindAcoes() {
+  form.acoes.forEach((_, i) => {
+    bindAcao("a"+i+"-acao", i, "acao");
+    bindAcao("a"+i+"-como", i, "como");
+    bindAcao("a"+i+"-resp", i, "responsavel");
+    bindAcao("a"+i+"-prazo", i, "prazo");
+    bindAcao("a"+i+"-ind", i, "indicador");
+  });
+}
+function bindAcao(id, i, key) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", e => form.acoes[i][key] = e.target.value);
+}
+
+function setPilarNota(pilar, n) {
+  form.pilares[pilar].nota = String(n);
+  renderStepContent();
+}
+function setNPS(n) {
+  form.nps = String(n);
+  renderStepContent();
+}
+function addAcao() {
+  collectAcoesData();
+  form.acoes.push({acao:"",como:"",responsavel:"",prazo:"",indicador:""});
+  renderStepContent();
+}
+function removeAcao(i) {
+  collectAcoesData();
+  form.acoes.splice(i, 1);
+  renderStepContent();
+}
+function collectAcoesData() {
+  form.acoes.forEach((_, i) => {
+    const get = id => { const el = document.getElementById(id); return el ? el.value : ""; };
+    form.acoes[i].acao = get("a"+i+"-acao");
+    form.acoes[i].como = get("a"+i+"-como");
+    form.acoes[i].responsavel = get("a"+i+"-resp");
+    form.acoes[i].prazo = get("a"+i+"-prazo");
+    form.acoes[i].indicador = get("a"+i+"-ind");
+  });
+}
+
+// ===================== NAVIGATION =====================
+function navBack() {
+  if (currentStep === 0) { showScreen("list"); return; }
+  currentStep--;
+  renderForm();
+}
+function navNext() {
+  if (currentStep === 0 && !form.nomeEmpreendedor.trim()) {
+    showAlert("err", "Informe o nome do empreendedor.");
+    return;
+  }
+  currentStep++;
+  renderForm();
+}
+
+// ===================== SAVE =====================
+async function salvar() {
+  if (!form.nomeEmpreendedor.trim()) { showAlert("err", "Informe o nome do empreendedor."); return; }
+
+  const btn = document.getElementById("btn-next");
+  btn.textContent = "Salvando...";
+  btn.disabled = true;
+
+  const rec = { ...form, id: Date.now(), savedAt: new Date().toLocaleString("pt-BR") };
+
+  // Salva localmente
+  saveRecord(rec);
+
+  // Envia para Google Sheets
+  try {
+    await fetch(SCRIPT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify(rec)
+    });
+  } catch(e) {}
+
+  btn.textContent = "✓ Salvo!";
+  btn.style.background = "#27ae60";
+  showAlert("ok", "✓ Mentoria salva! Dados enviados para o Google Sheets.");
+
+  setTimeout(() => {
+    form = newForm();
+    currentStep = 0;
+    showScreen("list");
+  }, 2000);
+}
+
+function showAlert(type, msg) {
+  const err = document.getElementById("alert-err");
+  const ok = document.getElementById("alert-ok");
+  err.style.display = "none"; ok.style.display = "none";
+  if (type === "err") { err.textContent = msg; err.style.display = "block"; }
+  if (type === "ok") { ok.textContent = msg; ok.style.display = "block"; }
+}
+
+// ===================== INIT =====================
+loadRecords();
+showScreen("list");
+</script>
+</body>
+</html>
