@@ -179,7 +179,8 @@ textarea{resize:vertical;line-height:1.6;}
   <div id="s-detail" style="display:none"></div>
 </div>
 <script>
-const SU="https://script.google.com/macros/s/AKfycbxv8DqJeJENCHC3ffiSLyih-rhdygjdx6rkE3lPPaz3jjY0_PJu5BUK1OUc8TyFl0DQ/exec";
+const SUPA_URL="https://cvjqdryogehpjfdihcmm.supabase.co";
+const SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2anFkcnlvZ2VocGpmZGloY21tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NjgyNzQsImV4cCI6MjA4ODE0NDI3NH0.eBFOtnBKS1Bwb5bT0FWcujJ6RHnfPH5zLyxplS6VgFQ";
 const LK="rota4d_v2";
 const PH=[
   {icon:"🔎",num:"Fase 1",name:"Diagnosticar",dur:"30–40 min",col:"green",obj:"Identificar gargalos e oportunidades do negócio"},
@@ -209,7 +210,71 @@ function nf(){return{
 
 function lr(){try{recs=JSON.parse(localStorage.getItem(LK)||"[]");}catch{recs=[];}}
 function sl(r){recs.push(r);try{localStorage.setItem(LK,JSON.stringify(recs));}catch{}}
-async function ss(r){try{await fetch(SU,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},body:JSON.stringify(r)});}catch{}}
+async function ss(r){
+  try{
+    // Prepara dados flat para o Supabase
+    const dados = {
+      saved_at: r.sv || new Date().toISOString(),
+      nome: r.nome||"",
+      negocio: r.negocio||"",
+      cnpj: r.cnpj||"",
+      segmento: r.seg||"",
+      data_mentoria: r.data||"",
+      formato: r.fmt||"",
+      mentor: r.mentor||"",
+      area: r.area||"",
+      campus: r.campus||"",
+      estagio: r.est||"",
+      desafios: (r.desa||[]).join(", "),
+      desafio_outro: r.desaOutro||"",
+      pilar_produto_nota: r.pils?.["Produto/Serviço"]?.n||"",
+      pilar_produto_classe: r.pils?.["Produto/Serviço"]?.c||"",
+      pilar_produto_obs: r.pils?.["Produto/Serviço"]?.o||"",
+      pilar_vendas_nota: r.pils?.["Vendas/Marketing"]?.n||"",
+      pilar_vendas_classe: r.pils?.["Vendas/Marketing"]?.c||"",
+      pilar_vendas_obs: r.pils?.["Vendas/Marketing"]?.o||"",
+      pilar_financas_nota: r.pils?.["Finanças"]?.n||"",
+      pilar_financas_classe: r.pils?.["Finanças"]?.c||"",
+      pilar_financas_obs: r.pils?.["Finanças"]?.o||"",
+      pilar_gestao_nota: r.pils?.["Gestão/Processos"]?.n||"",
+      pilar_gestao_classe: r.pils?.["Gestão/Processos"]?.c||"",
+      pilar_gestao_obs: r.pils?.["Gestão/Processos"]?.o||"",
+      gut_g: r.gut?.G||"",
+      gut_u: r.gut?.U||"",
+      gut_t: r.gut?.T||"",
+      problema: r.prob||"",
+      causa: r.causa||"",
+      cinco_p: r.cincoP||"",
+      meta_smart: r.meta||"",
+      kpi: r.kpi||"",
+      prazo: r.prazo||"",
+      acao1: r.acoes?.[0]?.a||"",
+      acao2: r.acoes?.[1]?.a||"",
+      acao3: r.acoes?.[2]?.a||"",
+      compromissos: (r.comps||[]).join("; "),
+      observacoes: r.obs||"",
+      data_retorno: r.retorno||"",
+      implementado: r.impl||"",
+      funcionou: r.func||"",
+      ajustes: r.ajus||"",
+      proximos_passos: r.prox||"",
+      nps: r.nps||"",
+      comentario_nps: r.cnps||""
+    };
+    const resp = await fetch(SUPA_URL+"/rest/v1/ATENDIMENTOS",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "apikey": SUPA_KEY,
+        "Authorization": "Bearer "+SUPA_KEY,
+        "Prefer": "return=minimal"
+      },
+      body: JSON.stringify(dados)
+    });
+    if(!resp.ok) console.error("Supabase erro:",resp.status);
+    else console.log("Salvo no Supabase!");
+  }catch(err){console.error("Erro Supabase:",err);}
+}
 
 function go(s){
   ["list","form","detail"].forEach(x=>document.getElementById("s-"+x).style.display="none");
