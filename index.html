@@ -2305,6 +2305,9 @@ function renderDashFiltrado(dataFull){
   const fEsc=document.getElementById('df-escolaridade')?.value||'';
   const fFmt=document.getElementById('df-formato')?.value||'';
   const fRenda=document.getElementById('df-renda')?.value||'';
+  const fCap=document.getElementById('df-cap')?.value||'';
+  const fModalidade=document.getElementById('df-modalidade')?.value||'';
+  const fCanal=document.getElementById('df-canal')?.value||'';
 
   let data=base;
   if(fC) data=data.filter(r=>r.mentor===fC);
@@ -2319,8 +2322,14 @@ function renderDashFiltrado(dataFull){
   if(fEsc) data=data.filter(r=>r.escolaridade===fEsc);
   if(fFmt) data=data.filter(r=>r.formato===fFmt);
   if(fRenda) data=data.filter(r=>r.fonte_renda===fRenda);
+  if(fCap) data=data.filter(r=>r.interesse_capacitacao===fCap);
+  if(fModalidade) data=data.filter(r=>r.modalidade_pref===fModalidade);
+  if(fCanal) data=data.filter(r=>{
+    if(!r.canais_venda) return false;
+    try{const arr=typeof r.canais_venda==='string'?JSON.parse(r.canais_venda):r.canais_venda;return Array.isArray(arr)&&arr.includes(fCanal);}catch(e){return false;}
+  });
 
-  const hasFilter=fC||fK||fE||fD||fA||fCtx||fSeg||fGen||fFx||fEsc||fFmt||fRenda;
+  const hasFilter=fC||fK||fE||fD||fA||fCtx||fSeg||fGen||fFx||fEsc||fFmt||fRenda||fCap||fModalidade||fCanal;
   const total=data.length;
   const mentors=cnt(data,'mentor');
   const segs=cnt(data,'segmento');
@@ -2444,6 +2453,32 @@ function renderDashFiltrado(dataFull){
             <option value="Complementa a renda" ${fRenda==='Complementa a renda'?'selected':''}>Complementa a renda</option>
           </select></div>
       </div>
+
+      <div style="font-size:11px;font-weight:700;color:#1d3557;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #f0f0f0;">📚 Capacitação & Canais</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
+        <div><label style="${lblStyle}">Interesse em Capacitação</label>
+          <select id="df-cap" onchange="renderDashFiltrado(ALL)" style="${selStyle}">
+            <option value="">Todos</option>
+            <option value="Sim" ${(document.getElementById('df-cap')?.value||'')==='Sim'?'selected':''}>Sim</option>
+            <option value="Não" ${(document.getElementById('df-cap')?.value||'')==='Não'?'selected':''}>Não</option>
+          </select></div>
+        <div><label style="${lblStyle}">Modalidade Preferida</label>
+          <select id="df-modalidade" onchange="renderDashFiltrado(ALL)" style="${selStyle}">
+            <option value="">Todas</option>
+            <option value="Online">Online</option>
+            <option value="Presencial">Presencial</option>
+            <option value="Tanto faz">Tanto faz</option>
+          </select></div>
+        <div><label style="${lblStyle}">Canal de Venda</label>
+          <select id="df-canal" onchange="renderDashFiltrado(ALL)" style="${selStyle}">
+            <option value="">Todos</option>
+            <option value="Redes sociais">Redes sociais</option>
+            <option value="Loja física">Loja física</option>
+            <option value="Marketplace">Marketplace</option>
+            <option value="Encomendas / WhatsApp">Encomendas / WhatsApp</option>
+            <option value="Feira / Evento">Feira / Evento</option>
+          </select></div>
+      </div>
     </div>`:``}
 
     <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
@@ -2475,6 +2510,12 @@ function renderDashFiltrado(dataFull){
       <div class="cc"><div class="ct">Faixa Etária</div><div class="cst">Perfil etário dos atendidos</div><div class="cw"><canvas id="c14"></canvas></div></div>
       <div class="cc"><div class="ct">Escolaridade</div><div class="cst">Nível de instrução</div><div class="cw"><canvas id="c15"></canvas></div></div>
       <div class="cc"><div class="ct">Atividade é Fonte Principal de Renda?</div><div class="cst">Relação do negócio com a renda familiar</div><div class="cw"><canvas id="c16"></canvas></div></div>
+      <div class="cc cfull"><div class="ct">Canais de Venda Utilizados</div><div class="cst">Frequência por canal entre os atendidos</div><div class="cw cwt"><canvas id="c17"></canvas></div></div>
+      <div class="cc cfull"><div class="ct">Temas de Capacitação Demandados</div><div class="cst">Temas de maior interesse declarado</div><div class="cw cwt"><canvas id="c18"></canvas></div></div>
+      <div class="cc"><div class="ct">Interesse em Capacitação</div><div class="cst">Quer participar de cursos/oficinas do IFB?</div><div class="cw"><canvas id="c19"></canvas></div></div>
+      <div class="cc"><div class="ct">Modalidade Preferida</div><div class="cst">Online, Presencial ou Tanto faz</div><div class="cw"><canvas id="c20"></canvas></div></div>
+      <div class="cc"><div class="ct">Melhores Horários</div><div class="cst">Preferência de horário para capacitação</div><div class="cw"><canvas id="c21"></canvas></div></div>
+      <div class="cc"><div class="ct">Melhores Dias</div><div class="cst">Dias da semana preferidos</div><div class="cw"><canvas id="c22"></canvas></div></div>
     </div>
 
     ${showFiltros?`
@@ -2528,6 +2569,61 @@ function renderDashFiltrado(dataFull){
     barChart('c14',cnt(data,'faixa_etaria'),'#7b2d8b');
     barH('c15',cnt(data,'escolaridade'),'#2d6a4f');
     donut('c16',cnt(data,'fonte_renda'),['#2d6a4f','#f59e0b','#457b9d']);
+    // c17: canais de venda (array JSON)
+    (()=>{
+      const canaisCnt={};
+      data.forEach(r=>{
+        if(!r.canais_venda) return;
+        try{
+          const arr=typeof r.canais_venda==='string'?JSON.parse(r.canais_venda):r.canais_venda;
+          if(Array.isArray(arr)&&arr.length) arr.forEach(c=>{if(c&&c.trim()) canaisCnt[c]=(canaisCnt[c]||0)+1;});
+        }catch(e){}
+      });
+      if(Object.keys(canaisCnt).length) barH('c17',canaisCnt,'#457b9d');
+      else {const el=document.getElementById('c17');if(el){const p=el.closest('.cc');if(p)p.innerHTML+='<div style="text-align:center;color:#999;font-size:12px;padding:20px;">Dados de canais disponíveis apenas para atendimentos com Contexto de Captação</div>';}}
+    })();
+    // c18: temas de capacitação (array JSON field: temas_interesse)
+    (()=>{
+      const temasCnt={};
+      data.forEach(r=>{
+        if(!r.temas_interesse) return;
+        try{
+          const arr=typeof r.temas_interesse==='string'?JSON.parse(r.temas_interesse):r.temas_interesse;
+          if(Array.isArray(arr)&&arr.length) arr.forEach(t=>{if(t&&t.trim()) temasCnt[t]=(temasCnt[t]||0)+1;});
+        }catch(e){}
+      });
+      if(Object.keys(temasCnt).length) barH('c18',temasCnt,'#7b2d8b');
+      else {const el=document.getElementById('c18');if(el){const p=el.closest('.cc');if(p)p.innerHTML+='<div style="text-align:center;color:#999;font-size:12px;padding:20px;">Dados disponíveis apenas para atendimentos com Contexto de Captação</div>';}}
+    })();
+    donut('c19',cnt(data,'interesse_capacitacao'),['#2d6a4f','#e53e3e','#94a3b8']);
+    donut('c20',cnt(data,'modalidade_pref'),['#457b9d','#2d6a4f','#f59e0b','#94a3b8']);
+    // c21: horários (array JSON)
+    (()=>{
+      const horCnt={};
+      data.forEach(r=>{
+        if(!r.horarios_disponiveis) return;
+        try{
+          const arr=typeof r.horarios_disponiveis==='string'?JSON.parse(r.horarios_disponiveis):r.horarios_disponiveis;
+          if(Array.isArray(arr)&&arr.length) arr.forEach(h=>{if(h&&h.trim()) horCnt[h]=(horCnt[h]||0)+1;});
+        }catch(e){}
+      });
+      if(Object.keys(horCnt).length) donut('c21',horCnt,['#f59e0b','#457b9d','#1d3557']);
+    })();
+    // c22: dias (array JSON)
+    (()=>{
+      const diasOrdem=['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+      const diasCnt={};
+      diasOrdem.forEach(d=>{diasCnt[d]=0;});
+      let temDados=false;
+      data.forEach(r=>{
+        if(!r.dias_disponiveis) return;
+        try{
+          const arr=typeof r.dias_disponiveis==='string'?JSON.parse(r.dias_disponiveis):r.dias_disponiveis;
+          if(Array.isArray(arr)&&arr.length){temDados=true;arr.forEach(d=>{if(d&&diasCnt[d]!==undefined) diasCnt[d]++;});}
+        }catch(e){}
+      });
+      if(temDados) barChart('c22',diasCnt,'#2d6a4f');
+    })();
   },100);
 }
 
