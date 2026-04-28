@@ -1696,48 +1696,115 @@ function solicitarAjusteEvidencia(empNome, acaoIdx, notifId){
   renderNotificacoes();
 }
 
+// ===== SSO — Abrir Portal ENEDES com login automático =====
+function abrirPortalSSO(nome, email, cnpj, telefone) {
+    if (!email) { sa('e', '⚠️ E-mail do empreendedor não cadastrado. Edite o atendimento e preencha o e-mail.'); return; }
+    const SALT = 'enedes-rota-2026';
+    const ts = Date.now();
+    const sig = btoa(email + ':' + ts + ':' + SALT).slice(0, 16);
+    const payload = { nome, email, cpf: cnpj||'', telefone: telefone||'', ts, sig };
+    const token = btoa(JSON.stringify(payload));
+    const PORTAL_URL = 'https://enedesifb.com.br/portal.html';
+    const url = `${PORTAL_URL}?sso=${encodeURIComponent(token)}`;
+    window.open(url, '_blank');
+    sa('o', `📅 Abrindo portal para ${nome} — acesso automático configurado.`);
+}
+
+
 // ===== PORTAL ENEDES — Agendamentos e Eventos =====
 function renderPortalEnedes(){
   const main = document.getElementById('app-main');
-  const PORTAL_URL = 'https://enedes.enedesifb.com.br/portal';
+  const PORTAL_URL = 'https://enedesifb.com.br/portal.html';
+  const AGENDA_URL = 'https://enedesifb.com.br/portal.html';
+  const AGENDAR_URL = 'https://enedesifb.com.br/portal.html';
+  const EVENTOS_URL = 'https://enedesifb.com.br/portal.html';
+
   main.innerHTML = `
-    <div style="max-width:1200px;margin:0 auto;padding:20px 16px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+    <div style="max-width:960px;margin:0 auto;padding:20px 16px;">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:24px;flex-wrap:wrap;">
         <div>
           <div style="font-size:20px;font-weight:800;color:#1d3557;">📅 Portal ENEDES</div>
           <div style="font-size:12px;color:#64748b;margin-top:3px;">Agendamentos de consultoria, eventos e coworking</div>
         </div>
         <a href="${PORTAL_URL}" target="_blank"
-           style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;border:1px solid #dde3ec;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:600;color:#1d3557;text-decoration:none;white-space:nowrap;">
-          ↗ Abrir em nova aba
+           style="display:inline-flex;align-items:center;gap:6px;background:#1d3557;color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;text-decoration:none;">
+          🌐 Abrir Portal Completo
         </a>
       </div>
 
-      <div style="border:1px solid var(--border,#dde3ec);border-radius:14px;overflow:hidden;height:calc(100vh - 170px);min-height:560px;position:relative;background:#f8fafc;">
-        <!-- Loading spinner -->
-        <div id="portal-enedes-loading" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:2;background:#f8fafc;">
-          <div style="width:38px;height:38px;border:3px solid #dde3ec;border-top-color:#3a9e4f;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:14px;"></div>
-          <div style="font-size:13px;color:#888;font-weight:500;">Carregando Portal ENEDES…</div>
+      <!-- Aviso sobre iframe bloqueado -->
+      <div style="background:#fff8e1;border:1px solid #fcd34d;border-radius:12px;padding:14px 18px;margin-bottom:24px;display:flex;align-items:flex-start;gap:12px;">
+        <div style="font-size:20px;flex-shrink:0;">💡</div>
+        <div style="font-size:13px;color:#92400e;line-height:1.5;">
+          <strong>O portal precisa ser aberto em aba separada</strong> — por segurança, o navegador bloqueia a exibição incorporada.
+          Use os atalhos abaixo ou clique em <strong>"Abrir Portal Completo"</strong> acima.
         </div>
-
-        <iframe
-          id="portal-enedes-iframe"
-          src="${PORTAL_URL}"
-          style="width:100%;height:100%;border:none;display:block;"
-          allow="clipboard-write"
-          onload="(function(){
-            var l=document.getElementById('portal-enedes-loading');
-            if(l) l.style.display='none';
-          })()"
-          onerror="(function(){
-            var l=document.getElementById('portal-enedes-loading');
-            if(l) l.innerHTML='<div style=\\'text-align:center;padding:20px;\\'><div style=\\'font-size:32px;margin-bottom:12px;\\'>⚠️</div><div style=\\'font-size:14px;color:#64748b;margin-bottom:16px;\\'>Não foi possível carregar o portal.</div><a href=\\'${PORTAL_URL}\\' target=\\'_blank\\' style=\\'background:#3a9e4f;color:#fff;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:700;text-decoration:none;\\'>Abrir Portal ENEDES →</a></div>';
-          })()"
-        ></iframe>
       </div>
+
+      <!-- Cards de acesso rápido -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:28px;">
+
+        <a href="${PORTAL_URL}" target="_blank" style="text-decoration:none;">
+          <div style="background:#fff;border:1px solid #dde3ec;border-radius:14px;padding:22px;cursor:pointer;transition:box-shadow .15s;display:flex;flex-direction:column;gap:10px;"
+               onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+            <div style="font-size:32px;">🏠</div>
+            <div style="font-size:14px;font-weight:700;color:#1d3557;">Página Inicial</div>
+            <div style="font-size:12px;color:#64748b;">Visão geral do portal e serviços disponíveis</div>
+            <div style="font-size:11px;color:#3a9e4f;font-weight:600;margin-top:4px;">Abrir →</div>
+          </div>
+        </a>
+
+        <a href="${AGENDAR_URL}" target="_blank" style="text-decoration:none;">
+          <div style="background:#fff;border:1px solid #dde3ec;border-radius:14px;padding:22px;cursor:pointer;transition:box-shadow .15s;display:flex;flex-direction:column;gap:10px;"
+               onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+            <div style="font-size:32px;">📝</div>
+            <div style="font-size:14px;font-weight:700;color:#1d3557;">Novo Agendamento</div>
+            <div style="font-size:12px;color:#64748b;">Agendar consultoria, coworking ou evento</div>
+            <div style="font-size:11px;color:#3a9e4f;font-weight:600;margin-top:4px;">Abrir →</div>
+          </div>
+        </a>
+
+        <a href="${AGENDA_URL}" target="_blank" style="text-decoration:none;">
+          <div style="background:#fff;border:1px solid #dde3ec;border-radius:14px;padding:22px;cursor:pointer;transition:box-shadow .15s;display:flex;flex-direction:column;gap:10px;"
+               onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+            <div style="font-size:32px;">📆</div>
+            <div style="font-size:14px;font-weight:700;color:#1d3557;">Ver Agenda</div>
+            <div style="font-size:12px;color:#64748b;">Visualizar todos os agendamentos e slots disponíveis</div>
+            <div style="font-size:11px;color:#3a9e4f;font-weight:600;margin-top:4px;">Abrir →</div>
+          </div>
+        </a>
+
+        <a href="${EVENTOS_URL}" target="_blank" style="text-decoration:none;">
+          <div style="background:#fff;border:1px solid #dde3ec;border-radius:14px;padding:22px;cursor:pointer;transition:box-shadow .15s;display:flex;flex-direction:column;gap:10px;"
+               onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+            <div style="font-size:32px;">🎪</div>
+            <div style="font-size:14px;font-weight:700;color:#1d3557;">Eventos</div>
+            <div style="font-size:12px;color:#64748b;">Feiras, workshops, capacitações e eventos ENEDES</div>
+            <div style="font-size:11px;color:#3a9e4f;font-weight:600;margin-top:4px;">Abrir →</div>
+          </div>
+        </a>
+
+      </div>
+
+      <!-- URL direta -->
+      <div style="background:#f1f5f9;border:1px solid #dde3ec;border-radius:12px;padding:16px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">URL do Portal</div>
+          <div style="font-size:13px;color:#1d3557;font-family:monospace;word-break:break-all;">${PORTAL_URL}</div>
+        </div>
+        <button onclick="navigator.clipboard.writeText('${PORTAL_URL}').then(()=>{this.textContent='✅ Copiado!';setTimeout(()=>this.textContent='📋 Copiar link',2000)})"
+          style="padding:8px 16px;background:#1d3557;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">
+          📋 Copiar link
+        </button>
+        <a href="${PORTAL_URL}" target="_blank"
+           style="padding:8px 16px;background:#3a9e4f;color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">
+          ↗ Abrir agora
+        </a>
+      </div>
+
     </div>`;
 }
-
 function renderFerramentas(){
   const main = document.getElementById('app-main');
   const ferramentas = [
@@ -2132,7 +2199,7 @@ async function adicionarUsuario(){
 // ===== DASHBOARD =====
 async function loadAndRenderDash(){
   document.getElementById('app-main').innerHTML='<div class="ld"><div class="spin"></div><br>Carregando…</div>';
-  await loadData();
+  await Promise.all([loadData(), carregarContextos()]);
   renderDashFiltrado(ALL);
 }
 
@@ -2149,7 +2216,15 @@ function renderDashFiltrado(dataFull){
   const consultores=[...new Set(base.map(r=>r.mentor).filter(Boolean))].sort();
   const campi=[...new Set(base.map(r=>r.campus).filter(Boolean))].sort();
   const estagios=[...new Set(base.map(r=>r.estagio).filter(Boolean))].sort();
-  const contextos=[...new Set(base.map(r=>r.acao_contexto).filter(Boolean))].sort();
+  // Mapa id→nome para contextos de captação
+  const ctxMapArr = [...CONTEXTOS_PADRAO, ...CONTEXTOS_EXTRAS.map(c=>({id:'extra_'+c.id, nome:c.nome}))];
+  const ctxMap = {};
+  ctxMapArr.forEach(c=>{ ctxMap[c.id]=c.nome; });
+  // IDs únicos presentes nos dados
+  const contextosIds=[...new Set(base.map(r=>r.acao_contexto).filter(Boolean))].sort((a,b)=>{
+    const na=ctxMap[a]||a, nb=ctxMap[b]||b;
+    return na.localeCompare(nb,'pt');
+  });
   const segmentos=[...new Set(base.map(r=>r.segmento).filter(Boolean))].sort();
   const formatos=[...new Set(base.map(r=>r.formato).filter(Boolean))].sort();
 
@@ -2229,7 +2304,7 @@ function renderDashFiltrado(dataFull){
   const optC=consultores.map(c=>`<option value="${c}" ${fC===c?'selected':''}>${c}</option>`).join('');
   const optK=campi.map(c=>`<option value="${c}" ${fK===c?'selected':''}>${c}</option>`).join('');
   const optE=estagios.map(e=>`<option value="${e}" ${fE===e?'selected':''}>${e}</option>`).join('');
-  const optCtx=contextos.map(c=>`<option value="${c}" ${fCtx===c?'selected':''}>${c}</option>`).join('');
+  const optCtx=contextosIds.map(c=>`<option value="${c}" ${fCtx===c?'selected':''}>${ctxMap[c]||c}</option>`).join('');
   const optSeg=segmentos.map(s=>`<option value="${s}" ${fSeg===s?'selected':''}>${s}</option>`).join('');
   const optFmt=formatos.map(f=>`<option value="${f}" ${fFmt===f?'selected':''}>${f}</option>`).join('');
 
@@ -2377,7 +2452,14 @@ function renderDashFiltrado(dataFull){
     const mesesObj={};mesesOrdenados.forEach(m=>{const [y,mo]=m.split('-');mesesObj[`${mo}/${y.slice(2)}`]=meses[m];});
     barChart('c10',mesesObj,'#457b9d');
     // Novos gráficos
-    donut('c11',cnt(data,'acao_contexto'),['#f59e0b','#e88c3a','#d97706','#b45309','#92400e','#f3c677','#fde68a']);
+    // c11: contexto com nomes legíveis
+    (()=>{
+      const ctxMapArr2=[...CONTEXTOS_PADRAO,...CONTEXTOS_EXTRAS.map(c=>({id:'extra_'+c.id,nome:c.nome}))];
+      const ctxMap2={};ctxMapArr2.forEach(c=>{ctxMap2[c.id]=c.nome;});
+      const ctxCnt={};
+      data.forEach(r=>{if(r.acao_contexto){const nm=ctxMap2[r.acao_contexto]||r.acao_contexto;ctxCnt[nm]=(ctxCnt[nm]||0)+1;}});
+      donut('c11',ctxCnt,['#f59e0b','#e88c3a','#d97706','#b45309','#92400e','#f3c677','#fde68a']);
+    })();
     donut('c12',cnt(data,'formato'),['#457b9d','#74a0c6','#a8c4d8','#c8d8f0']);
     donut('c13',cnt(data,'genero'),['#e879a0','#74a0c6','#a78bfa','#94a3b8']);
     barChart('c14',cnt(data,'faixa_etaria'),'#7b2d8b');
@@ -2915,6 +2997,7 @@ function renderDetalhe(){
       <button id="btn-evolucao" style="background:linear-gradient(135deg,#7b2d8b,#1d3557);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📈 Evolução do Negócio</button>
       <button id="btn-fase2" style="background:linear-gradient(135deg,#0d2a1a,#1a5e3a);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📘 Fase 2 — Plano de Negócio</button>
       <span style="font-size:12px;color:var(--muted);margin-left:4px;">Continuar preenchimento de onde parou</span>
+      ${r.email?`<button onclick="abrirPortalSSO('${e(r.nome||'')}','${e(r.email||'')}','${e(r.cnpj||'')}','${e(r.telefone||'')}')" style="background:linear-gradient(135deg,#f5a100,#e08c00);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📅 Agendar no Portal</button>`:'<span style="font-size:12px;color:#e08c00;background:#fff8e1;border:1px solid #f59e0b;border-radius:8px;padding:8px 12px;">⚠️ Cadastre o e-mail para liberar agendamento no portal</span>'}
       ${['coord','coord_abdi','coord_prog'].includes(PERFIL)?`<button onclick="excluirAtendimento()" style="background:#dc2626;color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:auto;">🗑 Excluir</button>`:''}
     </div>
     ${(()=>{
@@ -2969,7 +3052,7 @@ function renderDetalhe(){
           ${row("Negócio",r.negocio)}${row("CNPJ",r.cnpj)}${row("Segmento",r.segmento)}
           ${row("Estágio",r.estagio)}${row("Consultor",r.mentor)}${row("Campus",r.campus)}
           ${row("Desafios",r.desafios)}${row("Formato",r.formato)}
-          ${r.acao_contexto?row("Contexto de Captação",r.acao_contexto):''}
+          ${r.acao_contexto?row("Contexto de Captação",(()=>{const _cx=[...CONTEXTOS_PADRAO,...CONTEXTOS_EXTRAS.map(c=>({id:'extra_'+c.id,nome:c.nome}))];const _f=_cx.find(c=>c.id===r.acao_contexto);return _f?_f.nome:r.acao_contexto;})()):''}         
         </div>
         ${r.acao_contexto?`
         <div style="margin-top:12px;background:#f8fbf9;border:1px solid #c6dfd0;border-radius:10px;padding:12px 14px;">
