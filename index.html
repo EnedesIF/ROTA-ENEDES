@@ -1704,7 +1704,7 @@ function abrirPortalSSO(nome, email, cnpj, telefone) {
     const sig = btoa(email + ':' + ts + ':' + SALT).slice(0, 16);
     const payload = { nome, email, cpf: cnpj||'', telefone: telefone||'', ts, sig };
     const token = btoa(JSON.stringify(payload));
-    const PORTAL_URL = 'https://enedesifb.com.br/portal.html';
+    const PORTAL_URL = 'https://gestao.enedesifb.com.br/portal.html';
     const url = `${PORTAL_URL}?sso=${encodeURIComponent(token)}`;
     window.open(url, '_blank');
     sa('o', `📅 Abrindo portal para ${nome} — acesso automático configurado.`);
@@ -1714,10 +1714,10 @@ function abrirPortalSSO(nome, email, cnpj, telefone) {
 // ===== PORTAL ENEDES — Agendamentos e Eventos =====
 function renderPortalEnedes(){
   const main = document.getElementById('app-main');
-  const PORTAL_URL = 'https://enedesifb.com.br/portal.html';
-  const AGENDA_URL = 'https://enedesifb.com.br/portal.html';
-  const AGENDAR_URL = 'https://enedesifb.com.br/portal.html';
-  const EVENTOS_URL = 'https://enedesifb.com.br/portal.html';
+  const PORTAL_URL = 'https://gestao.enedesifb.com.br/portal.html';
+  const AGENDA_URL = 'https://gestao.enedesifb.com.br/portal.html';
+  const AGENDAR_URL = 'https://gestao.enedesifb.com.br/portal.html';
+  const EVENTOS_URL = 'https://gestao.enedesifb.com.br/portal.html';
 
   main.innerHTML = `
     <div style="max-width:960px;margin:0 auto;padding:20px 16px;">
