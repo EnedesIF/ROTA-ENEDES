@@ -2580,7 +2580,6 @@ function renderDashFiltrado(dataFull){
         }catch(e){}
       });
       if(Object.keys(canaisCnt).length) barH('c17',canaisCnt,'#457b9d');
-      else {const el=document.getElementById('c17');if(el){const p=el.closest('.cc');if(p)p.innerHTML+='<div style="text-align:center;color:#999;font-size:12px;padding:20px;">Dados de canais disponíveis apenas para atendimentos com Contexto de Captação</div>';}}
     })();
     // c18: temas de capacitação (array JSON field: temas_interesse)
     (()=>{
@@ -2593,7 +2592,6 @@ function renderDashFiltrado(dataFull){
         }catch(e){}
       });
       if(Object.keys(temasCnt).length) barH('c18',temasCnt,'#7b2d8b');
-      else {const el=document.getElementById('c18');if(el){const p=el.closest('.cc');if(p)p.innerHTML+='<div style="text-align:center;color:#999;font-size:12px;padding:20px;">Dados disponíveis apenas para atendimentos com Contexto de Captação</div>';}}
     })();
     donut('c19',cnt(data,'interesse_capacitacao'),['#2d6a4f','#e53e3e','#94a3b8']);
     donut('c20',cnt(data,'modalidade_pref'),['#457b9d','#2d6a4f','#f59e0b','#94a3b8']);
