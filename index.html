@@ -358,6 +358,12 @@ tbody tr:hover td{background:#fafcff;}
   .smart-row{grid-template-columns:1fr;}
 }
 @media(max-width:480px){.kpis{grid-template-columns:1fr;}}
+@media print{
+  header,nav,.nav-bar,#app-nav,#app-header,button{display:none!important;}
+  .cc{break-inside:avoid;page-break-inside:avoid;}
+  body{background:#fff!important;}
+  #app-main{padding:0!important;}
+}
 </style>
 </head>
 <body>
@@ -2266,6 +2272,98 @@ async function loadAndRenderDash(){
   renderDashFiltrado(ALL);
 }
 
+// ===== WORD CLOUD =====
+const STOPWORDS = new Set(['de','da','do','das','dos','e','a','o','as','os','em','com','que','um','uma','para','por','se','na','no','nas','nos','é','ao','à','ou','mais','seu','sua','não','já','tem','foi','está','são','ter','ser','como','mas','isso','esse','esta','este','ele','ela','sua','seu','quando','muito','bem','pode','sobre']);
+
+function extrairPalavras(textos) {
+  const freq = {};
+  textos.forEach(txt => {
+    if(!txt) return;
+    txt.toLowerCase()
+      .replace(/[^\wáéíóúâêîôûãõàèìòùç\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 3 && !STOPWORDS.has(w))
+      .forEach(w => { freq[w] = (freq[w]||0) + 1; });
+  });
+  return Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,60);
+}
+
+function renderWordCloud(data) {
+  const el = document.getElementById('wordcloud-container');
+  if(!el) { console.warn('wordcloud-container not found'); return; }
+  const textos = data.flatMap(r => {
+    const obs = [r.pilar_produto_obs, r.pilar_vendas_obs, r.pilar_financas_obs, r.pilar_gestao_obs];
+    const resps = ['pilar_produto_resps','pilar_vendas_resps','pilar_financas_resps','pilar_gestao_resps'].flatMap(k=>{
+      if(!r[k]) return [];
+      try{ const arr=JSON.parse(r[k]); return Array.isArray(arr)?arr:[]; }catch(e){return [];}
+    });
+    return [...obs,...resps];
+  }).filter(t=>t&&t.trim());
+  console.log('WordCloud: textos encontrados:', textos.length, 'registros:', data.length);
+  const palavras = extrairPalavras(textos);
+  if(!palavras.length) { 
+    el.innerHTML='<div style="color:#999;font-size:13px;text-align:center;">Nenhuma síntese registrada ainda nos atendimentos filtrados</div>'; 
+    return; 
+  }
+  const max = palavras[0][1], min = palavras[palavras.length-1][1]||1;
+  const cores = ['#1d3557','#457b9d','#2d6a4f','#7b2d8b','#d97706','#e53e3e','#0369a1'];
+  el.innerHTML = palavras.map(([w,n]) => {
+    const sz = Math.round(11 + ((n-min)/(max-min||1)) * 22);
+    const cor = cores[Math.floor(Math.random()*cores.length)];
+    const op = 0.5 + ((n-min)/(max-min||1)) * 0.5;
+    return `<span style="font-size:${sz}px;font-weight:${sz>20?800:sz>15?700:500};color:${cor};opacity:${op.toFixed(2)};padding:2px 4px;cursor:default;" title="${n} ocorrência(s)">${w}</span>`;
+  }).join('');
+}
+
+function renderCanvasAgregado(data) {
+  const campos = {
+    'canvas-para-quem':  data.map(r=>r.id_para_quem).filter(Boolean),
+    'canvas-dor':        data.map(r=>r.id_dor).filter(Boolean),
+    'canvas-oferta':     data.map(r=>r.id_oferta).filter(Boolean),
+    'canvas-diferencial':data.map(r=>r.id_diferencial).filter(Boolean),
+  };
+  const coresCampo = {
+    'canvas-para-quem':'#3b82f6','canvas-dor':'#ef4444',
+    'canvas-oferta':'#22c55e','canvas-diferencial':'#a855f7'
+  };
+  Object.entries(campos).forEach(([id, textos]) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    const palavras = extrairPalavras(textos).slice(0, 20);
+    if(!palavras.length) { el.innerHTML='<span style="color:#999;font-size:12px;font-style:italic;">Sem dados suficientes</span>'; return; }
+    const max = palavras[0][1];
+    const cor = coresCampo[id];
+    el.innerHTML = palavras.map(([w,n]) => {
+      const op = Math.round(40 + ((n/max)*60));
+      return `<span style="background:${cor}${op.toString(16).padStart(2,'0')};color:#fff;border-radius:99px;padding:3px 10px;font-size:11px;font-weight:600;" title="${n}x">${w}</span>`;
+    }).join('');
+  });
+}
+
+// ===== EXPORT PDF =====
+async function exportarDashPDF() {
+  const btn = event.target;
+  btn.textContent = '⏳ Gerando PDF...';
+  btn.disabled = true;
+  try {
+    // Usar html2pdf se disponível, senão window.print
+    if(typeof html2pdf !== 'undefined') {
+      const el = document.getElementById('app-main');
+      await html2pdf().set({
+        margin: 8,
+        filename: 'dashboard-enedes.pdf',
+        image: { type:'jpeg', quality:0.92 },
+        html2canvas: { scale:1.5, useCORS:true },
+        jsPDF: { unit:'mm', format:'a3', orientation:'landscape' }
+      }).from(el).save();
+    } else {
+      window.print();
+    }
+  } catch(e) { window.print(); }
+  btn.textContent = '📄 Exportar Dashboard em PDF';
+  btn.disabled = false;
+}
+
 function limparDashFiltros(){
   document.querySelectorAll('[id^="df-"]').forEach(el=>{
     if(el.tagName==='SELECT') el.value='';
@@ -2494,6 +2592,45 @@ function renderDashFiltrado(dataFull){
       </div>
     </div>
 
+
+    <!-- BOTÃO EXPORTAR PDF -->
+    <div style="display:flex;justify-content:flex-end;margin-bottom:20px;">
+      <button onclick="exportarDashPDF()" style="display:inline-flex;align-items:center;gap:8px;background:#1d3557;color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">
+        📄 Exportar Dashboard em PDF
+      </button>
+    </div>
+
+    <!-- NUVEM DE PALAVRAS -->
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:20px;">
+      <div style="font-size:14px;font-weight:700;color:#1d3557;margin-bottom:4px;">☁️ Nuvem de Palavras — Sínteses dos Pilares</div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:14px;">Palavras mais frequentes nas sínteses do consultor (pilares Produto, Vendas, Finanças, Gestão)</div>
+      <div id="wordcloud-container" style="width:100%;height:280px;background:#f8fafc;border-radius:10px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;padding:16px;overflow:hidden;"></div>
+    </div>
+
+    <!-- CANVAS INFOGRÁFICO AGREGADO -->
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:20px;">
+      <div style="font-size:14px;font-weight:700;color:#1d3557;margin-bottom:4px;">🧩 Canvas de Proposta de Valor — Visão Agregada</div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:14px;">Palavras e expressões mais recorrentes em cada quadrante do Canvas, extraídas de todos os atendimentos filtrados</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div style="background:#eff6ff;border-radius:12px;padding:16px;border-left:4px solid #3b82f6;">
+          <div style="font-size:10px;font-weight:800;color:#1e40af;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">👤 Para quem?</div>
+          <div id="canvas-para-quem" style="display:flex;flex-wrap:wrap;gap:5px;min-height:60px;"></div>
+        </div>
+        <div style="background:#fef2f2;border-radius:12px;padding:16px;border-left:4px solid #ef4444;">
+          <div style="font-size:10px;font-weight:800;color:#b91c1c;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">😣 Qual dor resolve?</div>
+          <div id="canvas-dor" style="display:flex;flex-wrap:wrap;gap:5px;min-height:60px;"></div>
+        </div>
+        <div style="background:#f0fdf4;border-radius:12px;padding:16px;border-left:4px solid #22c55e;">
+          <div style="font-size:10px;font-weight:800;color:#15803d;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">🎁 O que oferece?</div>
+          <div id="canvas-oferta" style="display:flex;flex-wrap:wrap;gap:5px;min-height:60px;"></div>
+        </div>
+        <div style="background:#fdf4ff;border-radius:12px;padding:16px;border-left:4px solid #a855f7;">
+          <div style="font-size:10px;font-weight:800;color:#7e22ce;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">⭐ Por que é diferente?</div>
+          <div id="canvas-diferencial" style="display:flex;flex-wrap:wrap;gap:5px;min-height:60px;"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="cgrid">
       <div class="cc"><div class="ct">Segmentos Atendidos</div><div class="cst">Distribuição por setor</div><div class="cw"><canvas id="c1"></canvas></div></div>
       <div class="cc"><div class="ct">Estágio dos Negócios</div><div class="cst">Maturidade dos empreendimentos</div><div class="cw"><canvas id="c2"></canvas></div></div>
@@ -2623,6 +2760,11 @@ function renderDashFiltrado(dataFull){
       if(temDados) barChart('c22',diasCnt,'#2d6a4f');
     })();
   },100);
+  // Nuvem de palavras e Canvas agregado — timeout separado para garantir DOM pronto
+  setTimeout(()=>{
+    renderWordCloud(data);
+    renderCanvasAgregado(data);
+  },300);
 }
 
 // ===== RELATÓRIOS =====
