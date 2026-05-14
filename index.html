@@ -2364,6 +2364,140 @@ async function exportarDashPDF() {
   btn.disabled = false;
 }
 
+function exportarDashExcel() {
+  try {
+    // Coleta dados filtrados atuais
+    const base = canSeeAll() ? ALL : ALL.filter(r => r.mentor === USER_NAME);
+    const fC = document.getElementById('df-consultor')?.value || '';
+    const fK = document.getElementById('df-campus')?.value || '';
+    const fE = document.getElementById('df-estagio')?.value || '';
+    const fD = document.getElementById('df-de')?.value || '';
+    const fA = document.getElementById('df-ate')?.value || '';
+    const fCtx = document.getElementById('df-contexto')?.value || '';
+    const fSeg = document.getElementById('df-segmento')?.value || '';
+    const fGen = document.getElementById('df-genero')?.value || '';
+    const fFx = document.getElementById('df-faixa')?.value || '';
+    const fEsc = document.getElementById('df-escolaridade')?.value || '';
+    const fFmt = document.getElementById('df-formato')?.value || '';
+    const fRenda = document.getElementById('df-renda')?.value || '';
+    const fCap = document.getElementById('df-cap')?.value || '';
+    const fModalidade = document.getElementById('df-modalidade')?.value || '';
+    const fCanal = document.getElementById('df-canal')?.value || '';
+    let data = base;
+    if(fC) data = data.filter(r => r.mentor === fC);
+    if(fK) data = data.filter(r => r.campus === fK);
+    if(fE) data = data.filter(r => r.estagio === fE);
+    if(fD) data = data.filter(r => r.data_mentoria && r.data_mentoria >= fD);
+    if(fA) data = data.filter(r => r.data_mentoria && r.data_mentoria <= fA);
+    if(fCtx) data = data.filter(r => r.acao_contexto === fCtx);
+    if(fSeg) data = data.filter(r => r.segmento === fSeg);
+    if(fGen) data = data.filter(r => r.genero === fGen);
+    if(fFx) data = data.filter(r => r.faixa_etaria === fFx);
+    if(fEsc) data = data.filter(r => r.escolaridade === fEsc);
+    if(fFmt) data = data.filter(r => r.formato === fFmt);
+    if(fRenda) data = data.filter(r => r.fonte_renda === fRenda);
+    if(fCap) data = data.filter(r => r.interesse_capacitacao === fCap);
+    if(fModalidade) data = data.filter(r => r.modalidade_pref === fModalidade);
+    if(fCanal) data = data.filter(r => {
+      if(!r.canais_venda) return false;
+      try { const arr = typeof r.canais_venda === 'string' ? JSON.parse(r.canais_venda) : r.canais_venda; return Array.isArray(arr) && arr.includes(fCanal); } catch(e) { return false; }
+    });
+
+    const hoje = new Date().toLocaleDateString('pt-BR');
+    const wb = XLSX.utils.book_new();
+
+    // === ABA 1: RESUMO KPIs ===
+    const avgNPS = data.filter(r => r.nps).length ? (data.filter(r => r.nps).reduce((a, r) => a + (+r.nps || 0), 0) / data.filter(r => r.nps).length).toFixed(1) : '-';
+    const totalVinc = data.filter(r => r.vinculado_programa).length;
+    const segs = {};
+    data.forEach(r => { if(r.segmento) segs[r.segmento] = (segs[r.segmento] || 0) + 1; });
+    const hoje0 = new Date(); hoje0.setHours(0,0,0,0);
+    const retVencidos = data.filter(r => r.retorno_data && new Date(r.retorno_data+'T00:00:00') < hoje0).length;
+    const ap1 = avgF(data,'pilar_produto_nota'), ap2 = avgF(data,'pilar_vendas_nota'), ap3 = avgF(data,'pilar_financas_nota'), ap4 = avgF(data,'pilar_gestao_nota');
+    const filtrosAtivos = [fC&&('Consultor: '+fC), fK&&('Campus: '+fK), fE&&('Estágio: '+fE), fSeg&&('Segmento: '+fSeg), fCtx&&('Contexto: '+fCtx), fD&&('De: '+fD), fA&&('Até: '+fA)].filter(Boolean).join(' | ') || 'Nenhum';
+
+    const wsResumo = XLSX.utils.aoa_to_sheet([
+      ['ENEDES · Metodologia 5D — Dashboard', '', '', ''],
+      ['Gerado em:', hoje, 'Filtros:', filtrosAtivos],
+      [''],
+      ['📊 KPIs GERAIS', '', '', ''],
+      ['Total de Atendimentos', data.length, '', ''],
+      ['Consultores Ativos', [...new Set(data.map(r => r.mentor).filter(Boolean))].length, '', ''],
+      ['Segmentos', Object.keys(segs).length, '', ''],
+      ['NPS Médio', avgNPS, '', ''],
+      ['No Programa 12M', totalVinc, '', ''],
+      ['Retornos Vencidos', retVencidos, '', ''],
+      [''],
+      ['📊 MÉDIA DOS PILARES (Fase 1)', '', '', ''],
+      ['Pilar Produto', ap1||'-', '', ''],
+      ['Pilar Vendas', ap2||'-', '', ''],
+      ['Pilar Finanças', ap3||'-', '', ''],
+      ['Pilar Gestão', ap4||'-', '', ''],
+      [''],
+      ['🏪 SEGMENTOS', 'Quantidade', '', ''],
+      ...Object.entries(segs).sort((a,b) => b[1]-a[1]).map(([k,v]) => [k, v, '', '']),
+      [''],
+      ['👥 CONSULTORES', 'Atendimentos', 'NPS Médio', 'Vinculados 12M'],
+      ...[...new Set(data.map(r => r.mentor).filter(Boolean))].sort().map(c => {
+        const dc = data.filter(r => r.mentor === c);
+        const npsC = dc.filter(r => r.nps).length ? (dc.filter(r => r.nps).reduce((a,r) => a+(+r.nps||0),0)/dc.filter(r=>r.nps).length).toFixed(1) : '-';
+        return [c, dc.length, npsC, dc.filter(r => r.vinculado_programa).length];
+      }),
+    ]);
+    wsResumo['!cols'] = [{wch:35},{wch:18},{wch:18},{wch:50}];
+    XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo Dashboard');
+
+    // === ABA 2: ATENDIMENTOS COMPLETOS (Fase 1) ===
+    const h1 = ['Nome','Negócio','CPF/CNPJ','Consultor','Campus','Segmento','Estágio','Contexto Captação','Formato','Data','NPS',
+      'Gênero','Faixa Etária','Escolaridade','Atividade Principal','Interesse Capacitação','Modalidade Pref.','Canal de Venda',
+      'Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão','GUT Score','Vinculado 12M','Data Retorno'];
+    const r1 = data.map(r => [
+      r.nome||'', r.negocio||'', r.cnpj||'', r.mentor||'', r.campus||'', r.segmento||'', r.estagio||'',
+      r.acao_contexto||'', r.formato||'', r.data_mentoria||'', r.nps||'',
+      r.genero||'', r.faixa_etaria||'', r.escolaridade||'', r.fonte_renda||'',
+      r.interesse_capacitacao||'', r.modalidade_pref||'',
+      (()=>{ try{ const a=typeof r.canais_venda==='string'?JSON.parse(r.canais_venda):r.canais_venda; return Array.isArray(a)?a.join('; '):''; }catch(e){return r.canais_venda||'';} })(),
+      r.pilar_produto_nota||'', r.pilar_vendas_nota||'', r.pilar_financas_nota||'', r.pilar_gestao_nota||'',
+      ((+r.gut_g||0)*(+r.gut_u||0)*(+r.gut_t||0))||'',
+      r.vinculado_programa?'Sim':'', r.retorno_data||''
+    ]);
+    const ws1 = XLSX.utils.aoa_to_sheet([h1, ...r1]);
+    ws1['!cols'] = h1.map((_,i) => ({wch: i<4?28:i===2?16:14}));
+    XLSX.utils.book_append_sheet(wb, ws1, 'Atendimentos Fase 1');
+
+    // === ABA 3: DIAGNÓSTICO DOS PILARES ===
+    const hP = ['Nome','Negócio','Consultor','Segmento','Estágio',
+      'Produto Nota','Produto Class.','Vendas Nota','Vendas Class.',
+      'Finanças Nota','Finanças Class.','Gestão Nota','Gestão Class.',
+      'Síntese Produto','Síntese Vendas','Síntese Finanças','Síntese Gestão'];
+    const rP = data.map(r => [
+      r.nome||'', r.negocio||'', r.mentor||'', r.segmento||'', r.estagio||'',
+      r.pilar_produto_nota||'', r.pilar_produto_classe||'',
+      r.pilar_vendas_nota||'', r.pilar_vendas_classe||'',
+      r.pilar_financas_nota||'', r.pilar_financas_classe||'',
+      r.pilar_gestao_nota||'', r.pilar_gestao_classe||'',
+      r.pilar_produto_sintese||'', r.pilar_vendas_sintese||'', r.pilar_financas_sintese||'', r.pilar_gestao_sintese||''
+    ]);
+    const wsP = XLSX.utils.aoa_to_sheet([hP, ...rP]);
+    wsP['!cols'] = hP.map((_,i) => ({wch: i<3?26:i>=13?40:14}));
+    XLSX.utils.book_append_sheet(wb, wsP, 'Pilares');
+
+    // === ABA 4: RETORNOS ===
+    const hR = ['Nome','Negócio','Consultor','Campus','Segmento','Data Retorno','Horário','Canal','Pauta'];
+    const rR = data.filter(r => r.retorno_data).map(r => [
+      r.nome||'', r.negocio||'', r.mentor||'', r.campus||'', r.segmento||'',
+      r.retorno_data||'', r.retorno_hora||'', r.retorno_canal||'', r.retorno_obs||''
+    ]);
+    const wsR = XLSX.utils.aoa_to_sheet([hR, ...rR]);
+    wsR['!cols'] = [{wch:26},{wch:26},{wch:22},{wch:16},{wch:18},{wch:14},{wch:10},{wch:14},{wch:40}];
+    XLSX.utils.book_append_sheet(wb, wsR, 'Retornos');
+
+    XLSX.writeFile(wb, `dashboard_enedes_${hoje.replace(/\//g,'-')}.xlsx`);
+  } catch(err) {
+    alert('Erro ao gerar Excel: ' + err.message);
+  }
+}
+
 function limparDashFiltros(){
   document.querySelectorAll('[id^="df-"]').forEach(el=>{
     if(el.tagName==='SELECT') el.value='';
@@ -2593,8 +2727,11 @@ function renderDashFiltrado(dataFull){
     </div>
 
 
-    <!-- BOTÃO EXPORTAR PDF -->
-    <div style="display:flex;justify-content:flex-end;margin-bottom:20px;">
+    <!-- BOTÕES EXPORTAR DASHBOARD -->
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+      <button onclick="exportarDashExcel()" style="display:inline-flex;align-items:center;gap:8px;background:#1e6b2e;color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">
+        📗 Exportar Dashboard em Excel
+      </button>
       <button onclick="exportarDashPDF()" style="display:inline-flex;align-items:center;gap:8px;background:#1d3557;color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">
         📄 Exportar Dashboard em PDF
       </button>
@@ -2774,39 +2911,125 @@ async function loadAndRenderRelatorios(){
   const base=canSeeAll()?ALL:ALL.filter(r=>r.mentor===USER_NAME);
   const consultores=[...new Set(base.map(r=>r.mentor).filter(Boolean))].sort();
   const campi=[...new Set(base.map(r=>r.campus).filter(Boolean))].sort();
+  const segmentos=[...new Set(base.map(r=>r.segmento).filter(Boolean))].sort();
+  // contextos
+  const ctxMapArr=[...CONTEXTOS_PADRAO,...CONTEXTOS_EXTRAS.map(c=>({id:'extra_'+c.id,nome:c.nome}))];
+  const ctxMap={};ctxMapArr.forEach(c=>{ctxMap[c.id]=c.nome;});
+  const contextosIds=[...new Set(base.map(r=>r.acao_contexto).filter(Boolean))].sort((a,b)=>(ctxMap[a]||a).localeCompare(ctxMap[b]||b,'pt'));
+
+  const selStyle='width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;';
+  const lblStyle='font-size:11px;color:#888;display:block;margin-bottom:4px;font-weight:600;';
+
   document.getElementById('app-main').innerHTML=`
     <div style="padding:4px 0 20px;">
       <div style="font-size:20px;font-weight:800;color:#1d3557;margin-bottom:4px;">📋 Relatórios</div>
-      <div style="font-size:13px;color:#888;">Filtre os dados e exporte em PDF ou CSV</div>
+      <div style="font-size:13px;color:#888;">Filtre os dados e exporte em PDF, CSV ou Excel — inclui dados da Fase 1 e Fase 2</div>
     </div>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:20px;">
       <div style="font-size:12px;font-weight:700;color:#6b7c93;letter-spacing:1px;text-transform:uppercase;margin-bottom:14px;">🔍 Filtros</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end;">
-        ${canSeeAll()?`<div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">Consultor</label>
-          <select id="rf-consultor" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;">
+
+      <div style="font-size:11px;font-weight:700;color:#1d3557;margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid #f0f0f0;">📋 Contexto de Atendimento</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;align-items:end;">
+        ${canSeeAll()?`
+        <div><label style="${lblStyle}">Consultor</label>
+          <select id="rf-consultor" style="${selStyle}">
             <option value="">Todos</option>${consultores.map(c=>`<option value="${c}">${c}</option>`).join('')}
           </select></div>
-        <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">Campus</label>
-          <select id="rf-campus" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;">
+        <div><label style="${lblStyle}">Campus</label>
+          <select id="rf-campus" style="${selStyle}">
             <option value="">Todos</option>${campi.map(c=>`<option value="${c}">${c}</option>`).join('')}
           </select></div>`:''}
-        <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">Estágio</label>
-          <select id="rf-estagio" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;">
+        <div><label style="${lblStyle}">Contexto de Captação</label>
+          <select id="rf-contexto" style="${selStyle}">
+            <option value="">Todos</option>${contextosIds.map(id=>`<option value="${id}">${ctxMap[id]||id}</option>`).join('')}
+          </select></div>
+        <div><label style="${lblStyle}">Formato</label>
+          <select id="rf-formato" style="${selStyle}">
+            <option value="">Todos</option>
+            ${[...new Set(base.map(r=>r.formato).filter(Boolean))].sort().map(f=>`<option value="${f}">${f}</option>`).join('')}
+          </select></div>
+        <div><label style="${lblStyle}">De</label>
+          <input type="date" id="rf-de" style="${selStyle}"></div>
+        <div><label style="${lblStyle}">Até</label>
+          <input type="date" id="rf-ate" style="${selStyle}"></div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:#1d3557;margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid #f0f0f0;">🏪 Negócio</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;align-items:end;">
+        <div><label style="${lblStyle}">Segmento</label>
+          <select id="rf-segmento" style="${selStyle}">
+            <option value="">Todos</option>${segmentos.map(s=>`<option value="${s}">${s}</option>`).join('')}
+          </select></div>
+        <div><label style="${lblStyle}">Estágio do Negócio</label>
+          <select id="rf-estagio" style="${selStyle}">
             <option value="">Todos</option>
             <option value="Ideação">Ideação</option><option value="Validação">Validação</option>
             <option value="Operação">Operação</option><option value="Tração">Tração</option><option value="Scale up">Scale up</option>
           </select></div>
-        <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">De</label>
-          <input type="date" id="rf-de" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;"></div>
-        <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">Até</label>
-          <input type="date" id="rf-ate" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;"></div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:#1d3557;margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid #f0f0f0;">👤 Perfil Socioeconômico</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;align-items:end;">
+        <div><label style="${lblStyle}">Gênero</label>
+          <select id="rf-genero" style="${selStyle}">
+            <option value="">Todos</option>
+            <option value="Feminino">Feminino</option><option value="Masculino">Masculino</option>
+            <option value="Não-binário">Não-binário</option><option value="Prefiro não informar">Prefiro não informar</option>
+          </select></div>
+        <div><label style="${lblStyle}">Faixa Etária</label>
+          <select id="rf-faixa" style="${selStyle}">
+            <option value="">Todas</option>
+            <option value="Até 24 anos">Até 24 anos</option><option value="25 a 34 anos">25 a 34 anos</option>
+            <option value="35 a 44 anos">35 a 44 anos</option><option value="45 a 54 anos">45 a 54 anos</option>
+            <option value="55 anos ou mais">55 anos ou mais</option>
+          </select></div>
+        <div><label style="${lblStyle}">Escolaridade</label>
+          <select id="rf-escolaridade" style="${selStyle}">
+            <option value="">Todas</option>
+            <option value="Ensino Fundamental">Ens. Fundamental</option><option value="Ensino Médio">Ensino Médio</option>
+            <option value="Superior incompleto">Superior incompleto</option><option value="Superior completo">Superior completo</option>
+            <option value="Pós-graduação">Pós-graduação</option>
+          </select></div>
+        <div><label style="${lblStyle}">Atividade Principal</label>
+          <select id="rf-renda" style="${selStyle}">
+            <option value="">Todas</option>
+            <option value="Sim">Principal fonte de renda</option>
+            <option value="Não">Não é fonte principal</option>
+            <option value="Complementa a renda">Complementa a renda</option>
+          </select></div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:#1d3557;margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid #f0f0f0;">📚 Capacitação & Canais</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:6px;align-items:end;">
+        <div><label style="${lblStyle}">Interesse em Capacitação</label>
+          <select id="rf-cap" style="${selStyle}">
+            <option value="">Todos</option><option value="Sim">Sim</option><option value="Não">Não</option>
+          </select></div>
+        <div><label style="${lblStyle}">Modalidade Preferida</label>
+          <select id="rf-modalidade" style="${selStyle}">
+            <option value="">Todas</option><option value="Online">Online</option>
+            <option value="Presencial">Presencial</option><option value="Tanto faz">Tanto faz</option>
+          </select></div>
+        <div><label style="${lblStyle}">Canal de Venda</label>
+          <select id="rf-canal" style="${selStyle}">
+            <option value="">Todos</option>
+            <option value="Redes sociais">Redes sociais</option><option value="Loja física">Loja física</option>
+            <option value="Marketplace">Marketplace</option><option value="Encomendas / WhatsApp">Encomendas / WhatsApp</option>
+            <option value="Feira / Evento">Feira / Evento</option>
+          </select></div>
+        <div><label style="${lblStyle}">Vinculado ao Programa 12M</label>
+          <select id="rf-programa" style="${selStyle}">
+            <option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option>
+          </select></div>
       </div>
     </div>
+
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;">
       <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;">
         <div style="font-size:24px;margin-bottom:8px;">📄</div>
-        <div style="font-weight:700;font-size:15px;color:#1d3557;margin-bottom:6px;">Lista de Atendimentos</div>
-        <div style="font-size:12px;color:#888;margin-bottom:16px;">Tabela completa com todos os dados</div>
+        <div style="font-weight:700;font-size:15px;color:#1d3557;margin-bottom:4px;">Lista de Atendimentos</div>
+        <div style="font-size:12px;color:#888;margin-bottom:4px;">Fase 1 completa com todos os campos</div>
+        <div style="font-size:11px;color:#6b7c93;margin-bottom:14px;padding:6px 8px;background:#f8fafc;border-radius:6px;">Nome, negócio, CPF, segmento, estágio, contexto, perfil socioeconômico, pilares, NPS</div>
         <div style="display:flex;gap:8px;">
           <button onclick="gerarRelPDF('lista')" style="flex:1;padding:9px;background:#1d3557;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📄 PDF</button>
           <button onclick="gerarRelCSV('lista')" style="flex:1;padding:9px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📊 CSV</button>
@@ -2814,9 +3037,20 @@ async function loadAndRenderRelatorios(){
         </div>
       </div>
       <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;">
+        <div style="font-size:24px;margin-bottom:8px;">📄🔗📘</div>
+        <div style="font-weight:700;font-size:15px;color:#1d3557;margin-bottom:4px;">Fase 1 + Fase 2 Integrado</div>
+        <div style="font-size:12px;color:#888;margin-bottom:4px;">Dados completos: diagnóstico e plano de negócio</div>
+        <div style="font-size:11px;color:#6b7c93;margin-bottom:14px;padding:6px 8px;background:#f8fafc;border-radius:6px;">Une atendimento (Fase 1) com modelo de negócio, canvas, custos e metas (Fase 2)</div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="gerarRelExcelIntegrado()" style="flex:1;padding:9px;background:#1e6b2e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📗 Excel Completo</button>
+          <button onclick="gerarRelCSV('integrado')" style="flex:1;padding:9px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📊 CSV</button>
+        </div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;">
         <div style="font-size:24px;margin-bottom:8px;">👥</div>
-        <div style="font-weight:700;font-size:15px;color:#1d3557;margin-bottom:6px;">Desempenho por Consultor</div>
-        <div style="font-size:12px;color:#888;margin-bottom:16px;">NPS, pilares e atendimentos por consultor</div>
+        <div style="font-weight:700;font-size:15px;color:#1d3557;margin-bottom:4px;">Desempenho por Consultor</div>
+        <div style="font-size:12px;color:#888;margin-bottom:4px;">NPS, pilares e atendimentos por consultor</div>
+        <div style="font-size:11px;color:#6b7c93;margin-bottom:14px;padding:6px 8px;background:#f8fafc;border-radius:6px;">Qtd atendimentos, NPS médio, média pilares, retornos, vinculados 12M</div>
         <div style="display:flex;gap:8px;">
           <button onclick="gerarRelPDF('consultores')" style="flex:1;padding:9px;background:#1d3557;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📄 PDF</button>
           <button onclick="gerarRelCSV('consultores')" style="flex:1;padding:9px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📊 CSV</button>
@@ -2825,8 +3059,9 @@ async function loadAndRenderRelatorios(){
       </div>
       <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;">
         <div style="font-size:24px;margin-bottom:8px;">📅</div>
-        <div style="font-weight:700;font-size:15px;color:#1d3557;margin-bottom:6px;">Agenda de Retornos</div>
-        <div style="font-size:12px;color:#888;margin-bottom:16px;">Lista de retornos agendados</div>
+        <div style="font-weight:700;font-size:15px;color:#1d3557;margin-bottom:4px;">Agenda de Retornos</div>
+        <div style="font-size:12px;color:#888;margin-bottom:4px;">Lista de retornos agendados</div>
+        <div style="font-size:11px;color:#6b7c93;margin-bottom:14px;padding:6px 8px;background:#f8fafc;border-radius:6px;">Data, horário, canal, pauta de retorno por empreendedor</div>
         <div style="display:flex;gap:8px;">
           <button onclick="gerarRelPDF('retornos')" style="flex:1;padding:9px;background:#1d3557;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📄 PDF</button>
           <button onclick="gerarRelCSV('retornos')" style="flex:1;padding:9px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📊 CSV</button>
@@ -2835,8 +3070,9 @@ async function loadAndRenderRelatorios(){
       </div>
       <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;">
         <div style="font-size:24px;margin-bottom:8px;">🚀</div>
-        <div style="font-weight:700;font-size:15px;color:#1d3557;margin-bottom:6px;">Encaminhamentos</div>
-        <div style="font-size:12px;color:#888;margin-bottom:16px;">Capacitações, comunidade e micro-aceleração</div>
+        <div style="font-weight:700;font-size:15px;color:#1d3557;margin-bottom:4px;">Encaminhamentos</div>
+        <div style="font-size:12px;color:#888;margin-bottom:4px;">Capacitações, comunidade e micro-aceleração</div>
+        <div style="font-size:11px;color:#6b7c93;margin-bottom:14px;padding:6px 8px;background:#f8fafc;border-radius:6px;">Encaminhamentos por empreendedor e consultor</div>
         <div style="display:flex;gap:8px;">
           <button onclick="gerarRelPDF('encaminhamentos')" style="flex:1;padding:9px;background:#1d3557;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📄 PDF</button>
           <button onclick="gerarRelCSV('encaminhamentos')" style="flex:1;padding:9px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📊 CSV</button>
@@ -2845,8 +3081,9 @@ async function loadAndRenderRelatorios(){
       </div>
       <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;">
         <div style="font-size:24px;margin-bottom:8px;">🌱</div>
-        <div style="font-weight:700;font-size:15px;color:#1d3557;margin-bottom:6px;">Programa 12 Meses</div>
-        <div style="font-size:12px;color:#888;margin-bottom:16px;">Empreendedores vinculados ao programa de incubação</div>
+        <div style="font-weight:700;font-size:15px;color:#1d3557;margin-bottom:4px;">Programa 12 Meses</div>
+        <div style="font-size:12px;color:#888;margin-bottom:4px;">Empreendedores vinculados ao programa de incubação</div>
+        <div style="font-size:11px;color:#6b7c93;margin-bottom:14px;padding:6px 8px;background:#f8fafc;border-radius:6px;">Nome, negócio, consultor, data de vinculação, segmento</div>
         <div style="display:flex;gap:8px;">
           <button onclick="gerarRelPDF('programa')" style="flex:1;padding:9px;background:#1d3557;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📄 PDF</button>
           <button onclick="gerarRelCSV('programa')" style="flex:1;padding:9px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📊 CSV</button>
@@ -2855,12 +3092,23 @@ async function loadAndRenderRelatorios(){
       </div>
       <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;">
         <div style="font-size:24px;margin-bottom:8px;">🎯</div>
-        <div style="font-weight:700;font-size:15px;color:#1d3557;margin-bottom:6px;">Diagnóstico dos Pilares</div>
-        <div style="font-size:12px;color:#888;margin-bottom:16px;">Notas e classificação dos 4 pilares por empreendedor</div>
+        <div style="font-weight:700;font-size:15px;color:#1d3557;margin-bottom:4px;">Diagnóstico dos Pilares</div>
+        <div style="font-size:12px;color:#888;margin-bottom:4px;">Notas e classificação dos 4 pilares por empreendedor</div>
+        <div style="font-size:11px;color:#6b7c93;margin-bottom:14px;padding:6px 8px;background:#f8fafc;border-radius:6px;">Produto, Vendas, Finanças, Gestão — nota, classe e síntese</div>
         <div style="display:flex;gap:8px;">
           <button onclick="gerarRelPDF('pilares')" style="flex:1;padding:9px;background:#1d3557;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📄 PDF</button>
           <button onclick="gerarRelCSV('pilares')" style="flex:1;padding:9px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📊 CSV</button>
           <button onclick="gerarRelExcel('pilares')" style="flex:1;padding:9px;background:#1e6b2e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📗 Excel</button>
+        </div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;border-top:3px solid #5e1f82;">
+        <div style="font-size:24px;margin-bottom:8px;">📘</div>
+        <div style="font-weight:700;font-size:15px;color:#5e1f82;margin-bottom:4px;">Plano de Negócio (Fase 2)</div>
+        <div style="font-size:12px;color:#888;margin-bottom:4px;">Dados do modelo de negócio expandido</div>
+        <div style="font-size:11px;color:#6b7c93;margin-bottom:14px;padding:6px 8px;background:#f5f0fc;border-radius:6px;">Canvas, proposta de valor, custos, metas, equipe e ações estratégicas</div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="gerarRelExcel('fase2')" style="flex:1;padding:9px;background:#5e1f82;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📗 Excel</button>
+          <button onclick="gerarRelCSV('fase2')" style="flex:1;padding:9px;background:#7b2d8b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📊 CSV</button>
         </div>
       </div>
     </div>`;
@@ -2873,48 +3121,123 @@ function getRelData(){
   const fE=document.getElementById('rf-estagio')?.value||'';
   const fD=document.getElementById('rf-de')?.value||'';
   const fA=document.getElementById('rf-ate')?.value||'';
+  const fCtx=document.getElementById('rf-contexto')?.value||'';
+  const fSeg=document.getElementById('rf-segmento')?.value||'';
+  const fGen=document.getElementById('rf-genero')?.value||'';
+  const fFx=document.getElementById('rf-faixa')?.value||'';
+  const fEsc=document.getElementById('rf-escolaridade')?.value||'';
+  const fFmt=document.getElementById('rf-formato')?.value||'';
+  const fRenda=document.getElementById('rf-renda')?.value||'';
+  const fCap=document.getElementById('rf-cap')?.value||'';
+  const fModalidade=document.getElementById('rf-modalidade')?.value||'';
+  const fCanal=document.getElementById('rf-canal')?.value||'';
+  const fProg=document.getElementById('rf-programa')?.value||'';
   let d=base;
   if(fC) d=d.filter(r=>r.mentor===fC);
   if(fK) d=d.filter(r=>r.campus===fK);
   if(fE) d=d.filter(r=>r.estagio===fE);
   if(fD) d=d.filter(r=>r.data_mentoria&&r.data_mentoria>=fD);
   if(fA) d=d.filter(r=>r.data_mentoria&&r.data_mentoria<=fA);
+  if(fCtx) d=d.filter(r=>r.acao_contexto===fCtx);
+  if(fSeg) d=d.filter(r=>r.segmento===fSeg);
+  if(fGen) d=d.filter(r=>r.genero===fGen);
+  if(fFx) d=d.filter(r=>r.faixa_etaria===fFx);
+  if(fEsc) d=d.filter(r=>r.escolaridade===fEsc);
+  if(fFmt) d=d.filter(r=>r.formato===fFmt);
+  if(fRenda) d=d.filter(r=>r.fonte_renda===fRenda);
+  if(fCap) d=d.filter(r=>r.interesse_capacitacao===fCap);
+  if(fModalidade) d=d.filter(r=>r.modalidade_pref===fModalidade);
+  if(fCanal) d=d.filter(r=>{
+    if(!r.canais_venda) return false;
+    try{const arr=typeof r.canais_venda==='string'?JSON.parse(r.canais_venda):r.canais_venda;return Array.isArray(arr)&&arr.includes(fCanal);}catch(e){return false;}
+  });
+  if(fProg==='sim') d=d.filter(r=>r.vinculado_programa);
+  if(fProg==='nao') d=d.filter(r=>!r.vinculado_programa);
   return d;
 }
 
 function gerarRelCSV(tipo){
   const data=getRelData();
   let rows=[],header=[];
+  const hoje=new Date().toLocaleDateString('pt-BR');
   if(tipo==='lista'){
-    header=['Nome','Negócio','CPF/CNPJ','Segmento','Estágio','Consultor','Campus','Data','NPS','Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão'];
-    rows=data.map(r=>[r.nome,r.negocio,r.cnpj,r.segmento,r.estagio,r.mentor,r.campus,r.data_mentoria,r.nps,r.pilar_produto_nota,r.pilar_vendas_nota,r.pilar_financas_nota,r.pilar_gestao_nota]);
+    header=['Nome','Negócio','CPF/CNPJ','Segmento','Estágio','Consultor','Campus','Contexto Captação','Formato','Data','NPS',
+      'Gênero','Faixa Etária','Escolaridade','Atividade Principal','Interesse Capacitação','Modalidade Pref.','Canal Venda',
+      'Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão','GUT Score','Vinculado 12M','Data Retorno'];
+    rows=data.map(r=>[r.nome,r.negocio,r.cnpj,r.segmento,r.estagio,r.mentor,r.campus,r.acao_contexto||'',r.formato||'',r.data_mentoria,r.nps,
+      r.genero||'',r.faixa_etaria||'',r.escolaridade||'',r.fonte_renda||'',r.interesse_capacitacao||'',r.modalidade_pref||'',
+      (()=>{try{const a=typeof r.canais_venda==='string'?JSON.parse(r.canais_venda):r.canais_venda;return Array.isArray(a)?a.join('; '):''}catch(e){return r.canais_venda||''}})(),
+      r.pilar_produto_nota,r.pilar_vendas_nota,r.pilar_financas_nota,r.pilar_gestao_nota,
+      ((+r.gut_g||0)*(+r.gut_u||0)*(+r.gut_t||0))||'',
+      r.vinculado_programa?'Sim':'Não',r.retorno_data||'']);
   } else if(tipo==='consultores'){
-    header=['Consultor','Atendimentos','NPS Médio','Média Pilares','Retornos','Vinculados 12M'];
+    header=['Consultor','Campus','Atendimentos','NPS Médio','Média Pilares','Produto','Vendas','Finanças','Gestão','Retornos','Vinculados 12M'];
     const cons=[...new Set(data.map(r=>r.mentor).filter(Boolean))];
     rows=cons.map(c=>{
       const dc=data.filter(r=>r.mentor===c);
       const nps=dc.filter(r=>r.nps).length?(dc.filter(r=>r.nps).reduce((a,r)=>a+(+r.nps||0),0)/dc.filter(r=>r.nps).length).toFixed(1):'';
-      const ps=[avgF(dc,'pilar_produto_nota'),avgF(dc,'pilar_vendas_nota'),avgF(dc,'pilar_financas_nota'),avgF(dc,'pilar_gestao_nota')].filter(x=>x>0);
+      const ap1=avgF(dc,'pilar_produto_nota'),ap2=avgF(dc,'pilar_vendas_nota'),ap3=avgF(dc,'pilar_financas_nota'),ap4=avgF(dc,'pilar_gestao_nota');
+      const ps=[ap1,ap2,ap3,ap4].filter(x=>x>0);
       const mp=ps.length?(ps.reduce((a,b)=>a+b,0)/ps.length).toFixed(1):'';
-      return[c,dc.length,nps,mp,dc.filter(r=>r.retorno_data).length,dc.filter(r=>r.vinculado_programa).length];
+      const campus=[...new Set(dc.map(r=>r.campus).filter(Boolean))].join('; ');
+      return[c,campus,dc.length,nps,mp,ap1||'',ap2||'',ap3||'',ap4||'',dc.filter(r=>r.retorno_data).length,dc.filter(r=>r.vinculado_programa).length];
     });
   } else if(tipo==='retornos'){
-    header=['Nome','Negócio','Consultor','Data Retorno','Horário','Canal','Pauta'];
-    rows=data.filter(r=>r.retorno_data).map(r=>[r.nome,r.negocio,r.mentor,r.retorno_data,r.retorno_hora,r.retorno_canal,r.retorno_obs]);
+    header=['Nome','Negócio','CPF/CNPJ','Consultor','Campus','Segmento','Data Retorno','Horário','Canal','Pauta'];
+    rows=data.filter(r=>r.retorno_data).map(r=>[r.nome,r.negocio,r.cnpj,r.mentor,r.campus,r.segmento||'',r.retorno_data,r.retorno_hora,r.retorno_canal,r.retorno_obs]);
   } else if(tipo==='encaminhamentos'){
-    header=['Nome','Negócio','Consultor','Capacitações','Comunidade','Micro-Aceleração'];
-    rows=data.filter(r=>r.encaminhamento||r.comunidade||r.micro_aceleracao).map(r=>[r.nome,r.negocio,r.mentor,r.encaminhamento,r.comunidade,r.micro_aceleracao]);
+    header=['Nome','Negócio','CPF/CNPJ','Consultor','Campus','Segmento','Capacitações','Comunidade','Micro-Aceleração'];
+    rows=data.filter(r=>r.encaminhamento||r.comunidade||r.micro_aceleracao).map(r=>[r.nome,r.negocio,r.cnpj,r.mentor,r.campus,r.segmento||'',r.encaminhamento,r.comunidade,r.micro_aceleracao]);
   } else if(tipo==='programa'){
-    header=['Nome','Negócio','Consultor','Data Vinculação','Segmento','Estágio'];
-    rows=data.filter(r=>r.vinculado_programa).map(r=>[r.nome,r.negocio,r.mentor,r.data_vinculacao,r.segmento,r.estagio]);
+    header=['Nome','Negócio','CPF/CNPJ','Consultor','Campus','Data Vinculação','Segmento','Estágio','NPS'];
+    rows=data.filter(r=>r.vinculado_programa).map(r=>[r.nome,r.negocio,r.cnpj,r.mentor,r.campus,r.data_vinculacao,r.segmento,r.estagio,r.nps||'']);
   } else if(tipo==='pilares'){
-    header=['Nome','Negócio','Consultor','Produto Nota','Produto Class.','Vendas Nota','Vendas Class.','Finanças Nota','Finanças Class.','Gestão Nota','Gestão Class.'];
-    rows=data.map(r=>[r.nome,r.negocio,r.mentor,r.pilar_produto_nota,r.pilar_produto_classe,r.pilar_vendas_nota,r.pilar_vendas_classe,r.pilar_financas_nota,r.pilar_financas_classe,r.pilar_gestao_nota,r.pilar_gestao_classe]);
+    header=['Nome','Negócio','CPF/CNPJ','Consultor','Segmento','Estágio',
+      'Produto Nota','Produto Class.','Produto Síntese',
+      'Vendas Nota','Vendas Class.','Vendas Síntese',
+      'Finanças Nota','Finanças Class.','Finanças Síntese',
+      'Gestão Nota','Gestão Class.','Gestão Síntese'];
+    rows=data.map(r=>[r.nome,r.negocio,r.cnpj,r.mentor,r.segmento||'',r.estagio||'',
+      r.pilar_produto_nota,r.pilar_produto_classe,r.pilar_produto_sintese||'',
+      r.pilar_vendas_nota,r.pilar_vendas_classe,r.pilar_vendas_sintese||'',
+      r.pilar_financas_nota,r.pilar_financas_classe,r.pilar_financas_sintese||'',
+      r.pilar_gestao_nota,r.pilar_gestao_classe,r.pilar_gestao_sintese||'']);
+  } else if(tipo==='fase2'){
+    // Fase 2: usa FASE2_CACHE para empreendedores dos dados filtrados
+    header=['Nome','Negócio','Consultor','Segmento','Proposta de Valor','Para Quem','Dor que Resolve','Solução','Canais Fase2',
+      'Diferencial','Canvas Resumo','Faturamento Previsto','Custo Fixo Total','Custo Variável Total','Margem','Qtd Metas','Qtd Ações'];
+    rows=data.map(r=>{
+      const f2=getFase2DataSync(r.nome)||{};
+      const custosFix=(f2.custos_fixos||[]).reduce((a,c)=>a+(+c.valor||0),0);
+      const custosVar=(f2.custos_variaveis||[]).reduce((a,c)=>a+(+c.valor||0),0);
+      const fin=f2.financeiro||{};
+      return[r.nome,r.negocio||'',r.mentor||'',r.segmento||'',
+        f2.proposta_valor||'',f2.para_quem||'',f2.dor_resolve||'',f2.solucao||'',
+        (()=>{try{const a=typeof f2.canais==='string'?JSON.parse(f2.canais):f2.canais;return Array.isArray(a)?a.join('; '):''}catch(e){return f2.canais||''}})(),
+        f2.diferencial||'',(()=>{const b=f2.canvas_blocos||[];return b.map(bl=>bl.titulo+': '+bl.conteudo).join(' | ')})(),
+        fin.faturamento_previsto||'',custosFix||'',custosVar||'',fin.margem||'',
+        (f2.metas||[]).length,(f2.acoes||[]).length];
+    });
+  } else if(tipo==='integrado'){
+    header=['Nome','Negócio','CPF/CNPJ','Consultor','Campus','Segmento','Estágio','Contexto','Data','NPS',
+      'Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão',
+      'Proposta de Valor','Para Quem','Dor que Resolve','Solução','Diferencial',
+      'Custo Fixo Total','Custo Variável Total','Faturamento Previsto','Qtd Metas','Qtd Ações'];
+    rows=data.map(r=>{
+      const f2=getFase2DataSync(r.nome)||{};
+      const custosFix=(f2.custos_fixos||[]).reduce((a,c)=>a+(+c.valor||0),0);
+      const custosVar=(f2.custos_variaveis||[]).reduce((a,c)=>a+(+c.valor||0),0);
+      const fin=f2.financeiro||{};
+      return[r.nome,r.negocio,r.cnpj,r.mentor,r.campus,r.segmento||'',r.estagio||'',r.acao_contexto||'',r.data_mentoria||'',r.nps||'',
+        r.pilar_produto_nota||'',r.pilar_vendas_nota||'',r.pilar_financas_nota||'',r.pilar_gestao_nota||'',
+        f2.proposta_valor||'',f2.para_quem||'',f2.dor_resolve||'',f2.solucao||'',f2.diferencial||'',
+        custosFix||'',custosVar||'',fin.faturamento_previsto||'',(f2.metas||[]).length,(f2.acoes||[]).length];
+    });
   }
   const csv=[header,...rows].map(r=>r.map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download=`relatorio_${tipo}_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.csv`;a.click();
+  const a=document.createElement('a');a.href=url;a.download=`relatorio_${tipo}_${hoje.replace(/\//g,'-')}.csv`;a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -2923,40 +3246,147 @@ function gerarRelExcel(tipo){
   let rows=[],header=[];
   const hoje=new Date().toLocaleDateString('pt-BR');
   if(tipo==='lista'){
-    header=['Nome','Negócio','CPF/CNPJ','Segmento','Estágio','Consultor','Campus','Data','NPS','Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão'];
-    rows=data.map(r=>[r.nome,r.negocio,r.cnpj,r.segmento,r.estagio,r.mentor,r.campus,r.data_mentoria,r.nps,r.pilar_produto_nota,r.pilar_vendas_nota,r.pilar_financas_nota,r.pilar_gestao_nota]);
+    header=['Nome','Negócio','CPF/CNPJ','Segmento','Estágio','Consultor','Campus','Contexto Captação','Formato','Data','NPS',
+      'Gênero','Faixa Etária','Escolaridade','Atividade Principal','Interesse Capacitação','Modalidade Pref.','Canal Venda',
+      'Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão','GUT Score','Vinculado 12M','Data Retorno'];
+    rows=data.map(r=>[r.nome||'',r.negocio||'',r.cnpj||'',r.segmento||'',r.estagio||'',r.mentor||'',r.campus||'',r.acao_contexto||'',r.formato||'',r.data_mentoria||'',r.nps||'',
+      r.genero||'',r.faixa_etaria||'',r.escolaridade||'',r.fonte_renda||'',r.interesse_capacitacao||'',r.modalidade_pref||'',
+      (()=>{try{const a=typeof r.canais_venda==='string'?JSON.parse(r.canais_venda):r.canais_venda;return Array.isArray(a)?a.join('; '):''}catch(e){return r.canais_venda||''}})(),
+      r.pilar_produto_nota||'',r.pilar_vendas_nota||'',r.pilar_financas_nota||'',r.pilar_gestao_nota||'',
+      ((+r.gut_g||0)*(+r.gut_u||0)*(+r.gut_t||0))||'',
+      r.vinculado_programa?'Sim':'Não',r.retorno_data||'']);
   } else if(tipo==='consultores'){
-    header=['Consultor','Atendimentos','NPS Médio','Média Pilares','Retornos','Vinculados 12M'];
+    header=['Consultor','Campus','Atendimentos','NPS Médio','Média Pilares','Produto','Vendas','Finanças','Gestão','Retornos','Vinculados 12M'];
     const cons=[...new Set(data.map(r=>r.mentor).filter(Boolean))];
     rows=cons.map(c=>{
       const dc=data.filter(r=>r.mentor===c);
       const nps=dc.filter(r=>r.nps).length?(dc.filter(r=>r.nps).reduce((a,r)=>a+(+r.nps||0),0)/dc.filter(r=>r.nps).length).toFixed(1):'';
-      const ps=[avgF(dc,'pilar_produto_nota'),avgF(dc,'pilar_vendas_nota'),avgF(dc,'pilar_financas_nota'),avgF(dc,'pilar_gestao_nota')].filter(x=>x>0);
+      const ap1=avgF(dc,'pilar_produto_nota'),ap2=avgF(dc,'pilar_vendas_nota'),ap3=avgF(dc,'pilar_financas_nota'),ap4=avgF(dc,'pilar_gestao_nota');
+      const ps=[ap1,ap2,ap3,ap4].filter(x=>x>0);
       const mp=ps.length?(ps.reduce((a,b)=>a+b,0)/ps.length).toFixed(1):'';
-      return[c,dc.length,nps,mp,dc.filter(r=>r.retorno_data).length,dc.filter(r=>r.vinculado_programa).length];
+      const campus=[...new Set(dc.map(r=>r.campus).filter(Boolean))].join('; ');
+      return[c,campus,dc.length,nps,mp,ap1||'',ap2||'',ap3||'',ap4||'',dc.filter(r=>r.retorno_data).length,dc.filter(r=>r.vinculado_programa).length];
     });
   } else if(tipo==='retornos'){
-    header=['Nome','Negócio','CPF/CNPJ','Consultor','Data Retorno','Horário','Canal','Pauta'];
-    rows=data.filter(r=>r.retorno_data).map(r=>[r.nome,r.negocio,r.cnpj,r.mentor,r.retorno_data,r.retorno_hora,r.retorno_canal,r.retorno_obs]);
+    header=['Nome','Negócio','CPF/CNPJ','Consultor','Campus','Segmento','Data Retorno','Horário','Canal','Pauta'];
+    rows=data.filter(r=>r.retorno_data).map(r=>[r.nome||'',r.negocio||'',r.cnpj||'',r.mentor||'',r.campus||'',r.segmento||'',r.retorno_data||'',r.retorno_hora||'',r.retorno_canal||'',r.retorno_obs||'']);
   } else if(tipo==='encaminhamentos'){
-    header=['Nome','Negócio','CPF/CNPJ','Consultor','Capacitações','Comunidade','Micro-Aceleração'];
-    rows=data.filter(r=>r.encaminhamento||r.comunidade||r.micro_aceleracao).map(r=>[r.nome,r.negocio,r.cnpj,r.mentor,r.encaminhamento,r.comunidade,r.micro_aceleracao]);
+    header=['Nome','Negócio','CPF/CNPJ','Consultor','Campus','Segmento','Capacitações','Comunidade','Micro-Aceleração'];
+    rows=data.filter(r=>r.encaminhamento||r.comunidade||r.micro_aceleracao).map(r=>[r.nome||'',r.negocio||'',r.cnpj||'',r.mentor||'',r.campus||'',r.segmento||'',r.encaminhamento||'',r.comunidade||'',r.micro_aceleracao||'']);
   } else if(tipo==='programa'){
-    header=['Nome','Negócio','CPF/CNPJ','Consultor','Data Vinculação','Segmento','Estágio'];
-    rows=data.filter(r=>r.vinculado_programa).map(r=>[r.nome,r.negocio,r.cnpj,r.mentor,r.data_vinculacao,r.segmento,r.estagio]);
+    header=['Nome','Negócio','CPF/CNPJ','Consultor','Campus','Data Vinculação','Segmento','Estágio','NPS'];
+    rows=data.filter(r=>r.vinculado_programa).map(r=>[r.nome||'',r.negocio||'',r.cnpj||'',r.mentor||'',r.campus||'',r.data_vinculacao||'',r.segmento||'',r.estagio||'',r.nps||'']);
   } else if(tipo==='pilares'){
-    header=['Nome','Negócio','CPF/CNPJ','Consultor','Produto Nota','Produto Class.','Vendas Nota','Vendas Class.','Finanças Nota','Finanças Class.','Gestão Nota','Gestão Class.'];
-    rows=data.map(r=>[r.nome,r.negocio,r.cnpj,r.mentor,r.pilar_produto_nota,r.pilar_produto_classe,r.pilar_vendas_nota,r.pilar_vendas_classe,r.pilar_financas_nota,r.pilar_financas_classe,r.pilar_gestao_nota,r.pilar_gestao_classe]);
+    header=['Nome','Negócio','CPF/CNPJ','Consultor','Segmento','Estágio',
+      'Produto Nota','Produto Class.','Produto Síntese',
+      'Vendas Nota','Vendas Class.','Vendas Síntese',
+      'Finanças Nota','Finanças Class.','Finanças Síntese',
+      'Gestão Nota','Gestão Class.','Gestão Síntese'];
+    rows=data.map(r=>[r.nome||'',r.negocio||'',r.cnpj||'',r.mentor||'',r.segmento||'',r.estagio||'',
+      r.pilar_produto_nota||'',r.pilar_produto_classe||'',r.pilar_produto_sintese||'',
+      r.pilar_vendas_nota||'',r.pilar_vendas_classe||'',r.pilar_vendas_sintese||'',
+      r.pilar_financas_nota||'',r.pilar_financas_classe||'',r.pilar_financas_sintese||'',
+      r.pilar_gestao_nota||'',r.pilar_gestao_classe||'',r.pilar_gestao_sintese||'']);
+  } else if(tipo==='fase2'){
+    header=['Nome','Negócio','Consultor','Segmento','Proposta de Valor','Para Quem','Dor que Resolve','Solução','Diferencial',
+      'Faturamento Previsto','Custo Fixo Total','Custo Variável Total','Margem','Qtd Metas','Qtd Ações'];
+    rows=data.map(r=>{
+      const f2=getFase2DataSync(r.nome)||{};
+      const custosFix=(f2.custos_fixos||[]).reduce((a,c)=>a+(+c.valor||0),0);
+      const custosVar=(f2.custos_variaveis||[]).reduce((a,c)=>a+(+c.valor||0),0);
+      const fin=f2.financeiro||{};
+      return[r.nome||'',r.negocio||'',r.mentor||'',r.segmento||'',
+        f2.proposta_valor||'',f2.para_quem||'',f2.dor_resolve||'',f2.solucao||'',f2.diferencial||'',
+        fin.faturamento_previsto||'',custosFix||'',custosVar||'',fin.margem||'',
+        (f2.metas||[]).length,(f2.acoes||[]).length];
+    });
   }
   try{
     const wb=XLSX.utils.book_new();
     const ws=XLSX.utils.aoa_to_sheet([header,...rows.map(r=>r.map(v=>v||''))]);
-    // Largura das colunas
-    ws['!cols']=header.map((_,i)=>({wch: i===0||i===1?30:i===2?18:14}));
+    ws['!cols']=header.map((_,i)=>({wch:i===0||i===1?30:i===2?16:i>=12?40:14}));
     XLSX.utils.book_append_sheet(wb,ws,'Relatório');
     XLSX.writeFile(wb,`relatorio_${tipo}_${hoje.replace(/\//g,'-')}.xlsx`);
   }catch(err){
     alert('Erro ao gerar Excel: '+err.message);
+  }
+}
+
+async function gerarRelExcelIntegrado(){
+  const data=getRelData();
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  // Carrega fase2 para todos os empreendedores ainda não em cache
+  const names=data.map(r=>r.nome).filter(Boolean);
+  await Promise.all(names.map(n=>getFase2Data(n)));
+
+  try{
+    const wb=XLSX.utils.book_new();
+
+    // === ABA 1: FASE 1 COMPLETA ===
+    const h1=['Nome','Negócio','CPF/CNPJ','Consultor','Campus','Segmento','Estágio','Contexto','Formato','Data','NPS',
+      'Gênero','Faixa Etária','Escolaridade','Atividade Principal','Interesse Capacitação','Modalidade','Canal Venda',
+      'Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão','GUT Score','Vinculado 12M'];
+    const r1=data.map(r=>[r.nome||'',r.negocio||'',r.cnpj||'',r.mentor||'',r.campus||'',r.segmento||'',r.estagio||'',
+      r.acao_contexto||'',r.formato||'',r.data_mentoria||'',r.nps||'',
+      r.genero||'',r.faixa_etaria||'',r.escolaridade||'',r.fonte_renda||'',r.interesse_capacitacao||'',r.modalidade_pref||'',
+      (()=>{try{const a=typeof r.canais_venda==='string'?JSON.parse(r.canais_venda):r.canais_venda;return Array.isArray(a)?a.join('; '):''}catch(e){return r.canais_venda||''}})(),
+      r.pilar_produto_nota||'',r.pilar_vendas_nota||'',r.pilar_financas_nota||'',r.pilar_gestao_nota||'',
+      ((+r.gut_g||0)*(+r.gut_u||0)*(+r.gut_t||0))||'',r.vinculado_programa?'Sim':'Não']);
+    const ws1=XLSX.utils.aoa_to_sheet([h1,...r1]);
+    ws1['!cols']=h1.map((_,i)=>({wch:i<4?28:14}));
+    XLSX.utils.book_append_sheet(wb,ws1,'Fase 1 — Atendimentos');
+
+    // === ABA 2: FASE 2 — MODELO DE NEGÓCIO ===
+    const h2=['Nome','Negócio','Consultor','Segmento','Proposta de Valor','Para Quem','Dor que Resolve','Solução','Diferencial',
+      'Canais Distribuição','Recursos Chave','Parcerias'];
+    const r2=data.map(r=>{
+      const f2=getFase2DataSync(r.nome)||{};
+      return[r.nome||'',r.negocio||'',r.mentor||'',r.segmento||'',
+        f2.proposta_valor||'',f2.para_quem||'',f2.dor_resolve||'',f2.solucao||'',f2.diferencial||'',
+        (()=>{try{const a=typeof f2.canais==='string'?JSON.parse(f2.canais):f2.canais;return Array.isArray(a)?a.join('; '):''}catch(e){return f2.canais||''}})(),
+        f2.recursos_chave||'',f2.parcerias||''];
+    });
+    const ws2=XLSX.utils.aoa_to_sheet([h2,...r2]);
+    ws2['!cols']=h2.map((_,i)=>({wch:i<4?26:42}));
+    XLSX.utils.book_append_sheet(wb,ws2,'Fase 2 — Modelo Negócio');
+
+    // === ABA 3: FASE 2 — FINANCEIRO ===
+    const h3=['Nome','Negócio','Consultor','Segmento','Faturamento Previsto','Custo Fixo Total','Custo Variável Total','Margem Prevista','Detalhe Custos Fixos','Detalhe Custos Variáveis'];
+    const r3=data.map(r=>{
+      const f2=getFase2DataSync(r.nome)||{};
+      const fin=f2.financeiro||{};
+      const cf=(f2.custos_fixos||[]);
+      const cv=(f2.custos_variaveis||[]);
+      const totalCF=cf.reduce((a,c)=>a+(+c.valor||0),0);
+      const totalCV=cv.reduce((a,c)=>a+(+c.valor||0),0);
+      const detCF=cf.map(c=>`${c.descricao||c.nome||'Item'}: R$${c.valor||0}`).join(' | ');
+      const detCV=cv.map(c=>`${c.descricao||c.nome||'Item'}: R$${c.valor||0}`).join(' | ');
+      return[r.nome||'',r.negocio||'',r.mentor||'',r.segmento||'',
+        fin.faturamento_previsto||'',totalCF||'',totalCV||'',fin.margem||'',detCF,detCV];
+    });
+    const ws3=XLSX.utils.aoa_to_sheet([h3,...r3]);
+    ws3['!cols']=h3.map((_,i)=>({wch:i<4?26:i<8?18:48}));
+    XLSX.utils.book_append_sheet(wb,ws3,'Fase 2 — Financeiro');
+
+    // === ABA 4: FASE 2 — METAS E AÇÕES ===
+    const h4=['Nome','Negócio','Consultor','Tipo','Nº','Descrição','Prazo','Status','Responsável'];
+    const r4=[];
+    data.forEach(r=>{
+      const f2=getFase2DataSync(r.nome)||{};
+      (f2.metas||[]).forEach((m,i)=>{
+        r4.push([r.nome||'',r.negocio||'',r.mentor||'','Meta',i+1,m.descricao||m.meta||'',m.prazo||'',m.status||'',m.responsavel||'']);
+      });
+      (f2.acoes||[]).forEach((a,i)=>{
+        r4.push([r.nome||'',r.negocio||'',r.mentor||'','Ação',i+1,a.descricao||a.acao||'',a.prazo||'',a.status||'',a.responsavel||'']);
+      });
+    });
+    const ws4=XLSX.utils.aoa_to_sheet([h4,...r4]);
+    ws4['!cols']=h4.map((_,i)=>({wch:i<3?26:i===5?50:14}));
+    XLSX.utils.book_append_sheet(wb,ws4,'Fase 2 — Metas e Ações');
+
+    XLSX.writeFile(wb,`relatorio_integrado_fase1_fase2_${hoje.replace(/\//g,'-')}.xlsx`);
+  }catch(err){
+    alert('Erro ao gerar Excel integrado: '+err.message);
   }
 }
 
