@@ -499,6 +499,18 @@ tbody tr:hover td{background:#fafcff;}
 
 <script>
 const SU="https://cvjqdryogehpjfdihcmm.supabase.co",SK="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2anFkcnlvZ2VocGpmZGloY21tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NjgyNzQsImV4cCI6MjA4ODE0NDI3NH0.eBFOtnBKS1Bwb5bT0FWcujJ6RHnfPH5zLyxplS6VgFQ";
+const PORTAL_SU="https://gxofsmhkzdqwvvvpwklh.supabase.co",PORTAL_SK="sb_publishable_TjddPnmRZXK6vIouWyFHxA_gKUY66kv";
+const PORTAL_HEADERS={'apikey':PORTAL_SK,'Authorization':'Bearer '+PORTAL_SK,'Content-Type':'application/json'};
+async function buscarParticipantePortalPorCPF(cpf){
+  const cpfLimpo=cpf.replace(/\D/g,'');
+  if(cpfLimpo.length!==11) return null;
+  try{
+    const r=await fetch(PORTAL_SU+'/rest/v1/participantes?cpf=eq.'+cpfLimpo+'&select=nome,email,cpf,telefone,genero,raca_cor,escolaridade&limit=1',{headers:PORTAL_HEADERS});
+    if(!r.ok) return null;
+    const data=await r.json();
+    return data&&data.length>0?data[0]:null;
+  }catch(e){ return null; }
+}
 const SB_HEADERS={'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'};
 
 // ===== CONFIG GLOBAL (API KEY salva no Supabase) =====
@@ -1459,6 +1471,7 @@ function buildNav(){
     views.push({id:'painel', label:'Meu Painel'});
     views.push({id:'fase2', label:'Plano de Negócio'});
   }
+  if(!isEmpreend()) views.push({id:'portal_enedes', label:'📅 Portal ENEDES'});
   views.push({id:'ferramentas', label:'🧰 Ferramentas'});
   
   nav.innerHTML = views.map(v =>
@@ -1507,6 +1520,7 @@ async function showView(view){
   }
   else if(view === 'ferramentas') { renderFerramentas(); }
   else if(view === 'notificacoes') { renderNotificacoes(); }
+  else if(view === 'portal_enedes') { renderPortalEnedes(); }
 }
 
 
@@ -1694,6 +1708,115 @@ function solicitarAjusteEvidencia(empNome, acaoIdx, notifId){
   renderNotificacoes();
 }
 
+// ===== SSO — Abrir Portal ENEDES com login automático =====
+function abrirPortalSSO(nome, email, cnpj, telefone) {
+    if (!email) { sa('e', '⚠️ E-mail do empreendedor não cadastrado. Edite o atendimento e preencha o e-mail.'); return; }
+    const SALT = 'enedes-rota-2026';
+    const ts = Date.now();
+    const sig = btoa(email + ':' + ts + ':' + SALT).slice(0, 16);
+    const payload = { nome, email, cpf: cnpj||'', telefone: telefone||'', ts, sig };
+    const token = btoa(JSON.stringify(payload));
+    const PORTAL_URL = 'https://gestao.enedesifb.com.br/portal.html';
+    const url = `${PORTAL_URL}?sso=${encodeURIComponent(token)}`;
+    window.open(url, '_blank');
+    sa('o', `📅 Abrindo portal para ${nome} — acesso automático configurado.`);
+}
+
+
+// ===== PORTAL ENEDES — Agendamentos e Eventos =====
+function renderPortalEnedes(){
+  const main = document.getElementById('app-main');
+  const PORTAL_URL = 'https://gestao.enedesifb.com.br/portal.html';
+  const AGENDA_URL = 'https://gestao.enedesifb.com.br/portal.html';
+  const AGENDAR_URL = 'https://gestao.enedesifb.com.br/portal.html';
+  const EVENTOS_URL = 'https://gestao.enedesifb.com.br/portal.html';
+
+  main.innerHTML = `
+    <div style="max-width:960px;margin:0 auto;padding:20px 16px;">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:24px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:20px;font-weight:800;color:#1d3557;">📅 Portal ENEDES</div>
+          <div style="font-size:12px;color:#64748b;margin-top:3px;">Agendamentos de consultoria, eventos e coworking</div>
+        </div>
+        <a href="${PORTAL_URL}" target="_blank"
+           style="display:inline-flex;align-items:center;gap:6px;background:#1d3557;color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;text-decoration:none;">
+          🌐 Abrir Portal Completo
+        </a>
+      </div>
+
+      <!-- Aviso sobre iframe bloqueado -->
+      <div style="background:#fff8e1;border:1px solid #fcd34d;border-radius:12px;padding:14px 18px;margin-bottom:24px;display:flex;align-items:flex-start;gap:12px;">
+        <div style="font-size:20px;flex-shrink:0;">💡</div>
+        <div style="font-size:13px;color:#92400e;line-height:1.5;">
+          <strong>O portal precisa ser aberto em aba separada</strong> — por segurança, o navegador bloqueia a exibição incorporada.
+          Use os atalhos abaixo ou clique em <strong>"Abrir Portal Completo"</strong> acima.
+        </div>
+      </div>
+
+      <!-- Cards de acesso rápido -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:28px;">
+
+        <a href="${PORTAL_URL}" target="_blank" style="text-decoration:none;">
+          <div style="background:#fff;border:1px solid #dde3ec;border-radius:14px;padding:22px;cursor:pointer;transition:box-shadow .15s;display:flex;flex-direction:column;gap:10px;"
+               onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+            <div style="font-size:32px;">🏠</div>
+            <div style="font-size:14px;font-weight:700;color:#1d3557;">Página Inicial</div>
+            <div style="font-size:12px;color:#64748b;">Visão geral do portal e serviços disponíveis</div>
+            <div style="font-size:11px;color:#3a9e4f;font-weight:600;margin-top:4px;">Abrir →</div>
+          </div>
+        </a>
+
+        <a href="${AGENDAR_URL}" target="_blank" style="text-decoration:none;">
+          <div style="background:#fff;border:1px solid #dde3ec;border-radius:14px;padding:22px;cursor:pointer;transition:box-shadow .15s;display:flex;flex-direction:column;gap:10px;"
+               onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+            <div style="font-size:32px;">📝</div>
+            <div style="font-size:14px;font-weight:700;color:#1d3557;">Novo Agendamento</div>
+            <div style="font-size:12px;color:#64748b;">Agendar consultoria, coworking ou evento</div>
+            <div style="font-size:11px;color:#3a9e4f;font-weight:600;margin-top:4px;">Abrir →</div>
+          </div>
+        </a>
+
+        <a href="${AGENDA_URL}" target="_blank" style="text-decoration:none;">
+          <div style="background:#fff;border:1px solid #dde3ec;border-radius:14px;padding:22px;cursor:pointer;transition:box-shadow .15s;display:flex;flex-direction:column;gap:10px;"
+               onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+            <div style="font-size:32px;">📆</div>
+            <div style="font-size:14px;font-weight:700;color:#1d3557;">Ver Agenda</div>
+            <div style="font-size:12px;color:#64748b;">Visualizar todos os agendamentos e slots disponíveis</div>
+            <div style="font-size:11px;color:#3a9e4f;font-weight:600;margin-top:4px;">Abrir →</div>
+          </div>
+        </a>
+
+        <a href="${EVENTOS_URL}" target="_blank" style="text-decoration:none;">
+          <div style="background:#fff;border:1px solid #dde3ec;border-radius:14px;padding:22px;cursor:pointer;transition:box-shadow .15s;display:flex;flex-direction:column;gap:10px;"
+               onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+            <div style="font-size:32px;">🎪</div>
+            <div style="font-size:14px;font-weight:700;color:#1d3557;">Eventos</div>
+            <div style="font-size:12px;color:#64748b;">Feiras, workshops, capacitações e eventos ENEDES</div>
+            <div style="font-size:11px;color:#3a9e4f;font-weight:600;margin-top:4px;">Abrir →</div>
+          </div>
+        </a>
+
+      </div>
+
+      <!-- URL direta -->
+      <div style="background:#f1f5f9;border:1px solid #dde3ec;border-radius:12px;padding:16px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">URL do Portal</div>
+          <div style="font-size:13px;color:#1d3557;font-family:monospace;word-break:break-all;">${PORTAL_URL}</div>
+        </div>
+        <button onclick="navigator.clipboard.writeText('${PORTAL_URL}').then(()=>{this.textContent='✅ Copiado!';setTimeout(()=>this.textContent='📋 Copiar link',2000)})"
+          style="padding:8px 16px;background:#1d3557;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">
+          📋 Copiar link
+        </button>
+        <a href="${PORTAL_URL}" target="_blank"
+           style="padding:8px 16px;background:#3a9e4f;color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">
+          ↗ Abrir agora
+        </a>
+      </div>
+
+    </div>`;
+}
 function renderFerramentas(){
   const main = document.getElementById('app-main');
   const ferramentas = [
@@ -1913,7 +2036,24 @@ function renderUsuarios(){
         <div class="fg" style="margin:0"><label class="lbl">Programa</label><input class="inp" id="nu-prog" placeholder="ex: ABDI, IFB…"></div>
       </div>
       <div id="nu-emp-extra" style="display:none;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-        <div class="fg" style="margin:0"><label class="lbl">CNPJ do negócio <span style="font-size:10px;color:var(--muted);font-weight:400;">(identificador secundário no portal)</span></label><input class="inp" id="nu-cnpj" placeholder="00.000.000/0001-00"></div>
+        <div class="fg" style="margin:0;grid-column:1/-1;">
+          <label class="lbl" style="display:flex;align-items:center;justify-content:space-between;">
+            CPF do Empreendedor
+            <span id="nu-cpf-status" style="font-size:11px;font-weight:700;"></span>
+          </label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input class="inp" id="nu-cpf" placeholder="000.000.000-00" style="flex:1;"
+              oninput="this.value=this.value.replace(/\D/g,'').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4').substring(0,14)"
+              onblur="buscarEmpNoPortal()">
+            <button type="button" onclick="buscarEmpNoPortal()" style="padding:8px 14px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;font-size:12px;font-weight:700;color:#16a34a;cursor:pointer;font-family:inherit;white-space:nowrap;">🔍 Buscar no Portal</button>
+          </div>
+          <div id="nu-portal-info" style="display:none;margin-top:8px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;font-size:12px;color:#1e40af;"></div>
+          <div id="nu-portal-nao-encontrado" style="display:none;margin-top:8px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400e;">
+            ⚠️ CPF não encontrado no Portal ENEDES. 
+            <a href="https://gestao.enedesifb.com.br/portal.html" target="_blank" style="color:#d97706;font-weight:700;">Peça ao empreendedor para se cadastrar primeiro →</a>
+          </div>
+        </div>
+        <div class="fg" style="margin:0"><label class="lbl">CNPJ do negócio <span style="font-size:10px;color:var(--muted);font-weight:400;">(opcional)</span></label><input class="inp" id="nu-cnpj" placeholder="00.000.000/0001-00"></div>
         <div class="fg" style="margin:0"><label class="lbl">Telefone <span style="font-size:10px;color:var(--muted);font-weight:400;">(opcional)</span></label><input class="inp" id="nu-tel" placeholder="(61) 9 0000-0000"></div>
       </div>
       <div style="display:flex;gap:12px;align-items:flex-end;">
@@ -2054,6 +2194,38 @@ function toggleCamposEmp(perfil){
 // Inicializar visibilidade ao renderizar
 setTimeout(()=>toggleCamposEmp(document.getElementById('nu-perfil')?.value||'empreend'),100);
 
+async function buscarEmpNoPortal(){
+  const cpfInput=document.getElementById('nu-cpf');
+  const statusEl=document.getElementById('nu-cpf-status');
+  const infoEl=document.getElementById('nu-portal-info');
+  const naoEncEl=document.getElementById('nu-portal-nao-encontrado');
+  if(!cpfInput||!statusEl) return;
+  const cpf=cpfInput.value.replace(/\D/g,'');
+  if(cpf.length!==11){ infoEl.style.display='none'; naoEncEl.style.display='none'; return; }
+  statusEl.textContent='⏳ buscando...';
+  statusEl.style.color='#888';
+  infoEl.style.display='none';
+  naoEncEl.style.display='none';
+  const p=await buscarParticipantePortalPorCPF(cpf);
+  if(p){
+    // Preenche campos automaticamente
+    const nomeEl=document.getElementById('nu-nome');
+    const emailEl=document.getElementById('nu-email');
+    const telEl=document.getElementById('nu-tel');
+    if(nomeEl&&!nomeEl.value) nomeEl.value=p.nome||'';
+    if(emailEl&&!emailEl.value) emailEl.value=p.email||'';
+    if(telEl&&!telEl.value) telEl.value=p.telefone||'';
+    statusEl.textContent='✅ encontrado no portal';
+    statusEl.style.color='#16a34a';
+    infoEl.style.display='block';
+    infoEl.innerHTML=`✅ <strong>${p.nome}</strong> encontrado no Portal ENEDES — dados importados automaticamente.`;
+  } else {
+    statusEl.textContent='⚠️ não encontrado';
+    statusEl.style.color='#d97706';
+    naoEncEl.style.display='block';
+  }
+}
+
 async function adicionarUsuario(){
   const nome=document.getElementById('nu-nome').value.trim();
   const user=document.getElementById('nu-user').value.trim().toLowerCase();
@@ -2062,6 +2234,7 @@ async function adicionarUsuario(){
   const programa=document.getElementById('nu-prog').value.trim();
   const cnpj=(document.getElementById('nu-cnpj')?.value||'').trim();
   const tel=(document.getElementById('nu-tel')?.value||'').trim();
+  const cpfEmp=(document.getElementById('nu-cpf')?.value||'').replace(/\D/g,'');
   const err=document.getElementById('nu-err');
   err.style.display='none';
   if(!nome||!user||!senha){err.style.display='block';err.textContent='Preencha todos os campos.';return;}
@@ -2074,6 +2247,7 @@ async function adicionarUsuario(){
   if(cnpj) novoUser.cnpj=cnpj;
   if(tel) novoUser.telefone=tel;
   if(email) novoUser.email=email;
+  if(cpfEmp) novoUser.cpf=cpfEmp;
   await addUser(novoUser);
   renderUsuarios();
   if(perfil==='empreend'){
@@ -2088,7 +2262,15 @@ async function adicionarUsuario(){
 // ===== DASHBOARD =====
 async function loadAndRenderDash(){
   document.getElementById('app-main').innerHTML='<div class="ld"><div class="spin"></div><br>Carregando…</div>';
-  await loadData();
+  await Promise.all([loadData(), carregarContextos()]);
+  renderDashFiltrado(ALL);
+}
+
+function limparDashFiltros(){
+  document.querySelectorAll('[id^="df-"]').forEach(el=>{
+    if(el.tagName==='SELECT') el.value='';
+    else el.value='';
+  });
   renderDashFiltrado(ALL);
 }
 
@@ -2097,17 +2279,57 @@ function renderDashFiltrado(dataFull){
   const consultores=[...new Set(base.map(r=>r.mentor).filter(Boolean))].sort();
   const campi=[...new Set(base.map(r=>r.campus).filter(Boolean))].sort();
   const estagios=[...new Set(base.map(r=>r.estagio).filter(Boolean))].sort();
+  // Mapa id→nome para contextos de captação
+  const ctxMapArr = [...CONTEXTOS_PADRAO, ...CONTEXTOS_EXTRAS.map(c=>({id:'extra_'+c.id, nome:c.nome}))];
+  const ctxMap = {};
+  ctxMapArr.forEach(c=>{ ctxMap[c.id]=c.nome; });
+  // IDs únicos presentes nos dados
+  const contextosIds=[...new Set(base.map(r=>r.acao_contexto).filter(Boolean))].sort((a,b)=>{
+    const na=ctxMap[a]||a, nb=ctxMap[b]||b;
+    return na.localeCompare(nb,'pt');
+  });
+  const segmentos=[...new Set(base.map(r=>r.segmento).filter(Boolean))].sort();
+  const formatos=[...new Set(base.map(r=>r.formato).filter(Boolean))].sort();
+
+  // Ler filtros existentes
   const fC=document.getElementById('df-consultor')?.value||'';
   const fK=document.getElementById('df-campus')?.value||'';
   const fE=document.getElementById('df-estagio')?.value||'';
   const fD=document.getElementById('df-de')?.value||'';
   const fA=document.getElementById('df-ate')?.value||'';
+  // Novos filtros
+  const fCtx=document.getElementById('df-contexto')?.value||'';
+  const fSeg=document.getElementById('df-segmento')?.value||'';
+  const fGen=document.getElementById('df-genero')?.value||'';
+  const fFx=document.getElementById('df-faixa')?.value||'';
+  const fEsc=document.getElementById('df-escolaridade')?.value||'';
+  const fFmt=document.getElementById('df-formato')?.value||'';
+  const fRenda=document.getElementById('df-renda')?.value||'';
+  const fCap=document.getElementById('df-cap')?.value||'';
+  const fModalidade=document.getElementById('df-modalidade')?.value||'';
+  const fCanal=document.getElementById('df-canal')?.value||'';
+
   let data=base;
   if(fC) data=data.filter(r=>r.mentor===fC);
   if(fK) data=data.filter(r=>r.campus===fK);
   if(fE) data=data.filter(r=>r.estagio===fE);
   if(fD) data=data.filter(r=>r.data_mentoria&&r.data_mentoria>=fD);
   if(fA) data=data.filter(r=>r.data_mentoria&&r.data_mentoria<=fA);
+  if(fCtx) data=data.filter(r=>r.acao_contexto===fCtx);
+  if(fSeg) data=data.filter(r=>r.segmento===fSeg);
+  if(fGen) data=data.filter(r=>r.genero===fGen);
+  if(fFx) data=data.filter(r=>r.faixa_etaria===fFx);
+  if(fEsc) data=data.filter(r=>r.escolaridade===fEsc);
+  if(fFmt) data=data.filter(r=>r.formato===fFmt);
+  if(fRenda) data=data.filter(r=>r.fonte_renda===fRenda);
+  if(fCap) data=data.filter(r=>r.interesse_capacitacao===fCap);
+  if(fModalidade) data=data.filter(r=>r.modalidade_pref===fModalidade);
+  if(fCanal) data=data.filter(r=>{
+    if(!r.canais_venda) return false;
+    try{const arr=typeof r.canais_venda==='string'?JSON.parse(r.canais_venda):r.canais_venda;return Array.isArray(arr)&&arr.includes(fCanal);}catch(e){return false;}
+  });
+
+  const hasFilter=fC||fK||fE||fD||fA||fCtx||fSeg||fGen||fFx||fEsc||fFmt||fRenda||fCap||fModalidade||fCanal;
   const total=data.length;
   const mentors=cnt(data,'mentor');
   const segs=cnt(data,'segmento');
@@ -2119,12 +2341,11 @@ function renderDashFiltrado(dataFull){
   const retVencidos=data.filter(r=>r.retorno_data&&new Date(r.retorno_data+'T00:00:00')<hoje).length;
   const retProximos=data.filter(r=>{if(!r.retorno_data)return false;const d=new Date(r.retorno_data+'T00:00:00');return d>=hoje&&d<=em7;}).length;
   const retTotal=data.filter(r=>r.retorno_data).length;
-  // GUT médio
   const gutVals=data.map(r=>(+r.gut_g||0)*(+r.gut_u||0)*(+r.gut_t||0)).filter(v=>v>0);
   const avgGUT=gutVals.length?(gutVals.reduce((a,b)=>a+b,0)/gutVals.length).toFixed(0):'-';
-  // Pilar médios
   const ap1=avgF(data,'pilar_produto_nota'),ap2=avgF(data,'pilar_vendas_nota'),ap3=avgF(data,'pilar_financas_nota'),ap4=avgF(data,'pilar_gestao_nota');
-  // Tabela consultores
+
+  // ---- Tabela consultores ----
   const tabelaConsultores=consultores.map((c,i)=>{
     const dc=data.filter(r=>r.mentor===c);
     const npsC=dc.filter(r=>r.nps).length?(dc.filter(r=>r.nps).reduce((a,r)=>a+(+r.nps||0),0)/dc.filter(r=>r.nps).length).toFixed(1):'-';
@@ -2141,40 +2362,127 @@ function renderDashFiltrado(dataFull){
       <td style="padding:10px 12px;text-align:center;color:#2d6a4f;">${vinc}</td>
     </tr>`;
   }).join('');
-  // Próximos retornos
+
+  // ---- Próximos retornos ----
   const retList=data.filter(r=>{if(!r.retorno_data)return false;const d=new Date(r.retorno_data+'T00:00:00');return d>=hoje&&d<=em7;}).sort((a,b)=>a.retorno_data>b.retorno_data?1:-1).slice(0,6);
   const retHTML=retList.length?retList.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;">
     <div><div style="font-weight:600;font-size:13px;">${r.nome||'—'}</div><div style="font-size:11px;color:#888;">${r.mentor||'—'} · ${r.negocio||''}</div></div>
     <div style="text-align:right;"><div style="font-size:12px;font-weight:700;color:#1d3557;">${r.retorno_data||''}</div><div style="font-size:11px;color:#888;">${r.retorno_hora||''} ${r.retorno_canal||''}</div></div>
   </div>`).join(''):'<div style="color:#999;font-size:13px;padding:10px 0;">Nenhum retorno nos próximos 7 dias</div>';
+
   const showFiltros=canSeeAll();
+
+  // Helpers para selects dinâmicos
+  const optC=consultores.map(c=>`<option value="${c}" ${fC===c?'selected':''}>${c}</option>`).join('');
+  const optK=campi.map(c=>`<option value="${c}" ${fK===c?'selected':''}>${c}</option>`).join('');
+  const optE=estagios.map(e=>`<option value="${e}" ${fE===e?'selected':''}>${e}</option>`).join('');
+  const optCtx=contextosIds.map(c=>`<option value="${c}" ${fCtx===c?'selected':''}>${ctxMap[c]||c}</option>`).join('');
+  const optSeg=segmentos.map(s=>`<option value="${s}" ${fSeg===s?'selected':''}>${s}</option>`).join('');
+  const optFmt=formatos.map(f=>`<option value="${f}" ${fFmt===f?'selected':''}>${f}</option>`).join('');
+
+  const selStyle='width:100%;padding:7px 10px;border:1px solid #dde3ec;border-radius:8px;font-size:12px;font-family:inherit;background:#fff;';
+  const lblStyle='font-size:10px;color:#888;font-weight:600;display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px;';
+  // limpar handled by limparDashFiltros()
+
   document.getElementById('app-main').innerHTML=`
-    ${showFiltros?`<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px;margin-bottom:20px;">
-      <div style="font-size:12px;font-weight:700;color:#6b7c93;letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;">🔍 Filtros do Dashboard</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end;">
-        <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">Consultor</label>
-          <select id="df-consultor" onchange="renderDashFiltrado(ALL)" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;">
-            <option value="">Todos</option>${consultores.map(c=>`<option value="${c}" ${fC===c?'selected':''}>${c}</option>`).join('')}
-          </select></div>
-        <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">Campus</label>
-          <select id="df-campus" onchange="renderDashFiltrado(ALL)" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;">
-            <option value="">Todos</option>${campi.map(c=>`<option value="${c}" ${fK===c?'selected':''}>${c}</option>`).join('')}
-          </select></div>
-        <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">Estágio</label>
-          <select id="df-estagio" onchange="renderDashFiltrado(ALL)" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;">
-            <option value="">Todos</option>${estagios.map(e=>`<option value="${e}" ${fE===e?'selected':''}>${e}</option>`).join('')}
-          </select></div>
-        <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">De</label>
-          <input type="date" id="df-de" value="${fD}" onchange="renderDashFiltrado(ALL)" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;"></div>
-        <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">Até</label>
-          <input type="date" id="df-ate" value="${fA}" onchange="renderDashFiltrado(ALL)" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;"></div>
-        <div style="display:flex;align-items:flex-end;">
-          <button onclick="document.getElementById('df-consultor').value='';document.getElementById('df-campus').value='';document.getElementById('df-estagio').value='';document.getElementById('df-de').value='';document.getElementById('df-ate').value='';renderDashFiltrado(ALL);" style="padding:8px 16px;border:1px solid #ddd;border-radius:8px;background:#f8f9fa;color:#555;font-size:13px;cursor:pointer;font-family:inherit;width:100%;">🔄 Limpar</button>
-        </div>
+    ${showFiltros?`
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px;margin-bottom:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+        <div style="font-size:12px;font-weight:700;color:#6b7c93;letter-spacing:1px;text-transform:uppercase;">🔍 Filtros do Dashboard</div>
+        ${hasFilter?`<div style="font-size:11px;color:#7b2d8b;font-weight:700;background:#f5f0ff;padding:4px 10px;border-radius:20px;">● ${total} resultado${total!==1?'s':''} filtrado${total!==1?'s':''}</div>`:''}
+        <button onclick="limparDashFiltros()" style="padding:6px 14px;border:1px solid #ddd;border-radius:8px;background:#f8f9fa;color:#555;font-size:12px;cursor:pointer;font-family:inherit;">🔄 Limpar tudo</button>
       </div>
-    </div>`:''}
+
+      <div style="font-size:11px;font-weight:700;color:#1d3557;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #f0f0f0;">📋 Contexto de Atendimento</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;">
+        <div><label style="${lblStyle}">Consultor</label>
+          <select id="df-consultor" onchange="renderDashFiltrado(ALL)" style="${selStyle}"><option value="">Todos</option>${optC}</select></div>
+        <div><label style="${lblStyle}">Campus</label>
+          <select id="df-campus" onchange="renderDashFiltrado(ALL)" style="${selStyle}"><option value="">Todos</option>${optK}</select></div>
+        <div><label style="${lblStyle}">Contexto de Captação</label>
+          <select id="df-contexto" onchange="renderDashFiltrado(ALL)" style="${selStyle}"><option value="">Todos</option>${optCtx}</select></div>
+        <div><label style="${lblStyle}">Formato</label>
+          <select id="df-formato" onchange="renderDashFiltrado(ALL)" style="${selStyle}"><option value="">Todos</option>${optFmt}</select></div>
+        <div><label style="${lblStyle}">De</label>
+          <input type="date" id="df-de" value="${fD}" onchange="renderDashFiltrado(ALL)" style="${selStyle}"></div>
+        <div><label style="${lblStyle}">Até</label>
+          <input type="date" id="df-ate" value="${fA}" onchange="renderDashFiltrado(ALL)" style="${selStyle}"></div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:#1d3557;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #f0f0f0;">🏪 Negócio</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;">
+        <div><label style="${lblStyle}">Segmento</label>
+          <select id="df-segmento" onchange="renderDashFiltrado(ALL)" style="${selStyle}"><option value="">Todos</option>${optSeg}</select></div>
+        <div><label style="${lblStyle}">Estágio do Negócio</label>
+          <select id="df-estagio" onchange="renderDashFiltrado(ALL)" style="${selStyle}"><option value="">Todos</option>${optE}</select></div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:#1d3557;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #f0f0f0;">👤 Perfil Socioeconômico</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
+        <div><label style="${lblStyle}">Gênero</label>
+          <select id="df-genero" onchange="renderDashFiltrado(ALL)" style="${selStyle}">
+            <option value="">Todos</option>
+            <option value="Feminino" ${fGen==='Feminino'?'selected':''}>Feminino</option>
+            <option value="Masculino" ${fGen==='Masculino'?'selected':''}>Masculino</option>
+            <option value="Não-binário" ${fGen==='Não-binário'?'selected':''}>Não-binário</option>
+            <option value="Prefiro não informar" ${fGen==='Prefiro não informar'?'selected':''}>Prefiro não informar</option>
+          </select></div>
+        <div><label style="${lblStyle}">Faixa Etária</label>
+          <select id="df-faixa" onchange="renderDashFiltrado(ALL)" style="${selStyle}">
+            <option value="">Todas</option>
+            <option value="Até 24 anos" ${fFx==='Até 24 anos'?'selected':''}>Até 24 anos</option>
+            <option value="25 a 34 anos" ${fFx==='25 a 34 anos'?'selected':''}>25 a 34 anos</option>
+            <option value="35 a 44 anos" ${fFx==='35 a 44 anos'?'selected':''}>35 a 44 anos</option>
+            <option value="45 a 54 anos" ${fFx==='45 a 54 anos'?'selected':''}>45 a 54 anos</option>
+            <option value="55 anos ou mais" ${fFx==='55 anos ou mais'?'selected':''}>55 anos ou mais</option>
+          </select></div>
+        <div><label style="${lblStyle}">Escolaridade</label>
+          <select id="df-escolaridade" onchange="renderDashFiltrado(ALL)" style="${selStyle}">
+            <option value="">Todas</option>
+            <option value="Ensino Fundamental" ${fEsc==='Ensino Fundamental'?'selected':''}>Ens. Fundamental</option>
+            <option value="Ensino Médio" ${fEsc==='Ensino Médio'?'selected':''}>Ensino Médio</option>
+            <option value="Superior incompleto" ${fEsc==='Superior incompleto'?'selected':''}>Superior incompleto</option>
+            <option value="Superior completo" ${fEsc==='Superior completo'?'selected':''}>Superior completo</option>
+            <option value="Pós-graduação" ${fEsc==='Pós-graduação'?'selected':''}>Pós-graduação</option>
+          </select></div>
+        <div><label style="${lblStyle}">Atividade Principal</label>
+          <select id="df-renda" onchange="renderDashFiltrado(ALL)" style="${selStyle}">
+            <option value="">Todas</option>
+            <option value="Sim" ${fRenda==='Sim'?'selected':''}>Principal fonte de renda</option>
+            <option value="Não" ${fRenda==='Não'?'selected':''}>Não é fonte principal</option>
+            <option value="Complementa a renda" ${fRenda==='Complementa a renda'?'selected':''}>Complementa a renda</option>
+          </select></div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:#1d3557;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #f0f0f0;">📚 Capacitação & Canais</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
+        <div><label style="${lblStyle}">Interesse em Capacitação</label>
+          <select id="df-cap" onchange="renderDashFiltrado(ALL)" style="${selStyle}">
+            <option value="">Todos</option>
+            <option value="Sim" ${(document.getElementById('df-cap')?.value||'')==='Sim'?'selected':''}>Sim</option>
+            <option value="Não" ${(document.getElementById('df-cap')?.value||'')==='Não'?'selected':''}>Não</option>
+          </select></div>
+        <div><label style="${lblStyle}">Modalidade Preferida</label>
+          <select id="df-modalidade" onchange="renderDashFiltrado(ALL)" style="${selStyle}">
+            <option value="">Todas</option>
+            <option value="Online">Online</option>
+            <option value="Presencial">Presencial</option>
+            <option value="Tanto faz">Tanto faz</option>
+          </select></div>
+        <div><label style="${lblStyle}">Canal de Venda</label>
+          <select id="df-canal" onchange="renderDashFiltrado(ALL)" style="${selStyle}">
+            <option value="">Todos</option>
+            <option value="Redes sociais">Redes sociais</option>
+            <option value="Loja física">Loja física</option>
+            <option value="Marketplace">Marketplace</option>
+            <option value="Encomendas / WhatsApp">Encomendas / WhatsApp</option>
+            <option value="Feira / Evento">Feira / Evento</option>
+          </select></div>
+      </div>
+    </div>`:``}
+
     <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
-      <div class="kpi k0"><div class="ki">🏪</div><div class="kv">${total}</div><div class="kl">Atendimentos</div>${fC||fK||fE?'<div class="ks" style="color:#7b2d8b;">filtrado</div>':''}</div>
+      <div class="kpi k0"><div class="ki">🏪</div><div class="kv">${total}</div><div class="kl">Atendimentos</div>${hasFilter?`<div class="ks" style="color:#7b2d8b;">filtrado</div>`:''}</div>
       <div class="kpi k1"><div class="ki">👤</div><div class="kv">${Object.keys(mentors).length}</div><div class="kl">Consultores Ativos</div></div>
       <div class="kpi k2"><div class="ki">📊</div><div class="kv">${Object.keys(segs).length}</div><div class="kl">Segmentos</div></div>
       <div class="kpi" style="border-top:4px solid #f59e0b;"><div class="ki">⭐</div><div class="kv">${avgNPS}</div><div class="kl">NPS Médio</div></div>
@@ -2185,6 +2493,7 @@ function renderDashFiltrado(dataFull){
         <div class="ks">${retVencidos>0?'⚠️ Atenção necessária':retProximos>0?'📅 Próximos 7 dias':'Total: '+retTotal}</div>
       </div>
     </div>
+
     <div class="cgrid">
       <div class="cc"><div class="ct">Segmentos Atendidos</div><div class="cst">Distribuição por setor</div><div class="cw"><canvas id="c1"></canvas></div></div>
       <div class="cc"><div class="ct">Estágio dos Negócios</div><div class="cst">Maturidade dos empreendimentos</div><div class="cw"><canvas id="c2"></canvas></div></div>
@@ -2195,8 +2504,22 @@ function renderDashFiltrado(dataFull){
       <div class="cc"><div class="ct">Vinculados ao Programa 12M</div><div class="cst">Proporção de empreendedores no programa</div><div class="cw"><canvas id="c8"></canvas></div></div>
       <div class="cc"><div class="ct">Distribuição GUT</div><div class="cst">Priorização do problema central</div><div class="cw"><canvas id="c9"></canvas></div></div>
       <div class="cc cfull"><div class="ct">Evolução Mensal de Atendimentos</div><div class="cst">Total por mês</div><div class="cw cwt"><canvas id="c10"></canvas></div></div>
+      <div class="cc"><div class="ct">Contexto de Captação</div><div class="cst">Como chegou ao atendimento</div><div class="cw"><canvas id="c11"></canvas></div></div>
+      <div class="cc"><div class="ct">Formato de Atendimento</div><div class="cst">Presencial / Online / Híbrido</div><div class="cw"><canvas id="c12"></canvas></div></div>
+      <div class="cc"><div class="ct">Perfil por Gênero</div><div class="cst">Distribuição dos empreendedores</div><div class="cw"><canvas id="c13"></canvas></div></div>
+      <div class="cc"><div class="ct">Faixa Etária</div><div class="cst">Perfil etário dos atendidos</div><div class="cw"><canvas id="c14"></canvas></div></div>
+      <div class="cc"><div class="ct">Escolaridade</div><div class="cst">Nível de instrução</div><div class="cw"><canvas id="c15"></canvas></div></div>
+      <div class="cc"><div class="ct">Atividade é Fonte Principal de Renda?</div><div class="cst">Relação do negócio com a renda familiar</div><div class="cw"><canvas id="c16"></canvas></div></div>
+      <div class="cc cfull"><div class="ct">Canais de Venda Utilizados</div><div class="cst">Frequência por canal entre os atendidos</div><div class="cw cwt"><canvas id="c17"></canvas></div></div>
+      <div class="cc cfull"><div class="ct">Temas de Capacitação Demandados</div><div class="cst">Temas de maior interesse declarado</div><div class="cw cwt"><canvas id="c18"></canvas></div></div>
+      <div class="cc"><div class="ct">Interesse em Capacitação</div><div class="cst">Quer participar de cursos/oficinas do IFB?</div><div class="cw"><canvas id="c19"></canvas></div></div>
+      <div class="cc"><div class="ct">Modalidade Preferida</div><div class="cst">Online, Presencial ou Tanto faz</div><div class="cw"><canvas id="c20"></canvas></div></div>
+      <div class="cc"><div class="ct">Melhores Horários</div><div class="cst">Preferência de horário para capacitação</div><div class="cw"><canvas id="c21"></canvas></div></div>
+      <div class="cc"><div class="ct">Melhores Dias</div><div class="cst">Dias da semana preferidos</div><div class="cw"><canvas id="c22"></canvas></div></div>
     </div>
-    ${showFiltros?`<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:20px;overflow-x:auto;">
+
+    ${showFiltros?`
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:20px;overflow-x:auto;">
       <div style="font-size:14px;font-weight:700;color:#1d3557;margin-bottom:14px;">👥 Desempenho por Consultor</div>
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead><tr style="background:#f4f7fb;">
@@ -2213,29 +2536,92 @@ function renderDashFiltrado(dataFull){
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:20px;">
       <div style="font-size:14px;font-weight:700;color:#1d3557;margin-bottom:14px;">📅 Próximos Retornos (7 dias)</div>
       ${retHTML}
-    </div>`:''}`;
+    </div>`:``}`;
+
   setTimeout(()=>{
     donut('c1',segs,['#74c69d','#40916c','#2d6a4f','#a8d8b0','#c8f0d8','#1a4a35','#457b9d','#74a0c6','#a8c4d8']);
     donut('c2',ests,['#0F2644','#2D6A4F','#D97706','#7B2D8B','#E879A0']);
     barH('c3',cntDesafios(data),'#7b2d8b');
     barChart('c4',mentors,'#1d3557');
     radarChart('c6',{'Produto/Serviço':ap1,'Vendas/Marketing':ap2,'Finanças':ap3,'Gestão/Processos':ap4});
-    // Gráfico de barras dos 4 pilares
     barChart('c7',{'Produto/Serviço':ap1,'Vendas/Marketing':ap2,'Finanças':ap3,'Gestão/Processos':ap4},'#7b2d8b');
-    // Vinculados ao programa
     const vincN=data.filter(r=>r.vinculado_programa).length;
-    const nVincN=data.length-vincN;
-    donut('c8',{'Vinculados':vincN,'Não vinculados':nVincN},['#2d6a4f','#e2e8f0']);
-    // GUT distribuição
+    donut('c8',{'Vinculados':vincN,'Não vinculados':data.length-vincN},['#2d6a4f','#e2e8f0']);
     const gutFaixas={'Baixo (1-25)':0,'Médio (26-64)':0,'Alto (65-125)':0};
     data.forEach(r=>{const g=(+r.gut_g||0)*(+r.gut_u||0)*(+r.gut_t||0);if(g>0){if(g<=25)gutFaixas['Baixo (1-25)']++;else if(g<=64)gutFaixas['Médio (26-64)']++;else gutFaixas['Alto (65-125)']++;}});
     donut('c9',gutFaixas,['#74c69d','#f59e0b','#e53e3e']);
-    // Evolução mensal
     const meses={};
     data.forEach(r=>{const d=r.data_mentoria||r.saved_at?.split('T')[0]||r.created_at?.split('T')[0];if(d){const m=d.substring(0,7);meses[m]=(meses[m]||0)+1;}});
     const mesesOrdenados=Object.keys(meses).sort();
     const mesesObj={};mesesOrdenados.forEach(m=>{const [y,mo]=m.split('-');mesesObj[`${mo}/${y.slice(2)}`]=meses[m];});
     barChart('c10',mesesObj,'#457b9d');
+    // Novos gráficos
+    // c11: contexto com nomes legíveis
+    (()=>{
+      const ctxMapArr2=[...CONTEXTOS_PADRAO,...CONTEXTOS_EXTRAS.map(c=>({id:'extra_'+c.id,nome:c.nome}))];
+      const ctxMap2={};ctxMapArr2.forEach(c=>{ctxMap2[c.id]=c.nome;});
+      const ctxCnt={};
+      data.forEach(r=>{if(r.acao_contexto){const nm=ctxMap2[r.acao_contexto]||r.acao_contexto;ctxCnt[nm]=(ctxCnt[nm]||0)+1;}});
+      donut('c11',ctxCnt,['#f59e0b','#e88c3a','#d97706','#b45309','#92400e','#f3c677','#fde68a']);
+    })();
+    donut('c12',cnt(data,'formato'),['#457b9d','#74a0c6','#a8c4d8','#c8d8f0']);
+    donut('c13',cnt(data,'genero'),['#e879a0','#74a0c6','#a78bfa','#94a3b8']);
+    barChart('c14',cnt(data,'faixa_etaria'),'#7b2d8b');
+    barH('c15',cnt(data,'escolaridade'),'#2d6a4f');
+    donut('c16',cnt(data,'fonte_renda'),['#2d6a4f','#f59e0b','#457b9d']);
+    // c17: canais de venda (array JSON)
+    (()=>{
+      const canaisCnt={};
+      data.forEach(r=>{
+        if(!r.canais_venda) return;
+        try{
+          const arr=typeof r.canais_venda==='string'?JSON.parse(r.canais_venda):r.canais_venda;
+          if(Array.isArray(arr)&&arr.length) arr.forEach(c=>{if(c&&c.trim()) canaisCnt[c]=(canaisCnt[c]||0)+1;});
+        }catch(e){}
+      });
+      if(Object.keys(canaisCnt).length) barH('c17',canaisCnt,'#457b9d');
+    })();
+    // c18: temas de capacitação (array JSON field: temas_interesse)
+    (()=>{
+      const temasCnt={};
+      data.forEach(r=>{
+        if(!r.temas_interesse) return;
+        try{
+          const arr=typeof r.temas_interesse==='string'?JSON.parse(r.temas_interesse):r.temas_interesse;
+          if(Array.isArray(arr)&&arr.length) arr.forEach(t=>{if(t&&t.trim()) temasCnt[t]=(temasCnt[t]||0)+1;});
+        }catch(e){}
+      });
+      if(Object.keys(temasCnt).length) barH('c18',temasCnt,'#7b2d8b');
+    })();
+    donut('c19',cnt(data,'interesse_capacitacao'),['#2d6a4f','#e53e3e','#94a3b8']);
+    donut('c20',cnt(data,'modalidade_pref'),['#457b9d','#2d6a4f','#f59e0b','#94a3b8']);
+    // c21: horários (array JSON)
+    (()=>{
+      const horCnt={};
+      data.forEach(r=>{
+        if(!r.horarios_disponiveis) return;
+        try{
+          const arr=typeof r.horarios_disponiveis==='string'?JSON.parse(r.horarios_disponiveis):r.horarios_disponiveis;
+          if(Array.isArray(arr)&&arr.length) arr.forEach(h=>{if(h&&h.trim()) horCnt[h]=(horCnt[h]||0)+1;});
+        }catch(e){}
+      });
+      if(Object.keys(horCnt).length) donut('c21',horCnt,['#f59e0b','#457b9d','#1d3557']);
+    })();
+    // c22: dias (array JSON)
+    (()=>{
+      const diasOrdem=['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+      const diasCnt={};
+      diasOrdem.forEach(d=>{diasCnt[d]=0;});
+      let temDados=false;
+      data.forEach(r=>{
+        if(!r.dias_disponiveis) return;
+        try{
+          const arr=typeof r.dias_disponiveis==='string'?JSON.parse(r.dias_disponiveis):r.dias_disponiveis;
+          if(Array.isArray(arr)&&arr.length){temDados=true;arr.forEach(d=>{if(d&&diasCnt[d]!==undefined) diasCnt[d]++;});}
+        }catch(e){}
+      });
+      if(temDados) barChart('c22',diasCnt,'#2d6a4f');
+    })();
   },100);
 }
 
@@ -2768,6 +3154,7 @@ function renderDetalhe(){
       <button id="btn-evolucao" style="background:linear-gradient(135deg,#7b2d8b,#1d3557);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📈 Evolução do Negócio</button>
       <button id="btn-fase2" style="background:linear-gradient(135deg,#0d2a1a,#1a5e3a);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📘 Fase 2 — Plano de Negócio</button>
       <span style="font-size:12px;color:var(--muted);margin-left:4px;">Continuar preenchimento de onde parou</span>
+      ${r.email?`<button onclick="abrirPortalSSO('${e(r.nome||'')}','${e(r.email||'')}','${e(r.cnpj||'')}','${e(r.telefone||'')}')" style="background:linear-gradient(135deg,#f5a100,#e08c00);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📅 Agendar no Portal</button>`:'<span style="font-size:12px;color:#e08c00;background:#fff8e1;border:1px solid #f59e0b;border-radius:8px;padding:8px 12px;">⚠️ Cadastre o e-mail para liberar agendamento no portal</span>'}
       ${['coord','coord_abdi','coord_prog'].includes(PERFIL)?`<button onclick="excluirAtendimento()" style="background:#dc2626;color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:auto;">🗑 Excluir</button>`:''}
     </div>
     ${(()=>{
@@ -2822,7 +3209,7 @@ function renderDetalhe(){
           ${row("Negócio",r.negocio)}${row("CNPJ",r.cnpj)}${row("Segmento",r.segmento)}
           ${row("Estágio",r.estagio)}${row("Consultor",r.mentor)}${row("Campus",r.campus)}
           ${row("Desafios",r.desafios)}${row("Formato",r.formato)}
-          ${r.acao_contexto?row("Contexto de Captação",r.acao_contexto):''}
+          ${r.acao_contexto?row("Contexto de Captação",(()=>{const _cx=[...CONTEXTOS_PADRAO,...CONTEXTOS_EXTRAS.map(c=>({id:'extra_'+c.id,nome:c.nome}))];const _f=_cx.find(c=>c.id===r.acao_contexto);return _f?_f.nome:r.acao_contexto;})()):''}         
         </div>
         ${r.acao_contexto?`
         <div style="margin-top:12px;background:#f8fbf9;border:1px solid #c6dfd0;border-radius:10px;padding:12px 14px;">
@@ -3303,10 +3690,9 @@ function renderForm(){
       <div id="ae" class="aerr" style="display:none"></div>
       <div id="ao" class="aok" style="display:none"></div>
     </div>
-    <div class="nav"><button class="bk" id="bbk">Cancelar</button><span id="autosave-indicator" style="font-size:11px;color:#94a3b8;font-weight:600;flex:1;text-align:center;padding:0 8px;"></span><button class="bs" id="bnt-salvar-parcial" style="display:none;background:#2d6a4f;font-size:13px;padding:10px 16px;" title="Salvar o progresso atual e ver resumo">💾 Salvar</button><button class="bn" id="bnt">Próximo →</button></div>
+    <div class="nav"><button class="bk" id="bbk">Cancelar</button><button class="bs" id="bnt-salvar-parcial" style="display:none;background:#2d6a4f;font-size:13px;padding:10px 16px;" title="Salvar o progresso atual e ver resumo">💾 Salvar</button><button class="bn" id="bnt">Próximo →</button></div>
     <div class="prog" id="prg"></div>`;
   rPB(); rPH(); rPC(); rNav(); rPrg();
-  iniciarAutoSaveInterval();
 }
 
 function rPB(){
@@ -3360,7 +3746,7 @@ function rNav(){
   const bk=document.getElementById('bbk'),nt=document.getElementById('bnt');
   const cs=["#2d6a4f","#1d3557","#7b2d8b","#e07a5f","#1a6b6b"];
   bk.textContent=cp===0?'Cancelar':'← Etapa anterior';
-  bk.onclick=()=>{if(cp===0){pararAutoSaveInterval();showView('lista');}else{autoSaveAgora();cp--;renderForm();}};
+  bk.onclick=()=>{if(cp===0)showView('lista');else{cp--;renderForm();}};
   if(cp<4){
     nt.textContent=`Próxima etapa → ${PH5[cp+1].icon}`;nt.style.background=cs[cp+1];nt.className='bn';nt.onclick=nxt;
     // Botão salvar parcial a partir do cp>=1
@@ -4223,7 +4609,7 @@ function rAc(a,i){
 }
 
 function bindP(){
-  const b=(id,fn)=>{const el=document.getElementById(id);if(el)el.addEventListener('input',ev=>{fn(ev.target.value);agendarAutoSave();});};
+  const b=(id,fn)=>{const el=document.getElementById(id);if(el)el.addEventListener('input',ev=>fn(ev.target.value));};
   if(cp===0){
     b('f0',v=>F.nome=v);b('f1',v=>F.negocio=v);b('ftel',v=>F.telefone=v);b('femail',v=>F.email=v);
     b('f2',v=>F.cnpj=v);b('f3',v=>F.seg=v);b('f4',v=>F.data=v);b('f5',v=>F.mentor=v);
@@ -4315,110 +4701,7 @@ function sn(n){F.nps=String(n);rPC();}
 
 function nxt(){
   if(cp===0&&!F.nome.trim()){sa('e','⚠️ Informe o nome do empreendedor.');return;}
-  ha();
-  autoSaveAgora(); // salva ao avançar etapa
-  cp++;renderForm();
-}
-
-
-// ===== AUTOSAVE =====
-let _autoSaveTimer = null;
-let _autoSaveStatus = ''; // 'saving' | 'saved' | 'error'
-let _lastAutoSaveData = '';
-
-function autoSaveIndicator(status, msg) {
-  _autoSaveStatus = status;
-  const el = document.getElementById('autosave-indicator');
-  if (!el) return;
-  const icons = { saving: '⏳', saved: '✅', error: '⚠️' };
-  const cores = { saving: '#94a3b8', saved: '#2d6a4f', error: '#d97706' };
-  el.textContent = `${icons[status] || ''} ${msg}`;
-  el.style.color = cores[status] || '#94a3b8';
-}
-
-async function autoSaveAgora() {
-  // Só autosalva se nome estiver preenchido
-  if (!F.nome || !F.nome.trim()) return;
-  // Não salva se dados não mudaram
-  const snapshot = JSON.stringify({n:F.nome,neg:F.negocio,pils:F.pils,desa:F.desa,cp});
-  if (snapshot === _lastAutoSaveData) return;
-  _lastAutoSaveData = snapshot;
-  autoSaveIndicator('saving', 'Salvando automaticamente...');
-  try {
-    const smartFull = F.meta || [F.meta_s,F.meta_m,F.meta_a,F.meta_r,F.meta_t].filter(Boolean).join(' · ');
-    const rec = {
-      saved_at: new Date().toLocaleString('pt-BR'),
-      empreendedor_usuario: F.empreendedor_usuario,
-      nome: F.nome, negocio: F.negocio, telefone: F.telefone, email: F.email, cnpj: F.cnpj,
-      segmento: F.seg, data_mentoria: F.data, formato: F.fmt, mentor: (F.mentor||USER_NAME),
-      area: F.area, campus: F.campus, estagio: F.est,
-      desafios: F.desa.join(', '), desafio_outro: F.desaOutro,
-      pilar_produto_nota: F.pils['Produto/Serviço'].n, pilar_produto_classe: F.pils['Produto/Serviço'].c,
-      pilar_produto_obs: F.pils['Produto/Serviço'].o, pilar_produto_resps: JSON.stringify(F.pils['Produto/Serviço'].resps||[]),
-      pilar_vendas_nota: F.pils['Vendas/Marketing'].n, pilar_vendas_classe: F.pils['Vendas/Marketing'].c,
-      pilar_vendas_obs: F.pils['Vendas/Marketing'].o, pilar_vendas_resps: JSON.stringify(F.pils['Vendas/Marketing'].resps||[]),
-      pilar_financas_nota: F.pils['Finanças'].n, pilar_financas_classe: F.pils['Finanças'].c,
-      pilar_financas_obs: F.pils['Finanças'].o, pilar_financas_resps: JSON.stringify(F.pils['Finanças'].resps||[]),
-      pilar_gestao_nota: F.pils['Gestão/Processos'].n, pilar_gestao_classe: F.pils['Gestão/Processos'].c,
-      pilar_gestao_obs: F.pils['Gestão/Processos'].o, pilar_gestao_resps: JSON.stringify(F.pils['Gestão/Processos'].resps||[]),
-      gut_g: F.gut.G, gut_u: F.gut.U, gut_t: F.gut.T,
-      problema: F.prob, causa: F.causa, cinco_p: F.cincoP,
-      meta_s: F.meta_s, meta_m: F.meta_m, meta_a: F.meta_a, meta_r: F.meta_r, meta_t: F.meta_t,
-      meta_smart: smartFull, kpi: F.kpi, prazo: F.prazo,
-      acao1: F.acoes[0]?.a||'', acao2: F.acoes[1]?.a||'', acao3: F.acoes[2]?.a||'',
-      acoes_json: JSON.stringify(F.acoes), compromissos: F.comps.join('; '), observacoes: F.obs,
-      data_retorno: F.retorno, implementado: F.impl, funcionou: F.func,
-      ajustes: F.ajus, proximos_passos: F.prox, nps: F.nps, comentario_nps: F.cnps,
-      encaminhamento: F.encaminhamento, comunidade: F.comunidade,
-      retorno_data: F.retorno_data, retorno_hora: F.retorno_hora,
-      retorno_canal: F.retorno_canal, retorno_obs: F.retorno_obs,
-      micro_aceleracao: F.micro, resultado_case: F.resultado,
-      dir_matriz: JSON.stringify(F.dir_matriz||{}), dir_ordem: JSON.stringify(F.dir_ordem||{}),
-      dir_datas: JSON.stringify(F.dir_datas||{}), dir_acao_ancora: F.dir_acao_ancora,
-      dir_orientacao: F.dir_orientacao,
-      mvp_o_que: F.mvp_o_que, mvp_funciona: F.mvp_funciona, mvp_fora: F.mvp_fora,
-      mvp_criterio: F.mvp_criterio, mvp_prazo: F.mvp_prazo, mvp_canal: F.mvp_canal,
-      id_modelo: F.id_modelo, id_para_quem: F.id_para_quem, id_dor: F.id_dor,
-      id_oferta: F.id_oferta, id_diferencial: F.id_diferencial,
-      id_checklist: JSON.stringify(F.id_checklist||[]),
-      id_cursos: JSON.stringify(F.id_cursos||[]), id_curso_outro: F.id_curso_outro,
-      acao_contexto: F.acao_contexto, faixa_etaria: F.faixa_etaria,
-      escolaridade: F.escolaridade, genero: F.genero, tempo_atuacao: F.tempo_atuacao,
-      fonte_renda: F.fonte_renda, canais_venda: JSON.stringify(F.canais_venda||[]),
-      pontos_atuacao: JSON.stringify(F.pontos_atuacao||[]),
-      metodo_precificacao: F.metodo_precificacao, interesse_capacitacao: F.interesse_capacitacao,
-      temas_interesse: JSON.stringify(F.temas_interesse||[]), modalidade_pref: F.modalidade_pref,
-      dias_disponiveis: JSON.stringify(F.dias_disponiveis||[]),
-      horarios_disponiveis: JSON.stringify(F.horarios_disponiveis||[]),
-    };
-    await saveData(rec, F._editIndex);
-    // Se era novo, guarda o index para continuar atualizando o mesmo registro
-    if (F._editIndex === undefined) {
-      const all = getAll();
-      const idx = all.findIndex(r => r.nome === F.nome && r.saved_at === rec.saved_at);
-      if (idx !== -1) F._editIndex = idx;
-    }
-    autoSaveIndicator('saved', 'Salvo automaticamente ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}));
-  } catch(e) {
-    autoSaveIndicator('error', 'Falha no autosave — verifique a conexão');
-    console.warn('AutoSave erro:', e);
-  }
-}
-
-function agendarAutoSave() {
-  clearTimeout(_autoSaveTimer);
-  _autoSaveTimer = setTimeout(autoSaveAgora, 30000); // 30 segundos após última alteração
-}
-
-// Autosave periódico a cada 60 segundos independente de mudanças
-let _autoSaveInterval = null;
-function iniciarAutoSaveInterval() {
-  clearInterval(_autoSaveInterval);
-  _autoSaveInterval = setInterval(autoSaveAgora, 60000);
-}
-function pararAutoSaveInterval() {
-  clearInterval(_autoSaveInterval);
-  clearTimeout(_autoSaveTimer);
+  ha();cp++;renderForm();
 }
 
 async function salvar(){
@@ -4506,8 +4789,6 @@ async function salvar(){
     const editIndex = F._editIndex;
     await saveData(rec, editIndex);
     btn.textContent='✓ Salvo!';btn.className='bs ok';
-    pararAutoSaveInterval();
-    autoSaveIndicator('saved', 'Atendimento salvo com sucesso!');
     const msg = editIndex !== undefined ? '✅ Atendimento atualizado com sucesso!' : '✅ Atendimento salvo com sucesso!';
     sa('o', msg);
     // Mostrar modal de vinculação ao programa após breve pausa
