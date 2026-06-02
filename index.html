@@ -2481,6 +2481,27 @@ function renderDashFiltrado(dataFull){
       </div>
     </div>`:``}
 
+    ${canExport()?`
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:16px;">📥</span>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#1d3557;">Exportar dados filtrados</div>
+          <div style="font-size:11px;color:#64748b;">${total} registro${total!==1?'s':''} com os filtros aplicados</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button onclick="gerarRelPDF('lista')" style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:#1d3557;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📄 PDF</button>
+        <button onclick="gerarRelCSV('lista')" style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📊 CSV</button>
+        <button onclick="gerarRelExcel('lista')" style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:#1e6b2e;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📗 Excel</button>
+        <div style="width:1px;background:#e2e8f0;margin:0 2px;"></div>
+        <button onclick="gerarRelPDF('consultores')" style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:#4a5568;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">👥 Consultores PDF</button>
+        <button onclick="gerarRelExcel('consultores')" style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:#4a5568;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">👥 Excel</button>
+        <div style="width:1px;background:#e2e8f0;margin:0 2px;"></div>
+        <button onclick="showView('relatorios')" style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:#f1f5f9;color:#1d3557;border:1.5px solid #dde3ec;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Mais relatórios →</button>
+      </div>
+    </div>`:``}
+
     <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
       <div class="kpi k0"><div class="ki">🏪</div><div class="kv">${total}</div><div class="kl">Atendimentos</div>${hasFilter?`<div class="ks" style="color:#7b2d8b;">filtrado</div>`:''}</div>
       <div class="kpi k1"><div class="ki">👤</div><div class="kv">${Object.keys(mentors).length}</div><div class="kl">Consultores Ativos</div></div>
@@ -2726,17 +2747,28 @@ async function loadAndRenderRelatorios(){
 
 function getRelData(){
   const base=canSeeAll()?ALL:ALL.filter(r=>r.mentor===USER_NAME);
-  const fC=document.getElementById('rf-consultor')?.value||'';
-  const fK=document.getElementById('rf-campus')?.value||'';
-  const fE=document.getElementById('rf-estagio')?.value||'';
-  const fD=document.getElementById('rf-de')?.value||'';
-  const fA=document.getElementById('rf-ate')?.value||'';
+  // Lê filtros da tela Relatórios (rf-) ou do Dashboard (df-) — o que estiver ativo
+  const fC=document.getElementById('rf-consultor')?.value||document.getElementById('df-consultor')?.value||'';
+  const fK=document.getElementById('rf-campus')?.value||document.getElementById('df-campus')?.value||'';
+  const fE=document.getElementById('rf-estagio')?.value||document.getElementById('df-estagio')?.value||'';
+  const fD=document.getElementById('rf-de')?.value||document.getElementById('df-de')?.value||'';
+  const fA=document.getElementById('rf-ate')?.value||document.getElementById('df-ate')?.value||'';
+  const fCtx=document.getElementById('df-contexto')?.value||'';
+  const fSeg=document.getElementById('df-segmento')?.value||'';
+  const fGen=document.getElementById('df-genero')?.value||'';
+  const fFx=document.getElementById('df-faixa')?.value||'';
+  const fFmt=document.getElementById('df-formato')?.value||'';
   let d=base;
   if(fC) d=d.filter(r=>r.mentor===fC);
   if(fK) d=d.filter(r=>r.campus===fK);
   if(fE) d=d.filter(r=>r.estagio===fE);
   if(fD) d=d.filter(r=>r.data_mentoria&&r.data_mentoria>=fD);
   if(fA) d=d.filter(r=>r.data_mentoria&&r.data_mentoria<=fA);
+  if(fCtx) d=d.filter(r=>r.acao_contexto===fCtx);
+  if(fSeg) d=d.filter(r=>r.segmento===fSeg);
+  if(fGen) d=d.filter(r=>r.genero===fGen);
+  if(fFx) d=d.filter(r=>r.faixa_etaria===fFx);
+  if(fFmt) d=d.filter(r=>r.formato===fFmt);
   return d;
 }
 
