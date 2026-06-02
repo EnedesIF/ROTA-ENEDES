@@ -3010,6 +3010,8 @@ async function loadAndRenderLista(){
   document.getElementById('app-main').innerHTML='<div class="ld"><div class="spin"></div><br>Carregando…</div>';
   await loadData();
   renderListaFiltrada();
+  // Carrega badges de evidências em background
+  setTimeout(()=>carregarBadgesEvidencias(ALL),400);
 }
 
 function renderListaFiltrada(){
@@ -3102,7 +3104,7 @@ function renderListaFiltrada(){
           if(diff<=7) return '<div style="margin-top:5px;font-size:11px;font-weight:600;color:#2d6a4f;">📅 Retorno em '+diff+' dias — '+ret.toLocaleDateString('pt-BR')+'</div>';
           return '<div style="margin-top:5px;font-size:11px;color:#64748b;">📅 Retorno agendado: '+ret.toLocaleDateString('pt-BR')+'</div>';
         })()}
-      </div>`;
+        ${r.empreendedor_usuario?`<div style="margin-top:6px;display:flex;align-items:center;gap:8px;"><span id="ev-badge-${r.id}" style="display:none;background:#ef4444;color:#fff;border-radius:20px;padding:2px 10px;font-size:10px;font-weight:800;"></span><button onclick="event.stopPropagation();(async()=>{selRec=ALL[${idxOrig}];await abrirPainelEvidencias(ALL[${idxOrig}].nome||'');})()" style="background:#eff6ff;color:#0369a1;border:1.5px solid #bfdbfe;border-radius:8px;padding:3px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">📎 Ver Evidências</button></div>`:''}      </div>`;
     }).join('')}`;
 }
 
@@ -3154,6 +3156,7 @@ function renderDetalhe(){
       <button id="btn-evolucao" style="background:linear-gradient(135deg,#7b2d8b,#1d3557);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📈 Evolução do Negócio</button>
       <button id="btn-fase2" style="background:linear-gradient(135deg,#0d2a1a,#1a5e3a);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📘 Fase 2 — Plano de Negócio</button>
       <span style="font-size:12px;color:var(--muted);margin-left:4px;">Continuar preenchimento de onde parou</span>
+      <button id="btn-ver-evidencias" style="background:linear-gradient(135deg,#0369a1,#1d4ed8);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;">📎 Evidências <span id="badge-evidencias" style="background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:800;display:none;">0</span></button>
       ${r.email?`<button onclick="abrirPortalSSO('${e(r.nome||'')}','${e(r.email||'')}','${e(r.cnpj||'')}','${e(r.telefone||'')}')" style="background:linear-gradient(135deg,#f5a100,#e08c00);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📅 Agendar no Portal</button>`:'<span style="font-size:12px;color:#e08c00;background:#fff8e1;border:1px solid #f59e0b;border-radius:8px;padding:8px 12px;">⚠️ Cadastre o e-mail para liberar agendamento no portal</span>'}
       ${['coord','coord_abdi','coord_prog'].includes(PERFIL)?`<button onclick="excluirAtendimento()" style="background:#dc2626;color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:auto;">🗑 Excluir</button>`:''}
     </div>
@@ -3271,6 +3274,18 @@ function renderDetalhe(){
     }
     showView('fase2');
   });
+  const _bEv = document.getElementById('btn-ver-evidencias');
+  if(_bEv) {
+    // Carrega badge de evidências pendentes
+    const empNomeEv = selRec?.nome||'';
+    if(empNomeEv){
+      const f2ev = getFase2DataSync(empNomeEv);
+      const pendentes = (f2ev.acoes||[]).filter(a=>a.evidencia_status==='aguardando').length;
+      const badge = document.getElementById('badge-evidencias');
+      if(badge && pendentes>0){ badge.textContent=pendentes; badge.style.display='inline-block'; }
+    }
+    _bEv.addEventListener('click',()=>abrirPainelEvidencias(selRec?.nome||''));
+  }
 }
 
 function nf(){return{
@@ -7910,12 +7925,28 @@ function empAbrirEvidencia(acaoIdx, taskIdx){
       <input id="ev-link" type="url" placeholder="https://instagram.com/... ou link do arquivo"
         style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;margin:4px 0 12px;box-sizing:border-box;">
 
+      <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;">Ou anexar arquivo (foto, PDF, vídeo)</label>
+      <div id="ev-upload-area" style="border:2px dashed #cbd5e1;border-radius:9px;padding:16px;margin:4px 0 12px;text-align:center;cursor:pointer;transition:border-color .2s;background:#f8fafc;"
+        onclick="document.getElementById('ev-arquivo').click()"
+        ondragover="event.preventDefault();this.style.borderColor='#0369a1'"
+        ondragleave="this.style.borderColor='#cbd5e1'"
+        ondrop="event.preventDefault();this.style.borderColor='#cbd5e1';empHandleFileDrop(event)">
+        <input id="ev-arquivo" type="file" accept="image/*,application/pdf,video/mp4,video/webm" style="display:none;" onchange="empHandleFileSelect(this)">
+        <div id="ev-upload-placeholder">
+          <div style="font-size:24px;margin-bottom:4px;">📁</div>
+          <div style="font-size:13px;color:#64748b;">Clique ou arraste um arquivo aqui</div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:2px;">Imagens, PDF ou vídeo · Máx 10 MB</div>
+        </div>
+        <div id="ev-upload-preview" style="display:none;font-size:13px;color:#0369a1;font-weight:600;"></div>
+      </div>
+
       <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;">Descrição do que foi feito</label>
       <textarea id="ev-obs" rows="3" placeholder="Descreva o que você fez, quando, como ficou..."
         style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;margin:4px 0 16px;resize:vertical;box-sizing:border-box;"></textarea>
 
+      <div id="ev-sending" style="display:none;text-align:center;padding:12px;color:#0369a1;font-size:13px;font-weight:600;">⏳ Enviando evidência…</div>
       <div style="display:flex;gap:10px;">
-        <button onclick="empSalvarEvidencia(${acaoIdx})" style="flex:1;background:#1a5e3a;color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">📤 Enviar para o Consultor</button>
+        <button onclick="empSalvarEvidencia(${acaoIdx})" id="ev-btn-enviar" style="flex:1;background:#1a5e3a;color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">📤 Enviar para o Consultor</button>
         <button onclick="document.getElementById('emp-evidencia-modal').remove()" style="background:#f1f5f9;color:#64748b;border:none;border-radius:10px;padding:12px 20px;font-size:14px;cursor:pointer;font-family:inherit;">Cancelar</button>
       </div>
     </div>
@@ -7927,7 +7958,7 @@ function empAbrirEvidencia(acaoIdx, taskIdx){
 async function empSalvarEvidencia(acaoIdx){
   const link = document.getElementById('ev-link')?.value.trim()||'';
   const obs  = document.getElementById('ev-obs')?.value.trim()||'';
-  if(!link && !obs){ alert('Preencha o link ou a descrição da evidência.'); return; }
+  if(!link && !obs && !_evArquivoSelecionado){ alert('Preencha o link, a descrição ou anexe um arquivo.'); return; }
 
   const empNome = f2GetEmpNome() || (getUsers().find(u=>u.usuario===USER_NAME)?.nome||'');
   if(!empNome){ alert('Não foi possível identificar o empreendedor.'); return; }
@@ -7935,10 +7966,28 @@ async function empSalvarEvidencia(acaoIdx){
   const data = getFase2DataSync(empNome);
   if(!data.acoes || !data.acoes[acaoIdx]){ alert('Ação não encontrada.'); return; }
 
-  data.acoes[acaoIdx].evidencia_link   = link;
+  // Mostrar loading
+  const sending = document.getElementById('ev-sending');
+  const envBtn  = document.getElementById('ev-btn-enviar');
+  if(sending) sending.style.display='block';
+  if(envBtn)  envBtn.disabled=true;
+
+  // Upload de arquivo (se houver)
+  let arquivoInfo = null;
+  if(_evArquivoSelecionado){
+    arquivoInfo = await empUploadArquivoEvidencia(empNome, acaoIdx);
+  }
+
+  data.acoes[acaoIdx].evidencia_link   = link || (arquivoInfo?.signedUrl||'');
   data.acoes[acaoIdx].evidencia_obs    = obs;
   data.acoes[acaoIdx].evidencia_status = 'aguardando';
   data.acoes[acaoIdx].evidencia_data   = new Date().toLocaleString('pt-BR');
+  if(arquivoInfo){
+    data.acoes[acaoIdx].evidencia_arquivo_path = arquivoInfo.path;
+    data.acoes[acaoIdx].evidencia_arquivo_nome = arquivoInfo.nome;
+    if(arquivoInfo.signedUrl && !link) data.acoes[acaoIdx].evidencia_link = arquivoInfo.signedUrl;
+  }
+  _evArquivoSelecionado = null; // reset
 
   await saveFase2Data(empNome, data);
 
@@ -8610,6 +8659,240 @@ function ha(){['e','o'].forEach(t=>{const el=document.getElementById('a'+t);if(e
 function cnt(data,k){return data.reduce((a,r)=>{const v=r[k];if(v)a[v]=(a[v]||0)+1;return a;},{});}
 function avgF(data,k){const v=data.map(r=>+r[k]).filter(n=>n>0);return v.length?+(v.reduce((a,b)=>a+b,0)/v.length).toFixed(1):0;}
 function cntDesafios(data){const a={};data.forEach(r=>{if(r.desafios)r.desafios.split(',').forEach(d=>{const t=d.trim();if(t)a[t]=(a[t]||0)+1;});});return a;}
+
+// ===== PAINEL DE EVIDÊNCIAS DO CONSULTOR =====
+async function abrirPainelEvidencias(empNome){
+  if(!empNome){ alert('Empreendedor não identificado.'); return; }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'modal-evidencias-consul';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(5,15,30,.75);z-index:99990;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;backdrop-filter:blur(6px);';
+
+  overlay.innerHTML = '<div style="background:#fff;border-radius:20px;max-width:720px;width:100%;margin:auto;box-shadow:0 40px 100px rgba(0,0,0,.35);overflow:hidden;"><div id="ev-modal-inner"><div style="padding:40px;text-align:center;color:#64748b;"><div style="font-size:28px;margin-bottom:10px;">⏳</div>Carregando evidências…</div></div></div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', ev=>{ if(ev.target===overlay) overlay.remove(); });
+
+  // Carrega dados
+  const data = await getFase2Data(empNome);
+  const acoes = data.acoes||[];
+
+  const stLabel = { '': '', 'aguardando': '⏳ Aguardando', 'aprovada': '✅ Aprovada', 'ajuste': '🔄 Ajuste solicitado' };
+  const stColor = { '': '#94a3b8', 'aguardando': '#d97706', 'aprovada': '#16a34a', 'ajuste': '#7c3aed' };
+  const stBg    = { '': '#f1f5f9', 'aguardando': '#fef9c3', 'aprovada': '#dcfce7', 'ajuste': '#ede9fe' };
+
+  const comEvidencia = acoes.filter((a,i)=>a.evidencia_link||a.evidencia_obs||a.evidencia_status==='aguardando');
+
+  const rows = comEvidencia.length === 0
+    ? '<div style="text-align:center;padding:40px;color:#94a3b8;font-size:14px;">📭 Nenhuma evidência enviada ainda pelo empreendedor.</div>'
+    : acoes.map((a,i)=>{
+        if(!a.evidencia_link && !a.evidencia_obs && a.evidencia_status!=='aguardando') return '';
+        const st = a.evidencia_status||'aguardando';
+        return `
+          <div style="background:#f8fafc;border:1.5px solid ${st==='aguardando'?'#fcd34d':st==='aprovada'?'#86efac':st==='ajuste'?'#c4b5fd':'#e2e8f0'};border-radius:14px;padding:16px 18px;margin-bottom:12px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+              <div style="flex:1;">
+                <div style="font-weight:700;font-size:14px;color:#0f2644;margin-bottom:4px;">${e(a.texto||a.a||'Ação '+(i+1))}</div>
+                ${a.pilar||a.categoria?`<div style="font-size:11px;color:#64748b;margin-bottom:6px;">📂 ${e(a.pilar||a.categoria)}</div>`:''}
+                ${a.evidencia_data?`<div style="font-size:11px;color:#94a3b8;">📅 Enviado em: ${e(a.evidencia_data)}</div>`:''}
+              </div>
+              <span style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;background:${stBg[st]};color:${stColor[st]};white-space:nowrap;">${stLabel[st]||st}</span>
+            </div>
+            ${a.evidencia_link?(()=>{
+              const _url = a.evidencia_link;
+              const _isImg = /\.(jpe?g|png|gif|webp)/i.test(_url);
+              const _isVid = /\.(mp4|webm)/i.test(_url);
+              const _isPdf = /\.pdf/i.test(_url);
+              const _icon = _isImg?'🖼️':_isPdf?'📄':_isVid?'🎥':'🔗';
+              const _preview = _isImg
+                ? '<img src="'+e(_url)+'" alt="Evidência" style="max-width:100%;border-radius:8px;max-height:280px;object-fit:contain;display:block;margin-bottom:6px;">'
+                : _isVid
+                ? '<video controls style="max-width:100%;border-radius:8px;max-height:200px;display:block;margin-bottom:6px;"><source src="'+e(_url)+'"></video>'
+                : '';
+              return '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:10px 14px;margin-bottom:8px;">'
+                + _preview
+                + '<div style="display:flex;align-items:center;gap:10px;">'
+                + '<span style="font-size:16px;">'+_icon+'</span>'
+                + '<a href="'+e(_url)+'" target="_blank" style="color:#0369a1;font-size:13px;font-weight:600;word-break:break-all;">'+e(a.evidencia_arquivo_nome||_url)+'</a>'
+                + '</div></div>';
+            })():''}
+            ${a.evidencia_obs?`<div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:10px 14px;margin-bottom:8px;">
+              <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">📝 Descrição do empreendedor</div>
+              <div style="font-size:13px;color:#334155;line-height:1.6;">${e(a.evidencia_obs)}</div>
+            </div>`:''}
+            ${a.evidencia_obs_consultor?`<div style="background:#fef9c3;border:1px solid #fde047;border-radius:9px;padding:10px 14px;margin-bottom:8px;">
+              <div style="font-size:10px;font-weight:700;color:#854d0e;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">💬 Seu feedback anterior</div>
+              <div style="font-size:13px;color:#78350f;">${e(a.evidencia_obs_consultor)}</div>
+            </div>`:''}
+            ${st!=='aprovada'?`
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+              <button onclick="avaliarEvidenciaInline('${e(empNome)}',${i},'aprovada')" 
+                style="background:#dcfce7;color:#16a34a;border:1.5px solid #86efac;border-radius:9px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;flex:1;">
+                ✅ Aprovar Evidência
+              </button>
+              <button onclick="pedirAjusteEvidenciaInline('${e(empNome)}',${i})"
+                style="background:#ede9fe;color:#7c3aed;border:1.5px solid #c4b5fd;border-radius:9px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;flex:1;">
+                🔄 Solicitar Ajuste
+              </button>
+            </div>`:
+            `<div style="background:#dcfce7;border-radius:9px;padding:8px 14px;font-size:12px;color:#16a34a;font-weight:600;">✅ Evidência aprovada — ação marcada como concluída</div>`}
+          </div>`;
+      }).join('');
+
+  const pendentes = comEvidencia.filter(a=>(a.evidencia_status||'aguardando')==='aguardando').length;
+
+  document.getElementById('ev-modal-inner').innerHTML = `
+    <div style="background:linear-gradient(135deg,#0369a1,#1d4ed8);padding:22px 28px;position:relative;">
+      <button onclick="document.getElementById('modal-evidencias-consul').remove()" 
+        style="position:absolute;top:14px;right:16px;background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;padding:5px 12px;font-size:14px;cursor:pointer;">✕</button>
+      <div style="font-size:20px;font-weight:800;color:#fff;margin-bottom:4px;">📎 Evidências do Empreendedor</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.7);">${e(empNome)} · ${comEvidencia.length} evidência${comEvidencia.length!==1?'s':''} enviada${comEvidencia.length!==1?'s':''}</div>
+      ${pendentes>0?`<div style="margin-top:10px;background:rgba(239,68,68,.2);border:1.5px solid rgba(239,68,68,.4);border-radius:8px;padding:8px 14px;font-size:12px;color:#fca5a5;font-weight:700;">⏳ ${pendentes} aguardando avaliação</div>`:''}
+    </div>
+    <div style="padding:20px 24px 24px;">
+      ${rows}
+      <button onclick="document.getElementById('modal-evidencias-consul').remove()" 
+        style="width:100%;margin-top:12px;padding:11px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">
+        Fechar
+      </button>
+    </div>`;
+}
+
+async function avaliarEvidenciaInline(empNome, acaoIdx, status){
+  const data = getFase2DataSync(empNome);
+  if(!data.acoes||!data.acoes[acaoIdx]){ alert('Ação não encontrada.'); return; }
+  data.acoes[acaoIdx].evidencia_status = status;
+  if(status==='aprovada'){
+    data.acoes[acaoIdx].done = true;
+    data.acoes[acaoIdx].status = 'concluida';
+  }
+  await saveFase2Data(empNome, data);
+  // Notifica empreendedor
+  const empUser = selRec?.empreendedor_usuario||'';
+  if(empUser){
+    fetch(SU+'/rest/v1/notificacoes',{
+      method:'POST',
+      headers:{...SB_HEADERS,'Prefer':'return=minimal'},
+      body:JSON.stringify({
+        para:empUser,
+        tipo:'avaliacao',
+        titulo:'✅ Evidência aprovada pelo consultor!',
+        mensagem:'Sua evidência para "'+data.acoes[acaoIdx].texto.substring(0,60)+'" foi aprovada. Ação marcada como concluída.',
+        lida:false,
+        created_at:new Date().toISOString()
+      })
+    }).catch(()=>{});
+  }
+  // Atualiza badge
+  const pendentes = (data.acoes||[]).filter(a=>a.evidencia_status==='aguardando').length;
+  const badge = document.getElementById('badge-evidencias');
+  if(badge){ if(pendentes>0){badge.textContent=pendentes;badge.style.display='inline-block';}else{badge.style.display='none';} }
+  document.getElementById('modal-evidencias-consul')?.remove();
+  abrirPainelEvidencias(empNome);
+}
+
+async function pedirAjusteEvidenciaInline(empNome, acaoIdx){
+  const feedback = prompt('Descreva o ajuste que o empreendedor deve fazer:');
+  if(!feedback) return;
+  const data = getFase2DataSync(empNome);
+  if(!data.acoes||!data.acoes[acaoIdx]) return;
+  data.acoes[acaoIdx].evidencia_status = 'ajuste';
+  data.acoes[acaoIdx].evidencia_obs_consultor = feedback;
+  await saveFase2Data(empNome, data);
+  // Notifica empreendedor
+  const empUser = selRec?.empreendedor_usuario||'';
+  if(empUser){
+    fetch(SU+'/rest/v1/notificacoes',{
+      method:'POST',
+      headers:{...SB_HEADERS,'Prefer':'return=minimal'},
+      body:JSON.stringify({
+        para:empUser,
+        tipo:'ajuste',
+        titulo:'🔄 Consultor solicitou ajuste na evidência',
+        mensagem:'Feedback: '+feedback,
+        lida:false,
+        created_at:new Date().toISOString()
+      })
+    }).catch(()=>{});
+  }
+  document.getElementById('modal-evidencias-consul')?.remove();
+  abrirPainelEvidencias(empNome);
+}
+
+// ===== BADGE DE EVIDÊNCIAS NA LISTA DE ATENDIMENTOS =====
+async function carregarBadgesEvidencias(records){
+  // Busca em background os empreendedores com evidências pendentes
+  for(const rec of records){
+    if(!rec.nome || !rec.empreendedor_usuario) continue;
+    try{
+      const f2 = getFase2DataSync(rec.nome);
+      const pendentes = (f2.acoes||[]).filter(a=>a.evidencia_status==='aguardando').length;
+      if(pendentes>0){
+        const badgeEl = document.getElementById('ev-badge-'+rec.id);
+        if(badgeEl){ badgeEl.textContent=pendentes+' ev.'; badgeEl.style.display='inline-block'; }
+      }
+    }catch(e){}
+  }
+}
+
+
+// ===== UPLOAD DE ARQUIVO NO STORAGE DO SUPABASE =====
+let _evArquivoSelecionado = null;
+
+function empHandleFileSelect(input){
+  const file = input.files[0];
+  if(!file) return;
+  if(file.size > 10*1024*1024){ alert('Arquivo muito grande. Máximo 10 MB.'); input.value=''; return; }
+  _evArquivoSelecionado = file;
+  const placeholder = document.getElementById('ev-upload-placeholder');
+  const preview = document.getElementById('ev-upload-preview');
+  if(placeholder) placeholder.style.display='none';
+  if(preview){ preview.style.display='block'; preview.innerHTML='✅ '+file.name+' ('+Math.round(file.size/1024)+' KB)'; }
+}
+
+function empHandleFileDrop(event){
+  const file = event.dataTransfer.files[0];
+  if(!file) return;
+  if(file.size > 10*1024*1024){ alert('Arquivo muito grande. Máximo 10 MB.'); return; }
+  _evArquivoSelecionado = file;
+  const placeholder = document.getElementById('ev-upload-placeholder');
+  const preview = document.getElementById('ev-upload-preview');
+  if(placeholder) placeholder.style.display='none';
+  if(preview){ preview.style.display='block'; preview.innerHTML='✅ '+file.name+' ('+Math.round(file.size/1024)+' KB)'; }
+}
+
+async function empUploadArquivoEvidencia(empNome, acaoIdx){
+  if(!_evArquivoSelecionado) return null;
+  const file = _evArquivoSelecionado;
+  const ext = file.name.split('.').pop();
+  const safeName = empNome.toLowerCase().replace(/[^a-z0-9]/g,'_').substring(0,30);
+  const path = safeName+'/acao_'+acaoIdx+'_'+Date.now()+'.'+ext;
+  try{
+    const r = await fetch(SU+'/storage/v1/object/evidencias/'+path, {
+      method:'POST',
+      headers:{ 'apikey':SK, 'Authorization':'Bearer '+SK, 'Content-Type': file.type },
+      body: file
+    });
+    if(r.ok){
+      // Gera signed URL (válida 1 ano = 31536000 segundos)
+      const signR = await fetch(SU+'/storage/v1/object/sign/evidencias/'+path,{
+        method:'POST',
+        headers:{...SB_HEADERS,'Content-Type':'application/json'},
+        body:JSON.stringify({expiresIn:31536000})
+      });
+      if(signR.ok){
+        const sign = await signR.json();
+        return { path, nome: file.name, signedUrl: SU+'/storage/v1'+sign.signedURL };
+      }
+      return { path, nome: file.name, signedUrl: null };
+    }
+    console.error('Upload falhou:', r.status, await r.text());
+    return null;
+  }catch(e){
+    console.error('Upload erro:', e.message);
+    return null;
+  }
+}
+
 </script>
 </body>
 </html>
