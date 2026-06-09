@@ -2776,8 +2776,8 @@ function gerarRelCSV(tipo){
   const data=getRelData();
   let rows=[],header=[];
   if(tipo==='lista'){
-    header=['Nome','Negócio','CPF/CNPJ','Segmento','Estágio','Consultor','Campus','Data','NPS','Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão'];
-    rows=data.map(r=>[r.nome,r.negocio,r.cnpj,r.segmento,r.estagio,r.mentor,r.campus,r.data_mentoria,r.nps,r.pilar_produto_nota,r.pilar_vendas_nota,r.pilar_financas_nota,r.pilar_gestao_nota]);
+    header=['Nome','Negócio','Telefone','Email','CPF/CNPJ','Segmento','Estágio','Consultor','Campus','Data','NPS','Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão'];
+    rows=data.map(r=>[r.nome,r.negocio,r.telefone,r.email,r.cnpj,r.segmento,r.estagio,r.mentor,r.campus,r.data_mentoria,r.nps,r.pilar_produto_nota,r.pilar_vendas_nota,r.pilar_financas_nota,r.pilar_gestao_nota]);
   } else if(tipo==='consultores'){
     header=['Consultor','Atendimentos','NPS Médio','Média Pilares','Retornos','Vinculados 12M'];
     const cons=[...new Set(data.map(r=>r.mentor).filter(Boolean))];
@@ -2813,8 +2813,8 @@ function gerarRelExcel(tipo){
   let rows=[],header=[];
   const hoje=new Date().toLocaleDateString('pt-BR');
   if(tipo==='lista'){
-    header=['Nome','Negócio','CPF/CNPJ','Segmento','Estágio','Consultor','Campus','Data','NPS','Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão'];
-    rows=data.map(r=>[r.nome,r.negocio,r.cnpj,r.segmento,r.estagio,r.mentor,r.campus,r.data_mentoria,r.nps,r.pilar_produto_nota,r.pilar_vendas_nota,r.pilar_financas_nota,r.pilar_gestao_nota]);
+    header=['Nome','Negócio','Telefone','Email','CPF/CNPJ','Segmento','Estágio','Consultor','Campus','Data','NPS','Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão'];
+    rows=data.map(r=>[r.nome,r.negocio,r.telefone,r.email,r.cnpj,r.segmento,r.estagio,r.mentor,r.campus,r.data_mentoria,r.nps,r.pilar_produto_nota,r.pilar_vendas_nota,r.pilar_financas_nota,r.pilar_gestao_nota]);
   } else if(tipo==='consultores'){
     header=['Consultor','Atendimentos','NPS Médio','Média Pilares','Retornos','Vinculados 12M'];
     const cons=[...new Set(data.map(r=>r.mentor).filter(Boolean))];
@@ -2842,7 +2842,7 @@ function gerarRelExcel(tipo){
     const wb=XLSX.utils.book_new();
     const ws=XLSX.utils.aoa_to_sheet([header,...rows.map(r=>r.map(v=>v||''))]);
     // Largura das colunas
-    ws['!cols']=header.map((_,i)=>({wch: i===0||i===1?30:i===2?18:14}));
+    ws['!cols']=header.map((_,i)=>({wch: i===0||i===1?30:i===2||i===3?18:i===4?16:14}));
     XLSX.utils.book_append_sheet(wb,ws,'Relatório');
     XLSX.writeFile(wb,`relatorio_${tipo}_${hoje.replace(/\//g,'-')}.xlsx`);
   }catch(err){
