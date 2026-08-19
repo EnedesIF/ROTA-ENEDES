@@ -455,6 +455,7 @@ tbody tr:hover td{background:#fafcff;}
         </div>
       </div>
     </div>
+    <div id="c-sup-fields" style="display:none;"></div>
     <div id="c-emp-fields" style="display:none;"></div>
     <div class="lfl"><label class="llb">E-mail de Recuperação <span style="color:#e53e3e;font-size:11px;">*obrigatório</span><span style="color:#888;font-size:11px;"> — para recuperar acesso caso perca a senha</span></label><input class="lin" type="email" id="c-email" placeholder="seu@email.com" required></div>
     <button class="lbn" onclick="doCadastro()">Criar Conta →</button>
@@ -1202,7 +1203,7 @@ function getUsers(){ return USERS_CACHE||_lsLoad()||USERS_DEFAULT; }
 async function saveUsers(arr){
   USERS_CACHE=arr; _lsSave(arr);
   for(const u of arr){
-    const CAMPOS_U = ['senha_hash','perfil','nome','programa','email','cnpj','telefone','cpf','ativo'];
+    const CAMPOS_U = ['senha_hash','perfil','nome','programa','email','cnpj','telefone','cpf','ativo','supervisor'];
     const _pp = {senha_hash: u.senha||u.senha_hash};
     CAMPOS_U.forEach(k=>{ if(u[k]!==undefined && k!=='senha_hash') _pp[k]=u[k]; });
     fetch(SU+'/rest/v1/usuarios_5d?usuario=eq.'+encodeURIComponent(u.usuario),{method:'PATCH',headers:{...SB_HEADERS,'Prefer':'return=minimal'},body:JSON.stringify(_pp)}).catch(e=>console.error('[saveUsers]',e));
@@ -1212,7 +1213,7 @@ async function saveUsers(arr){
 async function addUser(u){
   const users=getUsers(); users.push(u); USERS_CACHE=users; _lsSave(users);
   // Monta payload sem campo 'senha' (tabela só tem senha_hash)
-  const CAMPOS_VALIDOS = ['usuario','senha_hash','perfil','nome','programa','email','cnpj','telefone','cpf','ativo'];
+  const CAMPOS_VALIDOS = ['usuario','senha_hash','perfil','nome','programa','email','cnpj','telefone','cpf','ativo','supervisor'];
   const _pu = {senha_hash: u.senha||u.senha_hash};
   CAMPOS_VALIDOS.forEach(k=>{ if(u[k]!==undefined && k!=='senha_hash') _pu[k]=u[k]; });
   try{
@@ -1341,9 +1342,12 @@ async function doCadastro(){
     {
       const cpf=(document.getElementById('c-cpf')?.value||'').trim().replace(/\D/g,'');
       const cnpjEmp=(document.getElementById('c-cnpj-emp')?.value||'').trim().replace(/\D/g,'');
+      const supervisor=(document.getElementById('c-supervisor')?.value||'').trim();
+      if(perfil==='apoio_tec' && !supervisor){ce.style.display='block';ce.textContent='Selecione o consultor supervisor.';return;}
       const novoUser={usuario:user,senha:hashSenha(senha),perfil,nome,programa:'',email};
       if(cpf) novoUser.cpf=cpf;
       if(cnpjEmp) novoUser.cnpj=cnpjEmp;
+      if(supervisor) novoUser.supervisor=supervisor;
       const addResult = await addUser(novoUser);
       // Se empreendedor, tenta vincular ao atendimento pelo CPF/CNPJ/email
       if(perfil==='empreend'){
@@ -1373,8 +1377,38 @@ async function doCadastro(){
   }
 }
 
+async function _carregarConsultoresCadastro(){
+  // Busca consultores no Supabase para o apoio técnico escolher seu supervisor
+  const sel=document.getElementById('c-supervisor');
+  if(!sel) return;
+  try{
+    const r=await fetch(SU+'/rest/v1/usuarios_5d?perfil=eq.consul&select=usuario,nome&order=nome.asc',{headers:SB_HEADERS});
+    const cons = r.ok ? await r.json() : [];
+    sel.innerHTML = '<option value="">— selecione o consultor —</option>'
+      + cons.map(c=>`<option value="${e(c.usuario)}">${e(c.nome)} (${e(c.usuario)})</option>`).join('');
+  }catch(_){ sel.innerHTML='<option value="">— não foi possível carregar —</option>'; }
+}
+
 function toggleCamposEmpCadastro(val){
   const f=document.getElementById('c-emp-fields');
+  // Campo de supervisor (apoio técnico)
+  const sup=document.getElementById('c-sup-fields');
+  if(sup){
+    if(val==='apoio_tec'){
+      if(!sup.innerHTML.trim()){
+        sup.innerHTML = `
+          <div class="lfl" style="margin-top:8px;">
+            <label class="llb">Consultor Supervisor <span style="color:#e53e3e;font-size:11px;">*obrigatório</span></label>
+            <select class="lin" id="c-supervisor" style="color:#0d1b2e;"><option value="">Carregando consultores…</option></select>
+            <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:5px;">Você poderá editar os atendimentos deste consultor e acompanhar os empreendedores atendidos por ele.</div>
+          </div>`;
+      }
+      sup.style.display='block';
+      _carregarConsultoresCadastro();
+    } else {
+      sup.style.display='none';
+    }
+  }
   if(f){
     f.style.display=(val==='empreend')?'block':'none';
     if(val==='empreend' && !f.innerHTML.trim()){
@@ -2036,7 +2070,7 @@ function renderUsuarios(){
                 ${pNome[u.perfil]||u.perfil}
               </span>
             </td>
-            <td style="padding:12px 16px;font-size:12px;color:var(--muted);">${e(u.programa||'—')}</td>
+            <td style="padding:12px 16px;font-size:12px;color:var(--muted);">${u.perfil==='apoio_tec'&&u.supervisor?('👤 Supervisor: <strong>'+e(u.supervisor)+'</strong>'):e(u.programa||'—')}</td>
             <td style="padding:12px 16px;font-size:12px;color:var(--muted);">${u.cnpj?e(u.cnpj):'<span style="opacity:.4">—</span>'}</td>
             <td style="padding:12px 16px;text-align:center;display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;">
               ${u.perfil==='empreend'?`<button onclick="gerarLinkAcesso('${u.usuario}')" style="padding:4px 12px;border-radius:6px;border:1.5px solid #86efac;background:#f0fdf4;color:#16a34a;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">🔗 Link de Acesso</button>`:''}
@@ -3220,7 +3254,7 @@ function renderDetalhe(){
       <button id="btn-fase2" style="background:linear-gradient(135deg,#0d2a1a,#1a5e3a);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📘 Fase 2 — Plano de Negócio</button>
       <span style="font-size:12px;color:var(--muted);margin-left:4px;">Continuar preenchimento de onde parou</span>
       <button id="btn-ver-evidencias" style="background:linear-gradient(135deg,#0369a1,#1d4ed8);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;">📎 Evidências <span id="badge-evidencias" style="background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:800;display:none;">0</span></button>
-      ${r.email?`<button onclick="abrirPortalSSO('${e(r.nome||'')}','${e(r.email||'')}','${e(r.cnpj||'')}','${e(r.telefone||'')}')" style="background:linear-gradient(135deg,#f5a100,#e08c00);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📅 Agendar no Portal</button>`:'<span style="font-size:12px;color:#e08c00;background:#fff8e1;border:1px solid #f59e0b;border-radius:8px;padding:8px 12px;">⚠️ Cadastre o e-mail para liberar agendamento no portal</span>'}
+      ${r.email?`<button onclick="abrirPortalSSO('${e(r.nome||'')}','${e(r.email||'')}','${e(r.cpf||r.cnpj||'')}','${e(r.telefone||'')}')" style="background:linear-gradient(135deg,#f5a100,#e08c00);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📅 Agendar no Portal</button>`:'<span style="font-size:12px;color:#e08c00;background:#fff8e1;border:1px solid #f59e0b;border-radius:8px;padding:8px 12px;">⚠️ Cadastre o e-mail para liberar agendamento no portal</span>'}
       ${['coord','coord_abdi','coord_prog'].includes(PERFIL)?`<button onclick="excluirAtendimento()" style="background:#dc2626;color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:auto;">🗑 Excluir</button>`:''}
     </div>
     ${(()=>{
