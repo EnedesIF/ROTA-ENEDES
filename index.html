@@ -352,18 +352,31 @@ tbody tr:hover td{background:#fafcff;}
 .emp-doc-btn-primary{background:#52b47a;color:#06231a;box-shadow:0 6px 16px rgba(82,180,122,.35);}
 .emp-doc-btn-primary:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(82,180,122,.5);}
 @media(max-width:560px){.emp-doc-card{flex-direction:column;text-align:center;}.emp-doc-actions{width:100%;}.emp-doc-btn{width:100%;}}
-/* ===== BARRA FIXA "SALVAR AGORA" (formulário 5D) ===== */
-.save-bar{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:12px;
-  background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:12px;
-  padding:9px 12px 9px 16px;margin-bottom:12px;box-shadow:0 6px 18px rgba(15,38,68,.10);}
-.save-bar-ind{font-size:11px;font-weight:700;color:var(--muted);opacity:.75;transition:opacity .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* ===== BARRA "SALVAR AGORA" (topo do formulário 5D) ===== */
+.save-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:linear-gradient(135deg,#eef6f1,#eaf1fb);border:1.5px solid #bcd8c8;border-radius:12px;
+  padding:10px 12px 10px 16px;margin-bottom:14px;}
+.save-bar-ind{font-size:11px;font-weight:700;color:#3a6b52;opacity:.9;transition:opacity .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .save-bar-btn{flex-shrink:0;background:linear-gradient(135deg,#1a5e3a,#267a4e);color:#fff;border:none;border-radius:10px;
   padding:11px 20px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;letter-spacing:.2px;
   box-shadow:0 6px 16px rgba(26,94,58,.32);transition:transform .12s ease,box-shadow .12s ease,background .2s;}
 .save-bar-btn:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(26,94,58,.45);}
 .save-bar-btn:active{transform:translateY(0);}
 .save-bar-btn:disabled{opacity:.75;cursor:default;transform:none;box-shadow:none;}
-@media(max-width:480px){.save-bar-btn{padding:10px 14px;font-size:13px;}.save-bar-ind{font-size:10px;}}
+/* ===== BOTÃO FLUTUANTE "SALVAR" (sempre visível durante o formulário) ===== */
+#fab-salvar{position:fixed;right:24px;bottom:24px;z-index:300;display:flex;align-items:center;gap:9px;
+  background:linear-gradient(135deg,#1a5e3a,#267a4e);color:#fff;border:none;border-radius:999px;
+  padding:15px 24px;font-size:15px;font-weight:800;font-family:inherit;cursor:pointer;letter-spacing:.2px;
+  box-shadow:0 12px 30px rgba(15,38,68,.4),0 2px 6px rgba(0,0,0,.2);
+  transition:transform .14s ease,box-shadow .14s ease,background .2s;}
+#fab-salvar:hover{transform:translateY(-3px) scale(1.02);box-shadow:0 18px 40px rgba(15,38,68,.5);}
+#fab-salvar:active{transform:translateY(0) scale(.99);}
+#fab-salvar:disabled{opacity:.8;cursor:default;transform:none;}
+#fab-salvar .fab-ico{font-size:18px;}
+@media(max-width:480px){
+  .save-bar-btn{padding:10px 14px;font-size:13px;}.save-bar-ind{font-size:10px;}
+  #fab-salvar{right:14px;bottom:14px;padding:13px 20px;font-size:14px;}
+}
 
 /* ===== BADGE PERFIS ATUALIZADOS ===== */
 .hbdg-coord{background:rgba(192,98,42,.2);border-color:rgba(192,98,42,.4);color:#f0a878;}
@@ -587,6 +600,8 @@ const ESTAGIO_MSG = {
   "Scale up":  ["", "", "", ""],
 };
 const DESA=["Baixo faturamento","Falta de clientes","Dificuldade em precificação","Organização financeira","Marketing digital","Gestão de tempo","Processos internos","Falta de capital","Concorrência"];
+// Faixas de faturamento MENSAL — usadas no diagnóstico (linha de base) e comparação pós-incubação
+const FATURAMENTO_FAIXAS=["Sem faturamento ainda","Até R$ 1.000 / mês","R$ 1.001 a R$ 5.000 / mês","R$ 5.001 a R$ 10.000 / mês","R$ 10.001 a R$ 30.000 / mês","R$ 30.001 a R$ 50.000 / mês","R$ 50.001 a R$ 100.000 / mês","Acima de R$ 100.000 / mês"];
 const COMPS=["Compromete-se a executar o plano","Participará do retorno de acompanhamento","Monitorará os indicadores definidos","Compartilhará resultados com o consultor"];
 
 // ===== PERGUNTAS GUIADAS POR PILAR =====
@@ -1513,7 +1528,7 @@ async function showView(view){
   else if(view === 'lista') { await loadAndRenderLista(); }
   else if(view === 'novo')  { cp=0; F=nf(); selRec=null; carregarContextos().then(async ()=>{ await f5MaybeRestoreDraft(); renderForm(); }); }
   else if(view === 'backup') { renderBackup(); }
-  else if(view === 'detalhe') { renderDetalhe(); }
+  else if(view === 'detalhe') { await loadUsers().catch(()=>{}); renderDetalhe(); }
   else if(view === 'usuarios') {
     document.getElementById('app-main').innerHTML='<div style="padding:24px"><h2 style="color:#1a2035;margin-bottom:16px">Gerenciar Usuários</h2><div id="usuarios-panel"><div class="ld"><div class="spin"></div><br>Carregando usuários…</div></div></div>';
     await loadUsers();
@@ -3210,39 +3225,59 @@ function renderDetalhe(){
     </div>
     ${(()=>{
       const empU = r.empreendedor_usuario||'';
-      if(!empU){
-        if(['coord','coord_abdi','coord_prog','consul'].includes(PERFIL)){
-          const users = getUsers().filter(u=>u.perfil==='empreend');
-          if(!users.length) return '';
-          return `<div class="card" style="margin-bottom:14px;border:1.5px dashed #e2e8f0;">
-            <div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:10px;">🔗 Vincular Empreendedor ao Portal</div>
-            <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Conecte este atendimento a uma conta de empreendedor para que ele possa acompanhar sua evolução.</div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              <select id="sel-vinc-emp" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;flex:1;min-width:180px;">
-                <option value="">— selecione o usuário —</option>
-                ${users.map(u=>`<option value="${u.usuario}">${u.nome} (${u.usuario})</option>`).join('')}
+      const podeVincular = ['coord','coord_abdi','coord_prog','consul','apoio_tec'].includes(PERFIL);
+      const emps = getUsers().filter(u=>u.perfil==='empreend');
+      let bloco = '';
+      // ----- Card de vinculação (sempre visível para quem pode vincular) -----
+      if(podeVincular){
+        if(!empU){
+          const opcoes = emps.length
+            ? emps.map(u=>`<option value="${u.usuario}">${e(u.nome)} (${e(u.usuario)})</option>`).join('')
+            : '';
+          bloco += `<div class="card" style="margin-bottom:14px;border:1.5px dashed #b7e4c7;background:#f6fbf8;">
+            <div style="font-size:13px;font-weight:800;color:var(--green);margin-bottom:8px;">🔗 Vincular Empreendedor ao Portal</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Conecte este atendimento a uma conta de empreendedor para que ele possa acompanhar sua evolução pelo portal.</div>
+            ${emps.length ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <select id="sel-vinc-emp" style="padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;flex:1;min-width:200px;">
+                <option value="">— selecione o empreendedor —</option>
+                ${opcoes}
               </select>
-              <button onclick="vincularEmpAtendimento('${r.id}')" style="background:var(--green);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">🔗 Vincular</button>
+              <button onclick="vincularEmpAtendimento('${r.id}')" style="background:var(--green);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">🔗 Vincular</button>
+            </div>`
+            : `<div style="font-size:12px;color:#b45309;background:#fff8e1;border:1px solid #f59e0b;border-radius:8px;padding:10px 12px;">
+                Ainda não há nenhuma conta de <strong>empreendedor</strong> cadastrada para vincular. O empreendedor precisa criar a conta dele (ou o coordenador cadastrá-lo em <strong>Usuários</strong>) para aparecer aqui.
+              </div>`}
+          </div>`;
+        } else {
+          const empUser = emps.find(u=>u.usuario===empU);
+          bloco += `<div class="card" style="margin-bottom:14px;border:1.5px solid #b7e4c7;background:#f6fbf8;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <div style="font-size:13px;font-weight:800;color:var(--green);">✅ Empreendedor vinculado:</div>
+              <div style="font-size:13px;font-weight:700;color:var(--navy);">${e(empUser?empUser.nome:empU)} <span style="color:var(--muted);font-weight:400;">(${e(empU)})</span></div>
+              <button onclick="desvincularEmpAtendimento('${r.id}')" style="margin-left:auto;background:#fff;color:#dc2626;border:1.5px solid #fecaca;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🔗 Desvincular</button>
             </div>
           </div>`;
         }
-        return '';
       }
-      const portal=getPortalEmp(empU);
-      const msgs=portal.mensagens||[];
-      const nMsgsEmp=msgs.filter(m=>m.de==='emp').length;
-      return `<div class='card' style='margin-bottom:14px;'>
-        <div style='font-size:14px;font-weight:800;color:var(--navy);margin-bottom:14px;display:flex;align-items:center;gap:8px;'>
-          💬 Mensagens do Portal do Empreendedor
-          ${nMsgsEmp?`<span style='background:#eff6ff;color:#3b82f6;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;'>${nMsgsEmp} mensagen${nMsgsEmp>1?'s':''}</span>`:''}
-        </div>
-        <div id='portal-msgs-area'></div>
-        <div style='margin-top:12px;'>
-          <textarea id='portal-resp-input' rows='2' placeholder='Responder ao empreendedor…'
-            style='width:100%;border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13px;resize:none;outline:none;'></textarea>
-          <button onclick="responderMsgPortal('${empU}')" style='margin-top:8px;background:var(--navy);color:#fff;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;'>Enviar resposta</button>
-        </div>
-      </div>`;
+      // ----- Card de mensagens (quando já vinculado) -----
+      if(empU){
+        const portal=getPortalEmp(empU);
+        const msgs=portal.mensagens||[];
+        const nMsgsEmp=msgs.filter(m=>m.de==='emp').length;
+        bloco += `<div class='card' style='margin-bottom:14px;'>
+          <div style='font-size:14px;font-weight:800;color:var(--navy);margin-bottom:14px;display:flex;align-items:center;gap:8px;'>
+            💬 Mensagens do Portal do Empreendedor
+            ${nMsgsEmp?`<span style='background:#eff6ff;color:#3b82f6;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;'>${nMsgsEmp} mensagen${nMsgsEmp>1?'s':''}</span>`:''}
+          </div>
+          <div id='portal-msgs-area'></div>
+          <div style='margin-top:12px;'>
+            <textarea id='portal-resp-input' rows='2' placeholder='Responder ao empreendedor…'
+              style='width:100%;border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13px;resize:none;outline:none;'></textarea>
+            <button onclick="responderMsgPortal('${empU}')" style='margin-top:8px;background:var(--navy);color:#fff;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;'>Enviar resposta</button>
+          </div>
+        </div>`;
+      }
+      return bloco;
     })()} 
     ${!r.email ? `
     <div style="background:#fff8e1;border:1.5px solid #f59e0b;border-radius:12px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
@@ -3260,6 +3295,7 @@ function renderDetalhe(){
           ${row("Negócio",r.negocio)}${row("CNPJ",r.cnpj)}${row("Segmento",r.segmento)}
           ${row("Estágio",r.estagio)}${row("Consultor",r.mentor)}${row("Campus",r.campus)}
           ${row("Desafios",r.desafios)}${row("Formato",r.formato)}
+          ${r.faturamento_faixa?`<div class="dr" style="grid-column:1/-1;"><div class="dl">💰 Faturamento (linha de base)</div><div class="dv" style="font-weight:800;color:var(--green);">${e(r.faturamento_faixa)}</div></div>`:''}
           ${r.acao_contexto?row("Contexto de Captação",(()=>{const _cx=[...CONTEXTOS_PADRAO,...CONTEXTOS_EXTRAS.map(c=>({id:'extra_'+c.id,nome:c.nome}))];const _f=_cx.find(c=>c.id===r.acao_contexto);return _f?_f.nome:r.acao_contexto;})()):''}         
         </div>
         ${r.acao_contexto?`
@@ -3338,6 +3374,7 @@ function renderDetalhe(){
 
 function nf(){return{
   nome:"",negocio:"",cnpj:"",seg:"",data:"",fmt:"",mentor:USER_NAME||'',area:"",campus:"",telefone:"",email:"",est:"",desa:[],desaOutro:"",
+  faturamento_faixa:"",
   pils:{
     "Produto/Serviço":{n:"",c:"",o:"",resps:["","","",""]},
     "Vendas/Marketing":{n:"",c:"",o:"",resps:["","","",""]},
@@ -3532,6 +3569,7 @@ function editarAtendimento(){
   F.est = r.estagio||'';
   F.desa = r.desafios ? r.desafios.split(', ').filter(Boolean) : [];
   F.desaOutro = r.desafio_outro||'';
+  F.faturamento_faixa = r.faturamento_faixa||'';
   // Pilares
   const loadPilar = (key, campo) => {
     F.pils[key].n = r['pilar_'+campo+'_nota']||'';
@@ -3760,7 +3798,8 @@ function renderForm(){
       <div id="ao" class="aok" style="display:none"></div>
     </div>
     <div class="nav"><button class="bk" id="bbk">Cancelar</button><button class="bs" id="bnt-salvar-parcial" style="display:none;background:#2d6a4f;font-size:13px;padding:10px 16px;" title="Salvar o progresso atual e ver resumo">💾 Salvar</button><button class="bn" id="bnt">Próximo →</button></div>
-    <div class="prog" id="prg"></div>`;
+    <div class="prog" id="prg"></div>
+    <button id="fab-salvar" onclick="salvarProgresso(this)" title="Salvar o progresso atual no Supabase"><span class="fab-ico">💾</span> Salvar</button>`;
   rPB(); rPH(); rPC(); rNav(); rPrg();
 }
 
@@ -4080,6 +4119,13 @@ function rP0(){
 
       <div class="fg full"><label class="lbl">Formato</label>
         <div style="display:flex;gap:10px;margin-top:6px">${["Presencial","Online","Híbrido"].map(f=>`<label class="ri" style="flex:1"><input type="radio" name="fmt" value="${f}" ${F.fmt===f?'checked':''}>${f}</label>`).join('')}</div>
+      </div>
+      <div class="fg full" style="background:#f0f9f4;border:1.5px solid #b7e4c7;border-radius:12px;padding:14px 16px;margin-top:4px;">
+        <label class="lbl" style="color:var(--green);">💰 Faturamento atual do negócio <span style="font-weight:400;color:var(--muted);">— linha de base para medir a evolução após a incubação</span></label>
+        <select id="f-fat" style="margin-top:6px;">
+          <option value="">Selecione a faixa de faturamento mensal</option>
+          ${FATURAMENTO_FAIXAS.map(v=>`<option ${F.faturamento_faixa===v?'selected':''}>${v}</option>`).join('')}
+        </select>
       </div>
     </div>
     ${rBlocoContexto()}
@@ -4679,6 +4725,7 @@ function bindP(){
     b('f2',v=>F.cnpj=v);b('f3',v=>F.seg=v);b('f4',v=>F.data=v);b('f5',v=>F.mentor=v);
     b('f6',v=>F.desaOutro=v);b('f7',v=>F.area=v);b('f8',v=>F.campus=v);
     b('f-tempo',v=>F.tempo_atuacao=v);b('f-pontos',v=>F.pontos_atuacao=v.split(',').map(s=>s.trim()).filter(Boolean));
+    const _fat=document.getElementById('f-fat'); if(_fat)_fat.addEventListener('change',ev=>F.faturamento_faixa=ev.target.value);
     if(F.acao_contexto) bindContextoExtras();
 
     q('[name=fmt]').forEach(r=>r.addEventListener('change',ev=>F.fmt=ev.target.value));
@@ -4937,6 +4984,7 @@ async function salvar(){
     nome:F.nome,negocio:F.negocio,telefone:F.telefone,email:F.email,cnpj:F.cnpj,segmento:F.seg,
     data_mentoria:F.data,formato:F.fmt,mentor:(F.mentor||USER_NAME),area:F.area,campus:F.campus,
     estagio:F.est,desafios:F.desa.join(', '),desafio_outro:F.desaOutro,
+    faturamento_faixa:F.faturamento_faixa,
     // Pilares
     pilar_produto_nota:F.pils['Produto/Serviço'].n,pilar_produto_classe:F.pils['Produto/Serviço'].c,pilar_produto_obs:F.pils['Produto/Serviço'].o,
     pilar_produto_resps:JSON.stringify(F.pils['Produto/Serviço'].resps||[]),
@@ -8412,6 +8460,21 @@ function vincularEmpAtendimento(recId){
       alert('✅ Empreendedor vinculado com sucesso!');
       showView('detalhe');
     } else { alert('Erro ao vincular. Tente novamente.'); }
+  }).catch(()=>alert('Erro de conexão.'));
+}
+
+function desvincularEmpAtendimento(recId){
+  if(!confirm('Desvincular este empreendedor do atendimento? Ele deixará de ver este acompanhamento no portal.')) return;
+  fetch(SU+'/rest/v1/atendimentos_5d?id=eq.'+recId,{
+    method:'PATCH', headers:{...SB_HEADERS,'Prefer':'return=minimal'},
+    body:JSON.stringify({empreendedor_usuario:null})
+  }).then(r=>{
+    if(r.ok){
+      const rec = ALL.find(r=>String(r.id)===String(recId));
+      if(rec) rec.empreendedor_usuario = '';
+      alert('✅ Empreendedor desvinculado.');
+      showView('detalhe');
+    } else { alert('Erro ao desvincular. Tente novamente.'); }
   }).catch(()=>alert('Erro de conexão.'));
 }
 
