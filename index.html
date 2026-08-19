@@ -340,6 +340,30 @@ tbody tr:hover td{background:#fafcff;}
 .emp-prog-bar{background:#e8edf8;border-radius:20px;height:8px;overflow:hidden;margin-top:8px;}
 .emp-prog-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,var(--green),var(--gl));transition:width .6s ease;}
 .emp-no-prog{background:linear-gradient(135deg,#fff8e1,#fdf3ee);border:1.5px dashed #e0c080;border-radius:12px;padding:22px;text-align:center;color:#7a5400;}
+/* ===== CARD DE DOCUMENTO (portal empreendedor) ===== */
+.emp-doc-card{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#1a5e3a,#0f2644);border-radius:16px;padding:20px 22px;margin-bottom:20px;position:relative;overflow:hidden;box-shadow:0 12px 28px rgba(15,38,68,.22);}
+.emp-doc-card::before{content:'';position:absolute;right:-30px;bottom:-40px;width:180px;height:180px;background:radial-gradient(circle,rgba(82,180,122,.22),transparent 70%);border-radius:50%;pointer-events:none;}
+.emp-doc-ico{width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;position:relative;z-index:1;}
+.emp-doc-info{flex:1;min-width:0;position:relative;z-index:1;}
+.emp-doc-title{font-size:16px;font-weight:800;color:#fff;margin-bottom:3px;}
+.emp-doc-sub{font-size:12px;color:rgba(255,255,255,.62);line-height:1.4;}
+.emp-doc-actions{position:relative;z-index:1;flex-shrink:0;}
+.emp-doc-btn{border:none;border-radius:10px;padding:11px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:transform .15s ease,box-shadow .15s ease;}
+.emp-doc-btn-primary{background:#52b47a;color:#06231a;box-shadow:0 6px 16px rgba(82,180,122,.35);}
+.emp-doc-btn-primary:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(82,180,122,.5);}
+@media(max-width:560px){.emp-doc-card{flex-direction:column;text-align:center;}.emp-doc-actions{width:100%;}.emp-doc-btn{width:100%;}}
+/* ===== BARRA FIXA "SALVAR AGORA" (formulário 5D) ===== */
+.save-bar{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:12px;
+  padding:9px 12px 9px 16px;margin-bottom:12px;box-shadow:0 6px 18px rgba(15,38,68,.10);}
+.save-bar-ind{font-size:11px;font-weight:700;color:var(--muted);opacity:.75;transition:opacity .3s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.save-bar-btn{flex-shrink:0;background:linear-gradient(135deg,#1a5e3a,#267a4e);color:#fff;border:none;border-radius:10px;
+  padding:11px 20px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;letter-spacing:.2px;
+  box-shadow:0 6px 16px rgba(26,94,58,.32);transition:transform .12s ease,box-shadow .12s ease,background .2s;}
+.save-bar-btn:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(26,94,58,.45);}
+.save-bar-btn:active{transform:translateY(0);}
+.save-bar-btn:disabled{opacity:.75;cursor:default;transform:none;box-shadow:none;}
+@media(max-width:480px){.save-bar-btn{padding:10px 14px;font-size:13px;}.save-bar-ind{font-size:10px;}}
 
 /* ===== BADGE PERFIS ATUALIZADOS ===== */
 .hbdg-coord{background:rgba(192,98,42,.2);border-color:rgba(192,98,42,.4);color:#f0a878;}
@@ -1059,6 +1083,8 @@ function getEstagioMsg(i){
 
 let PERFIL='', USER_NAME='', ALL=[], cp=0, F=nf(), selRec=null, currentView='';
 let chartInstances={};
+// Autosave / rascunho do formulário 5D + registro visível ao empreendedor
+let _f5DirtyFlag=false, _f5AutoSaveTimer=null, _empMeuRec=null;
 
 // ===== CONTEXTOS DE AÇÃO (misto: lista padrão + cadastráveis pelo coordenador) =====
 const CONTEXTOS_PADRAO = [
@@ -1427,8 +1453,6 @@ async function loadData(){
       const data = await r.json();
       ALL = data;
       _ALL_DATA_LOADED = true;
-      // Sincronizar localStorage com dados do Supabase
-      try{ localStorage.setItem('enedes5d_mentorias', JSON.stringify(ALL)); }catch(_){}
       return;
     } else {
       console.warn('loadData HTTP '+r.status);
@@ -1444,11 +1468,8 @@ async function loadData(){
       document.body.prepend(w);
     }
   }
-  // Fallback: localStorage (modo offline / file://)
-  try{
-    const stored = localStorage.getItem('enedes5d_mentorias');
-    if(stored){ ALL = JSON.parse(stored); _ALL_DATA_LOADED = true; }
-  }catch(_){ ALL=[]; }
+  // Sem fallback local: os dados vivem apenas no Supabase.
+  // Se o banco estiver offline, ALL fica como está e o aviso vermelho é exibido acima.
 }
 
 function buildNav(){
@@ -1490,7 +1511,7 @@ async function showView(view){
   
   if(view === 'dash')       { await loadAndRenderDash(); }
   else if(view === 'lista') { await loadAndRenderLista(); }
-  else if(view === 'novo')  { cp=0; F=nf(); selRec=null; carregarContextos().then(()=>renderForm()); }
+  else if(view === 'novo')  { cp=0; F=nf(); selRec=null; carregarContextos().then(async ()=>{ await f5MaybeRestoreDraft(); renderForm(); }); }
   else if(view === 'backup') { renderBackup(); }
   else if(view === 'detalhe') { renderDetalhe(); }
   else if(view === 'usuarios') {
@@ -1911,45 +1932,40 @@ async function lerParamsURL(){
 }
 
 async function saveData(rec, editIndex){
-  // Tentar Supabase primeiro
-  try{
-    if(editIndex !== undefined && editIndex >= 0 && ALL[editIndex]?.id){
-      const id = ALL[editIndex].id;
-      const r = await fetch(SU+'/rest/v1/atendimentos_5d?id=eq.'+id, {
-        method:'PATCH',
-        headers:{...SB_HEADERS, 'Prefer':'return=representation'},
-        body: JSON.stringify(rec)
-      });
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      const updated = await r.json();
-      ALL[editIndex] = updated[0]||rec;
-    } else {
-      const r = await fetch(SU+'/rest/v1/atendimentos_5d', {
-        method:'POST',
-        headers:{...SB_HEADERS, 'Prefer':'return=representation'},
-        body: JSON.stringify(rec)
-      });
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      const inserted = await r.json();
-      ALL.unshift(inserted[0]||rec);
+  // Salvamento 100% Supabase, com até 4 tentativas em caso de rede instável.
+  // Sem fallback local: se falhar, o rascunho no Supabase preserva o trabalho.
+  let ultimoErro='';
+  for(let tentativa=1; tentativa<=4; tentativa++){
+    try{
+      if(editIndex !== undefined && editIndex >= 0 && ALL[editIndex]?.id){
+        const id = ALL[editIndex].id;
+        const r = await fetch(SU+'/rest/v1/atendimentos_5d?id=eq.'+id, {
+          method:'PATCH',
+          headers:{...SB_HEADERS, 'Prefer':'return=representation'},
+          body: JSON.stringify(rec)
+        });
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        const updated = await r.json();
+        ALL[editIndex] = updated[0]||rec;
+      } else {
+        const r = await fetch(SU+'/rest/v1/atendimentos_5d', {
+          method:'POST',
+          headers:{...SB_HEADERS, 'Prefer':'return=representation'},
+          body: JSON.stringify(rec)
+        });
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        const inserted = await r.json();
+        ALL.unshift(inserted[0]||rec);
+      }
+      return { ok:true, mode:'cloud' };
+    }catch(e){
+      ultimoErro = e.message;
+      console.warn('Supabase falhou (tentativa '+tentativa+'/4):', e.message);
+      if(tentativa<4) await new Promise(res=>setTimeout(res, 700*tentativa));
     }
-    return; // Supabase OK
-  }catch(e){
-    console.warn('Supabase indisponível, salvando localmente:', e.message);
   }
-  // Fallback: localStorage (funciona em file:// ou offline)
-  try{
-    const LS_KEY = 'enedes5d_mentorias';
-    const all = JSON.parse(localStorage.getItem(LS_KEY)||'[]');
-    if(editIndex !== undefined && editIndex >= 0 && editIndex < all.length){
-      all[editIndex] = rec;
-      ALL[editIndex] = rec;
-    } else {
-      all.unshift(rec);
-      ALL.unshift(rec);
-    }
-    localStorage.setItem(LS_KEY, JSON.stringify(all));
-  }catch(e2){ throw new Error('Erro ao salvar: '+e2.message); }
+  // Todas as tentativas falharam → NÃO grava local. Lança erro para o chamador tratar.
+  throw new Error('Servidor indisponível ('+ultimoErro+')');
 }
 // Gerenciar usuários (apenas coord geral)
 function renderUsuarios(){
@@ -3730,8 +3746,14 @@ function fecharPopupFase(){
 }
 
 function renderForm(){
+  _f5Suppress = false;      // formulário ativo → rascunho pode ser gravado
+  f5StartSafetyTimer();     // liga a fotografia periódica de segurança
   const el=document.getElementById('app-main');
   el.innerHTML=`
+    <div class="save-bar" id="save-bar">
+      <span id="f5-autosave-ind" class="save-bar-ind">☁️ rascunho automático na nuvem</span>
+      <button class="save-bar-btn" id="bnt-salvar-topo" onclick="salvarProgresso(this)" title="Salvar o progresso atual no Supabase">💾 Salvar agora</button>
+    </div>
     <div class="phases5d" id="phbar"></div>
     <div class="card"><div class="ph-hdr" id="ph-hdr"></div><div id="ph-c"></div>
       <div id="ae" class="aerr" style="display:none"></div>
@@ -3796,14 +3818,9 @@ function rNav(){
   bk.onclick=()=>{if(cp===0)showView('lista');else{cp--;renderForm();}};
   if(cp<4){
     nt.textContent=`Próxima etapa → ${PH5[cp+1].icon}`;nt.style.background=cs[cp+1];nt.className='bn';nt.onclick=nxt;
-    // Botão salvar parcial a partir do cp>=1
+    // Botão "Salvar" da barra inferior desativado: a barra fixa "Salvar agora" cobre isso
     const salvarParcial=document.getElementById('bnt-salvar-parcial');
-    if(salvarParcial && cp>=1){
-      salvarParcial.style.display='inline-flex';
-      salvarParcial.onclick=salvar;
-    } else if(salvarParcial){
-      salvarParcial.style.display='none';
-    }
+    if(salvarParcial) salvarParcial.style.display='none';
   }
   else{nt.textContent='Salvar Atendimento ✓';nt.style.background='#1a6b6b';nt.className='bs';nt.onclick=salvar;
     const salvarParcial=document.getElementById('bnt-salvar-parcial');
@@ -4710,6 +4727,8 @@ function bindP(){
     const rc=document.getElementById('ret_canal');if(rc)rc.addEventListener('change',ev=>F.retorno_canal=ev.target.value);
   }
   if(F.est==="Ideação") setTimeout(bindIdeacao, 100);
+  // Anexa autosave de rascunho a todos os campos (protege contra perda de dados)
+  f5AttachAutoSave();
 }
 
 function setDirMatriz(idx, quad){
@@ -4749,6 +4768,161 @@ function sn(n){F.nps=String(n);rPC();}
 function nxt(){
   if(cp===0&&!F.nome.trim()){sa('e','⚠️ Informe o nome do empreendedor.');return;}
   ha();cp++;renderForm();
+}
+
+// ===== AUTOSAVE / RASCUNHO DO FORMULÁRIO 5D =====
+// Protege contra perda de dados se a aba fechar antes de "Salvar Atendimento".
+// ===== RASCUNHO 5D — PERSISTIDO 100% NO SUPABASE (tabela rascunhos_5d) =====
+// Chave = consultor (USER_NAME). Um rascunho por consultor.
+let _f5Suppress = false;      // impede regravar rascunho após salvar/sair
+let _f5SafetyTimer = null;    // fotografa o formulário periodicamente
+let _f5Salvando = false;      // evita gravações concorrentes
+
+function f5DraftConsultor(){ return (USER_NAME||'').trim() || '__sem_usuario__'; }
+
+// Existe formulário 5D aberto na tela?
+function f5FormAberto(){ return !!document.getElementById('phbar'); }
+// O formulário tem algum conteúdo digno de rascunho?
+function f5TemConteudo(){
+  try{
+    if(F.nome && F.nome.trim()) return true;
+    if(F.negocio && F.negocio.trim()) return true;
+    if(F.prob || F.causa || F.meta || F.meta_s) return true;
+    if((F.acoes||[]).some(a=>a && a.a)) return true;
+    if(Object.values(F.pils||{}).some(p=>p.n || p.o)) return true;
+  }catch(e){}
+  return false;
+}
+
+// Timer de segurança: grava o rascunho mesmo em mudanças feitas por clique
+function f5StartSafetyTimer(){
+  if(_f5SafetyTimer) return;
+  _f5SafetyTimer = setInterval(()=>{
+    if(_f5Suppress) return;
+    if(!f5FormAberto()) return;
+    if(!f5TemConteudo()) return;
+    f5SaveDraftNow();
+  }, 5000);
+}
+
+function _f5Ind(txt, op){ const ind=document.getElementById('f5-autosave-ind'); if(ind){ ind.textContent=txt; ind.style.opacity=op; } }
+
+// Grava (upsert) o rascunho no Supabase
+async function f5SaveDraftNow(){
+  if(_f5Salvando) return;
+  if(!f5TemConteudo()){ _f5DirtyFlag=false; return; }
+  _f5Salvando = true;
+  const payload = {
+    consultor: f5DraftConsultor(),
+    dados: { F: F, cp: cp, user: USER_NAME||'' },
+    cp: cp,
+    atualizado_em: new Date().toISOString()
+  };
+  try{
+    _f5Ind('✎ salvando rascunho…','1');
+    const r = await fetch(SU+'/rest/v1/rascunhos_5d?on_conflict=consultor', {
+      method:'POST',
+      headers:{...SB_HEADERS, 'Prefer':'resolution=merge-duplicates,return=minimal'},
+      body: JSON.stringify(payload)
+    });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    _f5DirtyFlag = false;
+    _f5Ind('✓ rascunho salvo na nuvem','1'); setTimeout(()=>_f5Ind('☁️ rascunho automático na nuvem','.55'), 1800);
+  }catch(e){
+    // Rascunho não subiu: avisa sem apagar nada (o usuário continua digitando)
+    _f5Ind('⚠️ sem conexão — rascunho não salvo','1');
+    console.warn('Rascunho Supabase falhou:', e.message);
+  }finally{ _f5Salvando = false; }
+}
+
+function f5MarkDirty(){
+  _f5DirtyFlag = true;
+  _f5Ind('✎ salvando rascunho…','1');
+  clearTimeout(_f5AutoSaveTimer);
+  _f5AutoSaveTimer = setTimeout(f5SaveDraftNow, 1000);
+}
+
+// Apaga o rascunho do consultor no Supabase (após salvar definitivo)
+async function f5ClearDraft(){
+  _f5DirtyFlag = false;
+  clearTimeout(_f5AutoSaveTimer);
+  try{
+    await fetch(SU+'/rest/v1/rascunhos_5d?consultor=eq.'+encodeURIComponent(f5DraftConsultor()), {
+      method:'DELETE', headers:{...SB_HEADERS,'Prefer':'return=minimal'}
+    });
+  }catch(e){ console.warn('Falha ao limpar rascunho:', e.message); }
+}
+
+// Anexa listeners de "sujeira" a todos os campos do formulário (idempotente)
+function f5AttachAutoSave(){
+  const wrap = document.getElementById('app-main');
+  if(!wrap) return;
+  wrap.querySelectorAll('input,textarea,select').forEach(el=>{
+    if(el.dataset.f5bound) return;
+    el.dataset.f5bound = '1';
+    el.addEventListener('input', f5MarkDirty);
+    el.addEventListener('change', f5MarkDirty);
+  });
+}
+
+// Ao abrir "Novo atendimento", busca rascunho no Supabase e oferece restaurar.
+// Retorna true se restaurou (F e cp já ajustados).
+async function f5MaybeRestoreDraft(){
+  let draft=null;
+  try{
+    const r = await fetch(SU+'/rest/v1/rascunhos_5d?consultor=eq.'+encodeURIComponent(f5DraftConsultor())+'&select=dados,cp,atualizado_em&limit=1', {headers:SB_HEADERS});
+    if(r.ok){ const rows = await r.json(); if(rows && rows.length) draft = rows[0]; }
+  }catch(e){ console.warn('Falha ao ler rascunho:', e.message); return false; }
+  if(!draft || !draft.dados || !draft.dados.F) return false;
+  const dF = draft.dados.F;
+  const nome = (dF.nome||'').trim();
+  const quando = draft.atualizado_em ? new Date(draft.atualizado_em).toLocaleString('pt-BR') : '';
+  const ok = confirm('💾 Há um rascunho de atendimento não finalizado'
+    + (nome ? ' de "'+nome+'"' : '')
+    + (quando ? ' (salvo em '+quando+')' : '')
+    + '.\n\nDeseja continuar de onde parou?\n\n[OK] Restaurar rascunho   ·   [Cancelar] Começar em branco');
+  if(ok){
+    try{ F = Object.assign(nf(), dF); }catch(e){ return false; }
+    delete F._editIndex; // fluxo "Novo": nunca herdar índice de edição
+    cp = (typeof draft.cp==='number') ? draft.cp : (draft.dados.cp||0);
+    return true;
+  } else {
+    await f5ClearDraft();
+    return false;
+  }
+}
+
+// Salvamento incremental "Salvar agora" — grava o progresso no Supabase a
+// qualquer momento, sem abrir o modal de vinculação e sem criar duplicatas.
+async function salvarProgresso(btnEl){
+  if(!F.nome.trim()){ sa('e','⚠️ Informe ao menos o nome do empreendedor antes de salvar.'); return; }
+  const btn = btnEl || document.getElementById('bnt-salvar-topo');
+  const orig = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled=true; btn.innerHTML='⏳ Salvando…'; }
+  try{
+    const rec = buildRecFromF();
+    const editIndex = F._editIndex;
+    await saveData(rec, editIndex);
+    // 1ª gravação criou o registro no topo de ALL → fixa o índice para
+    // que os próximos "Salvar" atualizem o MESMO atendimento (sem duplicar).
+    if(editIndex === undefined || editIndex === null || editIndex < 0){
+      F._editIndex = 0;
+    }
+    // Progresso já está em atendimentos_5d → rascunho fica redundante
+    await f5ClearDraft();
+    if(btn){ btn.innerHTML='✓ Salvo na nuvem'; btn.style.background='#1a5e3a'; }
+    sa('o','✅ Progresso salvo na nuvem. Você pode continuar preenchendo.');
+    setTimeout(()=>{ if(btn){ btn.disabled=false; btn.innerHTML=orig; btn.style.background=''; } }, 1800);
+  }catch(err){
+    if(btn){ btn.disabled=false; btn.innerHTML=orig; }
+    sa('e','❌ Não deu para salvar agora ('+(err.message||'sem conexão')+'). '
+      + 'Seu rascunho está preservado na nuvem — tente novamente em instantes.');
+  }
+}
+
+function buildRecFromF(){
+  const rec = buildRecFromF();
+  return rec;
 }
 
 async function salvar(){
@@ -4834,15 +5008,21 @@ async function salvar(){
   };
   try{
     const editIndex = F._editIndex;
-    await saveData(rec, editIndex);
+    const res = await saveData(rec, editIndex);
     btn.textContent='✓ Salvo!';btn.className='bs ok';
-    const msg = editIndex !== undefined ? '✅ Atendimento atualizado com sucesso!' : '✅ Atendimento salvo com sucesso!';
-    sa('o', msg);
+    // Salvou de verdade na nuvem → o rascunho no Supabase não é mais necessário
+    _f5Suppress = true;
+    await f5ClearDraft();
+    const acao = editIndex !== undefined ? 'atualizado' : 'salvo';
+    sa('o', '✅ Atendimento '+acao+' com sucesso na nuvem!');
     // Mostrar modal de vinculação ao programa após breve pausa
     setTimeout(()=>mostrarModalVinculacao(rec), 800);
   }catch(err){
     btn.textContent='Salvar Atendimento ✓';btn.disabled=false;
-    sa('e','❌ Erro ao salvar. Tente novamente.');
+    // NÃO limpa o rascunho: o trabalho continua salvo em rascunhos_5d no Supabase
+    sa('e','❌ Não foi possível salvar no servidor agora ('+(err.message||'erro de conexão')+'). '
+      + 'Seu rascunho está preservado na nuvem — tente novamente em instantes. '
+      + 'Se persistir, verifique se o projeto Supabase está ativo.');
   }
 }
 
@@ -5014,6 +5194,154 @@ function _abrirIframePDF(conteudo, tituloBar, nomeArquivo){
   iDoc.write(conteudo);
   iDoc.write(`</body></html>`);
   iDoc.close();
+}
+
+// ===== DOCUMENTO DO EMPREENDEDOR (a partir de um registro salvo) =====
+// Gera o mesmo layout do Plano de Ação lendo as colunas planas do banco,
+// para que o empreendedor veja/baixe seu diagnóstico pelo portal.
+function buildDocFromRec(r){
+  if(!r) return '<div style="padding:40px;text-align:center;color:#888;">Documento indisponível.</div>';
+  const num=v=>{const n=parseInt(v,10);return isNaN(n)?0:n;};
+  const gt=num(r.gut_g)*num(r.gut_u)*num(r.gut_t);
+  const smartFull=r.meta_smart||[r.meta_s,r.meta_m,r.meta_a,r.meta_r,r.meta_t].filter(Boolean).join(' · ');
+  const pilMap=[
+    {i:'📦',k:'Produto/Serviço',n:'pilar_produto_nota',c:'pilar_produto_classe',o:'pilar_produto_obs'},
+    {i:'📣',k:'Vendas/Marketing',n:'pilar_vendas_nota',c:'pilar_vendas_classe',o:'pilar_vendas_obs'},
+    {i:'💰',k:'Finanças',n:'pilar_financas_nota',c:'pilar_financas_classe',o:'pilar_financas_obs'},
+    {i:'⚙️',k:'Gestão/Processos',n:'pilar_gestao_nota',c:'pilar_gestao_classe',o:'pilar_gestao_obs'},
+  ];
+  const pilarRows=pilMap.map(p=>{
+    const nota=r[p.n], classe=(r[p.c]||''), obs=(r[p.o]||'');
+    if(!nota) return '';
+    const cls=classe==='urgente'?'#e53e3e':classe==='estrategico'?'#2d6a4f':classe==='importante'?'#dd6b20':'#888';
+    return `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee;">${p.i} ${p.k}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center;font-weight:700;color:#7b2d8b;">${nota}/5</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;"><span style="background:${cls}20;color:${cls};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;">${classe.toUpperCase()}</span></td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:12px;color:#555;">${e(obs)}</td></tr>`;
+  }).filter(Boolean).join('');
+  // Ações: prioriza acoes_json, senão acao1..3
+  let acoesArr=[];
+  try{ acoesArr=JSON.parse(r.acoes_json||'[]'); }catch(_){}
+  if(!acoesArr.length){ acoesArr=[{a:r.acao1},{a:r.acao2},{a:r.acao3}].filter(x=>x&&x.a); }
+  const acoes=acoesArr.filter(a=>a&&a.a).map((a,i)=>`
+    <div style="background:#fef8f5;border-left:4px solid #e07a5f;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:700;color:#e07a5f;letter-spacing:1px;margin-bottom:6px;">AÇÃO ${i+1}</div>
+      <div style="font-weight:600;margin-bottom:4px;">${e(a.a)}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;font-size:12px;color:#555;margin-top:8px;">
+        <div><b>Como:</b> ${e(a.c)||'—'}</div>
+        <div><b>Quando:</b> ${e(a.q)||'—'}</div>
+        <div><b>Responsável:</b> ${e(a.r)||'—'}</div>
+        <div><b>Indicador:</b> ${e(a.ind)||'—'}</div>
+      </div>
+    </div>`).join('');
+  const comps=(r.compromissos||'').split(';').map(s=>s.trim()).filter(Boolean);
+  const encaminhamentos=[r.encaminhamento,r.comunidade,r.micro].filter(Boolean);
+  const logoSrc=(()=>{try{return document.querySelector('.hlo img')?.src||'';}catch(e){return '';}})();
+
+  return `
+  <div id="pdf-doc" style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:700px;margin:0 auto;color:#1a2035;font-size:13px;line-height:1.6;">
+    <div style="background:linear-gradient(135deg,#1d3557,#2d4a8a);padding:28px 32px;border-radius:12px 12px 0 0;display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:16px;">
+        <img src="${logoSrc}" style="height:52px;width:auto;" alt="ENEDES" onerror="this.style.display='none'">
+        <div>
+          <div style="color:#fff;font-size:18px;font-weight:800;letter-spacing:.5px;">ENEDES</div>
+          <div style="color:#a8c4e8;font-size:11px;">Escola de Negócios e Desenvolvimento Social · IFB</div>
+          <div style="color:#74c69d;font-size:11px;font-weight:600;margin-top:2px;">ENEDES · Metodologia 5D</div>
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <div style="color:#fff;font-size:20px;font-weight:800;">Plano de Ação</div>
+        <div style="color:#a8c4e8;font-size:11px;">Atendimento Empreendedor</div>
+        <div style="color:#a8c4e8;font-size:11px;">${e(r.data_mentoria)||new Date().toLocaleDateString('pt-BR')}</div>
+      </div>
+    </div>
+    <div style="background:#2d6a4f;height:4px;"></div>
+
+    <div style="background:#f8fafb;border:1px solid #dde3ec;padding:20px 24px;border-top:none;">
+      <div style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#6b7c93;margin-bottom:10px;">Identificação</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div><span style="color:#6b7c93;font-size:11px;">Empreendedor(a):</span><br><strong style="font-size:15px;">${e(r.nome)||'—'}</strong></div>
+        <div><span style="color:#6b7c93;font-size:11px;">Negócio:</span><br><strong>${e(r.negocio)||'—'}</strong></div>
+        <div><span style="color:#6b7c93;font-size:11px;">Segmento:</span><br>${e(r.segmento)||'—'}</div>
+        <div><span style="color:#6b7c93;font-size:11px;">Estágio:</span><br>${e(r.estagio)||'—'}</div>
+        <div><span style="color:#6b7c93;font-size:11px;">Consultor(a):</span><br>${e(r.mentor)||'—'}</div>
+        <div><span style="color:#6b7c93;font-size:11px;">Campus:</span><br>${e(r.campus)||'—'}</div>
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #dde3ec;border-top:none;padding:20px 24px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <div style="background:#f0f9f4;color:#2d6a4f;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;">🔎</div>
+        <div style="font-size:13px;font-weight:800;color:#2d6a4f;letter-spacing:.5px;">1D — DIAGNÓSTICO · Avaliação dos 4 Pilares</div>
+      </div>
+      ${pilarRows?`<table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr style="background:#f4f7fb;">
+          <th style="text-align:left;padding:8px 12px;color:#6b7c93;font-size:10px;letter-spacing:1px;text-transform:uppercase;">Pilar</th>
+          <th style="text-align:center;padding:8px 12px;color:#6b7c93;font-size:10px;letter-spacing:1px;text-transform:uppercase;">Nota</th>
+          <th style="padding:8px 12px;color:#6b7c93;font-size:10px;letter-spacing:1px;text-transform:uppercase;">Classificação</th>
+          <th style="padding:8px 12px;color:#6b7c93;font-size:10px;letter-spacing:1px;text-transform:uppercase;">Observações</th>
+        </tr></thead><tbody>${pilarRows}</tbody></table>`
+      :'<em style="color:#999;font-size:12px;">Nenhum pilar avaliado.</em>'}
+    </div>
+
+    <div style="background:#f8fafb;border:1px solid #dde3ec;border-top:none;padding:20px 24px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <div style="background:#e8edf8;color:#1d3557;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;">🎯</div>
+        <div style="font-size:13px;font-weight:800;color:#1d3557;letter-spacing:.5px;">2D — DEFINIR · Foco Estratégico</div>
+      </div>
+      ${r.problema?`<div style="margin-bottom:10px;"><span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7c93;letter-spacing:1px;">Problema Central</span><br><div style="background:#fff;border-left:3px solid #1d3557;padding:8px 12px;border-radius:0 6px 6px 0;margin-top:4px;">${e(r.problema)}</div></div>`:''}
+      ${r.causa?`<div style="margin-bottom:10px;"><span style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7c93;letter-spacing:1px;">Causa Raiz</span><br><div style="padding:6px 0;font-size:12px;">${e(r.causa)}</div></div>`:''}
+      ${gt?`<div style="display:inline-block;background:#e8edf8;border:1px solid #1d3557;border-radius:8px;padding:8px 16px;margin-bottom:10px;font-size:12px;"><strong>Matriz GUT:</strong> G(${num(r.gut_g)}) × U(${num(r.gut_u)}) × T(${num(r.gut_t)}) = <strong style="font-size:16px;color:#1d3557;">${gt}</strong></div>`:''}
+      ${smartFull?`<div style="background:#fff;border:2px solid #2d6a4f;border-radius:8px;padding:12px 16px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#2d6a4f;letter-spacing:1px;margin-bottom:6px;">🎯 Meta SMART</div>
+        <div style="font-weight:600;">${e(smartFull)}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;font-size:11px;color:#555;">
+          ${r.kpi?`<div><b>KPI:</b> ${e(r.kpi)}</div>`:''}
+          ${r.prazo?`<div><b>Prazo:</b> ${e(r.prazo)}</div>`:''}
+        </div>
+      </div>`:''}
+    </div>
+
+    <div style="background:#fff;border:1px solid #dde3ec;border-top:none;padding:20px 24px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <div style="background:#f3e8f8;color:#7b2d8b;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;">🛠</div>
+        <div style="font-size:13px;font-weight:800;color:#7b2d8b;letter-spacing:.5px;">3D — DESENVOLVER · Plano de Ação (até 90 dias)</div>
+      </div>
+      ${acoes||'<em style="color:#999;font-size:12px;">Nenhuma ação registrada.</em>'}
+      ${comps.length?`
+        <div style="margin-top:14px;background:#f0f9f4;border:1px solid #b7e4c7;border-radius:8px;padding:12px 16px;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#2d6a4f;letter-spacing:1px;margin-bottom:8px;">✅ Compromissos Assumidos</div>
+          ${comps.map(c=>`<div style="font-size:12px;margin-bottom:4px;">✔ ${e(c)}</div>`).join('')}
+        </div>`:''}
+    </div>
+
+    ${encaminhamentos.length?`<div style="background:#e8f4f4;border:1px solid #b0d8d8;border-top:none;padding:20px 24px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <div style="background:#d0ecec;color:#1a6b6b;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;">🌱</div>
+        <div style="font-size:13px;font-weight:800;color:#1a6b6b;letter-spacing:.5px;">5D — DESDOBRAR · Encaminhamentos</div>
+      </div>
+      <div style="font-size:12px;color:#1a2035;">
+        ${r.encaminhamento?`<div style="margin-bottom:8px;"><b>📚 Capacitações:</b> ${e(r.encaminhamento)}</div>`:''}
+        ${r.comunidade?`<div style="margin-bottom:8px;"><b>🤝 Comunidade:</b> ${e(r.comunidade)}</div>`:''}
+        ${r.micro?`<div><b>🚀 Micro-aceleração:</b> ${e(r.micro)}</div>`:''}
+      </div>
+    </div>`:''}
+
+    <div style="background:#1d3557;padding:16px 24px;border-radius:0 0 12px 12px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="color:#a8c4e8;font-size:11px;">ENEDES · Escola de Negócios e Desenvolvimento Social · IFB<br>ENEDES · Metodologia 5D</div>
+      <div style="color:#74c69d;font-size:11px;text-align:right;">Gerado em ${new Date().toLocaleDateString('pt-BR')}<br>${e(r.mentor)||''}</div>
+    </div>
+  </div>`;
+}
+
+// Abre o documento do empreendedor (visualizar / salvar como PDF)
+function empVerDocumento(){
+  const r = _empMeuRec;
+  if(!r){ alert('Seu documento ainda não está disponível.'); return; }
+  const conteudo = buildDocFromRec(r);
+  const nome = (r.nome||'empreendedor').toLowerCase().replace(/\s+/g,'_');
+  const hoje = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
+  _abrirIframePDF(conteudo, '📄 Meu Plano de Ação — '+(r.nome||''), 'plano_acao_'+nome+'_'+hoje);
 }
 
 // ===== DOCUMENTO DE FECHAMENTO =====
@@ -5408,6 +5736,7 @@ async function renderEmpPainel(){
     (!r.empreendedor_usuario && r.nome?.toLowerCase()===usuarioLogado?.nome?.toLowerCase())
   );
   const meu = todos[0] || null; // mais recente
+  _empMeuRec = meu; // disponibiliza para gerar/baixar o documento
 
   if(!meu){
     document.getElementById('app-main').innerHTML=`
@@ -5469,6 +5798,17 @@ async function renderEmpPainel(){
           ${meu.campus?`<span class="emp-badge" style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.7);">${e(meu.campus)}</span>`:''}
           ${meu.estagio?`<span class="emp-badge" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.6);">${e(meu.estagio)}</span>`:''}
         </div>
+      </div>
+    </div>
+
+    <div class="emp-doc-card">
+      <div class="emp-doc-ico">📄</div>
+      <div class="emp-doc-info">
+        <div class="emp-doc-title">Seu Diagnóstico & Plano de Ação</div>
+        <div class="emp-doc-sub">Documento completo da sua consultoria 5D — pronto para visualizar ou baixar em PDF.</div>
+      </div>
+      <div class="emp-doc-actions">
+        <button class="emp-doc-btn emp-doc-btn-primary" onclick="empVerDocumento()">👁 Visualizar / Baixar PDF</button>
       </div>
     </div>
 
@@ -7051,8 +7391,17 @@ function f2SalvarAgora() {
 
 // Aviso ao fechar aba com dados não salvos
 window.addEventListener('beforeunload', e => {
-  if (_f2DirtyFlag) { e.preventDefault(); e.returnValue = ''; }
+  if (_f5DirtyFlag && !_f5Suppress && f5FormAberto() && f5TemConteudo()) { try{ f5SaveDraftNow(); }catch(_){} }
+  if (_f2DirtyFlag || _f5DirtyFlag) { e.preventDefault(); e.returnValue = ''; }
 });
+// Grava o rascunho imediatamente quando o app é minimizado/fechado (mobile inclusive)
+function f5FlushSeguro(){
+  if(_f5Suppress) return;
+  if(!f5FormAberto() || !f5TemConteudo()) return;
+  try{ clearTimeout(_f5AutoSaveTimer); f5SaveDraftNow(); }catch(_){}
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') f5FlushSeguro(); });
+window.addEventListener('pagehide', f5FlushSeguro);
 
 function f2AttachAutoSave() {
   const wrap = document.getElementById('f2-wrap');
