@@ -2408,6 +2408,9 @@ function renderDashFiltrado(dataFull){
   const hasFilter=fC||fK||fE||fD||fA||fCtx||fSeg||fGen||fFx||fEsc||fFmt||fRenda||fCap||fModalidade||fCanal||fTipoResp||fInterno;
   const total=data.length;
   const mentors=cnt(data,'mentor');
+  const _mkeys=Object.keys(mentors);
+  const nConsul=_mkeys.filter(m=>respTipo({mentor:m})==='Consultor').length;
+  const nApoio=_mkeys.filter(m=>respTipo({mentor:m})==='Apoio Técnico').length;
   const segs=cnt(data,'segmento');
   const ests=cnt(data,'estagio');
   const avgNPS=data.filter(r=>r.nps).length?(data.filter(r=>r.nps).reduce((a,r)=>a+(+r.nps||0),0)/data.filter(r=>r.nps).length).toFixed(1):'-';
@@ -2589,7 +2592,8 @@ function renderDashFiltrado(dataFull){
 
     <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
       <div class="kpi k0"><div class="ki">🏪</div><div class="kv">${total}</div><div class="kl">Atendimentos</div>${hasFilter?`<div class="ks" style="color:#7b2d8b;">filtrado</div>`:''}</div>
-      <div class="kpi k1"><div class="ki">👤</div><div class="kv">${Object.keys(mentors).length}</div><div class="kl">Consultores Ativos</div></div>
+      <div class="kpi k1"><div class="ki">👤</div><div class="kv">${nConsul}</div><div class="kl">Consultores Ativos</div></div>
+      <div class="kpi" style="border-top:4px solid #0a4a7a;"><div class="ki">🛠️</div><div class="kv">${nApoio}</div><div class="kl">Apoio Técnico Ativo</div></div>
       <div class="kpi k2"><div class="ki">📊</div><div class="kv">${Object.keys(segs).length}</div><div class="kl">Segmentos</div></div>
       <div class="kpi" style="border-top:4px solid #f59e0b;"><div class="ki">⭐</div><div class="kv">${avgNPS}</div><div class="kl">NPS Médio</div></div>
       <div class="kpi" style="border-top:4px solid #2d6a4f;"><div class="ki">🚀</div><div class="kv">${totalVinc}</div><div class="kl">No Programa 12M</div></div>
