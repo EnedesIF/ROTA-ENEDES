@@ -2043,9 +2043,26 @@ async function saveData(rec, editIndex){
       if(tentativa<4) await new Promise(res=>setTimeout(res, 700*tentativa));
     }
   }
-  const errFinal = new Error(ultimoErro||'Servidor indisponível');
-  errFinal.status = ultimoStatus; errFinal.detalhe = ultimoDetalhe||ultimoErro;
-  throw errFinal;
+  // Todas as tentativas ao Supabase falharam → rede de segurança no localStorage
+  // (nada se perde, o fluxo continua e o popup de vínculo aparece). O erro real
+  // é mostrado na caixa vermelha para diagnóstico.
+  try{
+    const LS_KEY='enedes5d_mentorias';
+    const all = JSON.parse(localStorage.getItem(LS_KEY)||'[]');
+    const editing = (editIndex !== undefined && editIndex >= 0);
+    if(!rec.id) rec.id = 'local_'+Date.now(); // id temporário para o fluxo (vínculo etc.)
+    if(editing && editIndex < all.length){ all[editIndex]=rec; ALL[editIndex]=rec; }
+    else { all.unshift(rec); ALL.unshift(rec); }
+    localStorage.setItem(LS_KEY, JSON.stringify(all));
+    // Guarda para reenviar ao Supabase quando a causa for corrigida
+    try{ const P='enedes5d_pendentes'; const p=JSON.parse(localStorage.getItem(P)||'[]'); p.push({rec,ts:Date.now()}); localStorage.setItem(P,JSON.stringify(p)); }catch(_){}
+    try{ mostrarErroSalvamento({status:ultimoStatus, detalhe:(ultimoDetalhe||ultimoErro)}); }catch(_){}
+    return { ok:true, mode:'local', erro:(ultimoDetalhe||ultimoErro), status:ultimoStatus };
+  }catch(eLS){
+    const errFinal = new Error(ultimoErro||'Servidor indisponível');
+    errFinal.status = ultimoStatus; errFinal.detalhe = ultimoDetalhe||ultimoErro;
+    throw errFinal;
+  }
 }
 
 // Mostra um painel de erro FIXO e copiável quando o salvamento falha (independe do console)
@@ -5215,22 +5232,28 @@ async function salvarProgresso(btnEl){
   try{
     const rec = buildRecFromF();
     const editIndex = F._editIndex;
-    await saveData(rec, editIndex);
+    const res = await saveData(rec, editIndex);
     // 1ª gravação criou o registro no topo de ALL → fixa o índice para
     // que os próximos "Salvar" atualizem o MESMO atendimento (sem duplicar).
     if(editIndex === undefined || editIndex === null || editIndex < 0){
       F._editIndex = 0;
     }
-    // Progresso já está em atendimentos_5d → rascunho fica redundante
-    await f5ClearDraft();
-    if(btn){ btn.innerHTML='✓ Salvo na nuvem'; btn.style.background='#1a5e3a'; }
-    sa('o','✅ Progresso salvo na nuvem. Você pode continuar preenchendo.');
-    setTimeout(()=>{ if(btn){ btn.disabled=false; btn.innerHTML=orig; btn.style.background=''; } }, 1800);
+    const local = res && res.mode==='local';
+    if(local){
+      if(btn){ btn.innerHTML='⚠️ Salvo local'; btn.style.background='#b45309'; }
+      sa('e','⚠️ Salvo NESTE DISPOSITIVO (o Supabase recusou). Nada se perdeu. Veja o motivo na caixa vermelha embaixo e me envie para eu corrigir.');
+    } else {
+      // Salvou na nuvem de verdade → rascunho fica redundante
+      await f5ClearDraft();
+      if(btn){ btn.innerHTML='✓ Salvo na nuvem'; btn.style.background='#1a5e3a'; }
+      sa('o','✅ Progresso salvo na nuvem. Você pode continuar preenchendo.');
+    }
+    setTimeout(()=>{ if(btn){ btn.disabled=false; btn.innerHTML=orig; btn.style.background=''; } }, 2000);
     // Oferece vincular ao Programa 12 Meses — uma vez, e só se ainda não vinculado
     const recSalvo = (F._editIndex>=0 && ALL[F._editIndex]) ? ALL[F._editIndex] : rec;
     if(!_vincOffered && !recSalvo.vinculado_programa){
       _vincOffered = true;
-      setTimeout(()=>mostrarModalVinculacao(recSalvo), 900);
+      setTimeout(()=>mostrarModalVinculacao(recSalvo), 1000);
     }
   }catch(err){
     if(btn){ btn.disabled=false; btn.innerHTML=orig; }
@@ -5332,18 +5355,23 @@ async function salvar(){
     const editIndex = F._editIndex;
     const res = await saveData(rec, editIndex);
     btn.textContent='✓ Salvo!';btn.className='bs ok';
-    // Salvou de verdade na nuvem → o rascunho no Supabase não é mais necessário
-    _f5Suppress = true;
-    await f5ClearDraft();
     const acao = editIndex !== undefined ? 'atualizado' : 'salvo';
-    if(res && res.removidas && res.removidas.length){
-      sa('e','✅ Atendimento '+acao+', mas alguns campos novos NÃO foram gravados porque as colunas não existem no banco: '
-        + res.removidas.join(', ') + '. Rode o ALTER TABLE no Supabase para passar a salvar esses dados.');
+    const local = res && res.mode==='local';
+    if(local){
+      sa('e','⚠️ Atendimento '+acao+' NESTE DISPOSITIVO (o Supabase recusou). Nada se perdeu. Veja o motivo na caixa vermelha e me envie para eu corrigir.');
     } else {
-      sa('o', '✅ Atendimento '+acao+' com sucesso na nuvem!');
+      _f5Suppress = true;
+      await f5ClearDraft();
+      if(res && res.removidas && res.removidas.length){
+        sa('e','✅ Atendimento '+acao+', mas alguns campos novos NÃO foram gravados porque as colunas não existem no banco: '
+          + res.removidas.join(', ') + '. Rode o ALTER TABLE no Supabase para passar a salvar esses dados.');
+      } else {
+        sa('o', '✅ Atendimento '+acao+' com sucesso na nuvem!');
+      }
     }
-    // Mostrar modal de vinculação ao programa após breve pausa
-    setTimeout(()=>mostrarModalVinculacao(rec), 800);
+    // Usa o registro efetivamente salvo (com id) para o modal de vinculação
+    const recSalvo2 = (editIndex!==undefined && ALL[editIndex]) ? ALL[editIndex] : (ALL[0]||rec);
+    setTimeout(()=>mostrarModalVinculacao(recSalvo2), 800);
   }catch(err){
     btn.textContent='Salvar Atendimento ✓';btn.disabled=false;
     mostrarErroSalvamento(err);
