@@ -5263,7 +5263,86 @@ async function salvarProgresso(btnEl){
 }
 
 function buildRecFromF(){
-  const rec = buildRecFromF();
+  // Build SMART meta if not manual
+  const smartFull=F.meta||[F.meta_s,F.meta_m,F.meta_a,F.meta_r,F.meta_t].filter(Boolean).join(' · ');
+  const rec={
+    saved_at:new Date().toLocaleString('pt-BR'),
+    empreendedor_usuario:F.empreendedor_usuario,
+    nome:F.nome,negocio:F.negocio,telefone:F.telefone,email:F.email,cnpj:F.cnpj,segmento:F.seg,
+    data_mentoria:F.data,formato:F.fmt,mentor:(F.mentor||USER_NAME),area:F.area,campus:F.campus,
+    estagio:F.est,desafios:F.desa.join(', '),desafio_outro:F.desaOutro,
+    faturamento_faixa:F.faturamento_faixa,
+    empreendedor_interno:!!F.empreendedor_interno,
+    cnae_codigo:F.cnae_codigo,cnae_descricao:F.cnae_descricao,cnae_classe:F.cnae_classe,cnae_classe_desc:F.cnae_classe_desc,
+    // Pilares
+    pilar_produto_nota:F.pils['Produto/Serviço'].n,pilar_produto_classe:F.pils['Produto/Serviço'].c,pilar_produto_obs:F.pils['Produto/Serviço'].o,
+    pilar_produto_resps:JSON.stringify(F.pils['Produto/Serviço'].resps||[]),
+    pilar_vendas_nota:F.pils['Vendas/Marketing'].n,pilar_vendas_classe:F.pils['Vendas/Marketing'].c,pilar_vendas_obs:F.pils['Vendas/Marketing'].o,
+    pilar_vendas_resps:JSON.stringify(F.pils['Vendas/Marketing'].resps||[]),
+    pilar_financas_nota:F.pils['Finanças'].n,pilar_financas_classe:F.pils['Finanças'].c,pilar_financas_obs:F.pils['Finanças'].o,
+    pilar_financas_resps:JSON.stringify(F.pils['Finanças'].resps||[]),
+    pilar_gestao_nota:F.pils['Gestão/Processos'].n,pilar_gestao_classe:F.pils['Gestão/Processos'].c,pilar_gestao_obs:F.pils['Gestão/Processos'].o,
+    pilar_gestao_resps:JSON.stringify(F.pils['Gestão/Processos'].resps||[]),
+    // Definir
+    gut_g:F.gut.G,gut_u:F.gut.U,gut_t:F.gut.T,
+    problema:F.prob,causa:F.causa,cinco_p:F.cincoP,
+    meta_s:F.meta_s,meta_m:F.meta_m,meta_a:F.meta_a,meta_r:F.meta_r,meta_t:F.meta_t,
+    meta_smart:smartFull,kpi:F.kpi,prazo:F.prazo,
+    // Desenvolver
+    acao1:F.acoes[0]?.a||'',acao2:F.acoes[1]?.a||'',acao3:F.acoes[2]?.a||'',
+    acoes_json:JSON.stringify(F.acoes),
+    compromissos:F.comps.join('; '),observacoes:F.obs,
+    // Direcionar
+    data_retorno:F.retorno,implementado:F.impl,funcionou:F.func,
+    ajustes:F.ajus,proximos_passos:F.prox,nps:F.nps,comentario_nps:F.cnps,
+    // Desdobrar
+    encaminhamento:F.encaminhamento,comunidade:F.comunidade,
+    // Agendamento de retorno
+    retorno_data:F.retorno_data,retorno_hora:F.retorno_hora,retorno_canal:F.retorno_canal,retorno_obs:F.retorno_obs,
+    micro_aceleracao:F.micro,resultado_case:F.resultado,
+    // Direcionar
+    dir_matriz:JSON.stringify(F.dir_matriz||{}),
+    dir_ordem:JSON.stringify(F.dir_ordem||{}),
+    dir_datas:JSON.stringify(F.dir_datas||{}),
+    dir_acao_ancora:F.dir_acao_ancora,
+    dir_orientacao:F.dir_orientacao,
+    // MVP
+    mvp_o_que:F.mvp_o_que,mvp_funciona:F.mvp_funciona,mvp_fora:F.mvp_fora,
+    mvp_criterio:F.mvp_criterio,mvp_prazo:F.mvp_prazo,mvp_canal:F.mvp_canal,
+    // Ideação
+    id_modelo:F.id_modelo,id_para_quem:F.id_para_quem,id_dor:F.id_dor,
+    id_oferta:F.id_oferta,id_diferencial:F.id_diferencial,
+    id_checklist:JSON.stringify(F.id_checklist||[]),
+    id_cursos:JSON.stringify(F.id_cursos||[]),
+    id_curso_outro:F.id_curso_outro,
+    // Contexto de ação + perfil socioeconômico + capacitação
+    acao_contexto:F.acao_contexto,
+    faixa_etaria:F.faixa_etaria,
+    escolaridade:F.escolaridade,
+    genero:F.genero,
+    tempo_atuacao:F.tempo_atuacao,
+    fonte_renda:F.fonte_renda,
+    canais_venda:F.canais_venda.join(', '),
+    pontos_atuacao:F.pontos_atuacao.join(', '),
+    metodo_precificacao:F.metodo_precificacao,
+    interesse_capacitacao:F.interesse_capacitacao,
+    temas_interesse:JSON.stringify(F.temas_interesse||[]),
+    modalidade_pref:F.modalidade_pref,
+    dias_disponiveis:F.dias_disponiveis.join(', '),
+    horarios_disponiveis:F.horarios_disponiveis.join(', '),
+    // Contexto de ação + blocos extras
+    acao_contexto:F.acao_contexto,
+    faixa_etaria:F.faixa_etaria,escolaridade:F.escolaridade,genero:F.genero,
+    tempo_atuacao:F.tempo_atuacao,fonte_renda:F.fonte_renda,
+    canais_venda:JSON.stringify(F.canais_venda||[]),
+    pontos_atuacao:JSON.stringify(F.pontos_atuacao||[]),
+    metodo_precificacao:F.metodo_precificacao,
+    interesse_capacitacao:F.interesse_capacitacao,
+    temas_interesse:JSON.stringify(F.temas_interesse||[]),
+    modalidade_pref:F.modalidade_pref,
+    dias_disponiveis:JSON.stringify(F.dias_disponiveis||[]),
+    horarios_disponiveis:JSON.stringify(F.horarios_disponiveis||[])
+  };
   return rec;
 }
 
