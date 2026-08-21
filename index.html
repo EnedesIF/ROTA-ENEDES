@@ -1223,8 +1223,9 @@ async function addUser(u){
   const CAMPOS_VALIDOS = ['usuario','senha_hash','perfil','nome','programa','email','cnpj','telefone','cpf','ativo','supervisor'];
   const _pu = {senha_hash: u.senha||u.senha_hash};
   CAMPOS_VALIDOS.forEach(k=>{ if(u[k]!==undefined && k!=='senha_hash') _pu[k]=u[k]; });
+  const _puLimpo = _sbClean(_pu);
   try{
-    const res = await sbEscreve('POST', SU+'/rest/v1/usuarios_5d', _pu);
+    const res = await sbEscreve('POST', SU+'/rest/v1/usuarios_5d', _puLimpo);
     if(!res.ok){
       console.error('[addUser] Supabase erro:', res.status, res.erro);
       return {ok:false, erro:res.erro};
@@ -1565,7 +1566,7 @@ async function showView(view){
   
   if(view === 'dash')       { await loadAndRenderDash(); }
   else if(view === 'lista') { await loadAndRenderLista(); }
-  else if(view === 'novo')  { cp=0; F=nf(); selRec=null; carregarContextos().then(async ()=>{ await f5MaybeRestoreDraft(); renderForm(); }); }
+  else if(view === 'novo')  { cp=0; F=nf(); selRec=null; _vincOffered=false; carregarContextos().then(async ()=>{ await f5MaybeRestoreDraft(); renderForm(); }); }
   else if(view === 'backup') { renderBackup(); }
   else if(view === 'detalhe') { await loadUsers().catch(()=>{}); renderDetalhe(); }
   else if(view === 'usuarios') {
@@ -2007,8 +2008,21 @@ async function sbEscreve(method, url, payload){
   return {ok:false, status:0, erro:'muitas colunas ausentes no banco', removidas};
 }
 
+// Converte strings vazias em null: colunas de data/número/booleano no Postgres
+// rejeitam "" e derrubam o INSERT inteiro. null é aceito por qualquer tipo.
+function _sbClean(obj){
+  const out = {};
+  Object.keys(obj).forEach(k=>{
+    let v = obj[k];
+    if(v === '' || v === undefined) v = null;
+    out[k] = v;
+  });
+  return out;
+}
+
 async function saveData(rec, editIndex){
   // Salvamento 100% Supabase, com até 4 tentativas em caso de rede instável.
+  rec = _sbClean(rec); // '' -> null (evita erro de tipo em data/número/booleano)
   let ultimoErro='';
   for(let tentativa=1; tentativa<=4; tentativa++){
     try{
@@ -3635,6 +3649,8 @@ function mostrarEvolucao(nome, negocio){
 function editarAtendimento(){
   const r = selRec;
   if(!r) return;
+  _f5RestoredInfo = null; // edição de registro real não é rascunho recuperado
+  _vincOffered = !!r.vinculado_programa; // se já vinculado, não reoferece
   // Marcar que estamos editando (para salvar sobrescrever em vez de criar novo)
   F._editIndex = ALL.indexOf(r);
   // Carregar dados do registro em F
@@ -3874,6 +3890,11 @@ function renderForm(){
   f5StartSafetyTimer();     // liga a fotografia periódica de segurança
   const el=document.getElementById('app-main');
   el.innerHTML=`
+    ${_f5RestoredInfo?`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#e8f2fc;border:1.5px solid #7fb2e0;border-radius:12px;padding:12px 16px;margin-bottom:12px;">
+      <span style="font-size:20px;">📥</span>
+      <div style="flex:1;min-width:180px;font-size:13px;color:#0a4a7a;font-weight:600;">Rascunho recuperado${_f5RestoredInfo.nome?' de "'+e(_f5RestoredInfo.nome)+'"':''}${_f5RestoredInfo.quando?' · salvo em '+_f5RestoredInfo.quando:''}. Você voltou de onde parou.</div>
+      <button onclick="descartarRascunho()" style="background:#fff;border:1px solid #cbd5e1;color:#475569;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🗑 Começar em branco</button>
+    </div>`:''}
     <div class="save-bar" id="save-bar">
       <span id="f5-autosave-ind" class="save-bar-ind">☁️ rascunho automático na nuvem</span>
       <button class="save-bar-btn" id="bnt-salvar-topo" onclick="salvarProgresso(this)" title="Salvar o progresso atual no Supabase">💾 Salvar agora</button>
@@ -5030,6 +5051,7 @@ function nxt(){
 // ===== RASCUNHO 5D — PERSISTIDO 100% NO SUPABASE (tabela rascunhos_5d) =====
 // Chave = consultor (USER_NAME). Um rascunho por consultor.
 let _f5Suppress = false;      // impede regravar rascunho após salvar/sair
+let _vincOffered = false;     // oferece o modal de vínculo ao programa só uma vez por atendimento
 let _f5SafetyTimer = null;    // fotografa o formulário periodicamente
 let _f5Salvando = false;      // evita gravações concorrentes
 
@@ -5100,6 +5122,7 @@ function f5MarkDirty(){
 // Apaga o rascunho do consultor no Supabase (após salvar definitivo)
 async function f5ClearDraft(){
   _f5DirtyFlag = false;
+  _f5RestoredInfo = null;
   clearTimeout(_f5AutoSaveTimer);
   try{
     await fetch(SU+'/rest/v1/rascunhos_5d?consultor=eq.'+encodeURIComponent(f5DraftConsultor()), {
@@ -5120,31 +5143,38 @@ function f5AttachAutoSave(){
   });
 }
 
-// Ao abrir "Novo atendimento", busca rascunho no Supabase e oferece restaurar.
-// Retorna true se restaurou (F e cp já ajustados).
+// Ao abrir "Novo atendimento", busca rascunho no Supabase e RESTAURA automaticamente
+// (sem popup), deixando um aviso para descartar caso queira começar em branco.
+let _f5RestoredInfo = null;
 async function f5MaybeRestoreDraft(){
+  _f5RestoredInfo = null;
   let draft=null;
   try{
-    const r = await fetch(SU+'/rest/v1/rascunhos_5d?consultor=eq.'+encodeURIComponent(f5DraftConsultor())+'&select=dados,cp,atualizado_em&limit=1', {headers:SB_HEADERS});
+    const r = await fetch(SU+'/rest/v1/rascunhos_5d?consultor=eq.'+encodeURIComponent(f5DraftConsultor())+'&select=dados,cp,atualizado_em&order=atualizado_em.desc&limit=1', {headers:SB_HEADERS});
     if(r.ok){ const rows = await r.json(); if(rows && rows.length) draft = rows[0]; }
+    else { console.warn('[rascunho] leitura HTTP '+r.status); }
   }catch(e){ console.warn('Falha ao ler rascunho:', e.message); return false; }
   if(!draft || !draft.dados || !draft.dados.F) return false;
   const dF = draft.dados.F;
-  const nome = (dF.nome||'').trim();
-  const quando = draft.atualizado_em ? new Date(draft.atualizado_em).toLocaleString('pt-BR') : '';
-  const ok = confirm('💾 Há um rascunho de atendimento não finalizado'
-    + (nome ? ' de "'+nome+'"' : '')
-    + (quando ? ' (salvo em '+quando+')' : '')
-    + '.\n\nDeseja continuar de onde parou?\n\n[OK] Restaurar rascunho   ·   [Cancelar] Começar em branco');
-  if(ok){
-    try{ F = Object.assign(nf(), dF); }catch(e){ return false; }
-    delete F._editIndex; // fluxo "Novo": nunca herdar índice de edição
-    cp = (typeof draft.cp==='number') ? draft.cp : (draft.dados.cp||0);
-    return true;
-  } else {
-    await f5ClearDraft();
-    return false;
-  }
+  if(!dF.nome && !dF.negocio) return false; // rascunho vazio, ignora
+  try{ F = Object.assign(nf(), dF); }catch(e){ return false; }
+  delete F._editIndex; // fluxo "Novo": nunca herdar índice de edição
+  cp = (typeof draft.cp==='number') ? draft.cp : (draft.dados.cp||0);
+  if(cp<0||cp>4) cp=0;
+  _f5RestoredInfo = {
+    nome: (dF.nome||'').trim(),
+    quando: draft.atualizado_em ? new Date(draft.atualizado_em).toLocaleString('pt-BR') : ''
+  };
+  return true;
+}
+
+// Descarta o rascunho recuperado e recomeça em branco
+async function descartarRascunho(){
+  if(!confirm('Descartar o rascunho recuperado e começar um atendimento em branco?')) return;
+  _f5RestoredInfo = null;
+  await f5ClearDraft();
+  cp=0; F=nf(); selRec=null;
+  renderForm();
 }
 
 // Salvamento incremental "Salvar agora" — grava o progresso no Supabase a
@@ -5168,6 +5198,12 @@ async function salvarProgresso(btnEl){
     if(btn){ btn.innerHTML='✓ Salvo na nuvem'; btn.style.background='#1a5e3a'; }
     sa('o','✅ Progresso salvo na nuvem. Você pode continuar preenchendo.');
     setTimeout(()=>{ if(btn){ btn.disabled=false; btn.innerHTML=orig; btn.style.background=''; } }, 1800);
+    // Oferece vincular ao Programa 12 Meses — uma vez, e só se ainda não vinculado
+    const recSalvo = (F._editIndex>=0 && ALL[F._editIndex]) ? ALL[F._editIndex] : rec;
+    if(!_vincOffered && !recSalvo.vinculado_programa){
+      _vincOffered = true;
+      setTimeout(()=>mostrarModalVinculacao(recSalvo), 900);
+    }
   }catch(err){
     if(btn){ btn.disabled=false; btn.innerHTML=orig; }
     sa('e','❌ Não deu para salvar agora ('+(err.message||'sem conexão')+'). '
