@@ -2023,7 +2023,7 @@ function _sbClean(obj){
 async function saveData(rec, editIndex){
   // Salvamento 100% Supabase, com até 4 tentativas em caso de rede instável.
   rec = _sbClean(rec); // '' -> null (evita erro de tipo em data/número/booleano)
-  let ultimoErro='';
+  let ultimoErro='', ultimoDetalhe='', ultimoStatus='';
   for(let tentativa=1; tentativa<=4; tentativa++){
     try{
       let res, editing = (editIndex !== undefined && editIndex >= 0 && ALL[editIndex]?.id);
@@ -2032,7 +2032,7 @@ async function saveData(rec, editIndex){
       } else {
         res = await sbEscreve('POST', SU+'/rest/v1/atendimentos_5d', rec);
       }
-      if(!res.ok) throw new Error('HTTP '+res.status+(res.erro?' — '+res.erro.slice(0,180):''));
+      if(!res.ok){ ultimoStatus=res.status; ultimoDetalhe=res.erro||''; throw new Error('HTTP '+res.status+(res.erro?' — '+res.erro.slice(0,240):'')); }
       if(res.removidas.length) console.warn('[saveData] Colunas inexistentes ignoradas (rode o ALTER TABLE):', res.removidas.join(', '));
       const row = (res.data&&res.data[0]) || rec;
       if(editing) ALL[editIndex]=row; else ALL.unshift(row);
@@ -2043,7 +2043,35 @@ async function saveData(rec, editIndex){
       if(tentativa<4) await new Promise(res=>setTimeout(res, 700*tentativa));
     }
   }
-  throw new Error('Servidor indisponível ('+ultimoErro+')');
+  const errFinal = new Error(ultimoErro||'Servidor indisponível');
+  errFinal.status = ultimoStatus; errFinal.detalhe = ultimoDetalhe||ultimoErro;
+  throw errFinal;
+}
+
+// Mostra um painel de erro FIXO e copiável quando o salvamento falha (independe do console)
+function mostrarErroSalvamento(err){
+  const status = err && err.status ? err.status : '';
+  const detalhe = (err && (err.detalhe||err.message)) || 'erro desconhecido';
+  let box = document.getElementById('erro-salvamento-box');
+  if(!box){
+    box = document.createElement('div');
+    box.id='erro-salvamento-box';
+    box.style.cssText='position:fixed;left:16px;right:16px;bottom:16px;z-index:9999;background:#fff;border:2px solid #dc2626;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.25);padding:16px 18px;max-width:720px;margin:0 auto;font-family:Sora,sans-serif;';
+    document.body.appendChild(box);
+  }
+  box.innerHTML=`
+    <div style="display:flex;align-items:flex-start;gap:10px;">
+      <div style="font-size:20px;">❌</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:800;color:#dc2626;font-size:14px;margin-bottom:4px;">O atendimento NÃO foi salvo no Supabase</div>
+        <div style="font-size:12px;color:#475569;margin-bottom:8px;">Erro exato do servidor${status?' (status '+status+')':''} — copie e mande para análise:</div>
+        <textarea readonly id="erro-salvamento-txt" style="width:100%;height:80px;font-family:monospace;font-size:12px;border:1px solid #e2e8f0;border-radius:8px;padding:8px;background:#fef2f2;color:#7f1d1d;resize:vertical;">${(String(detalhe)).replace(/</g,'&lt;')}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button onclick="(function(){var t=document.getElementById('erro-salvamento-txt');t.select();document.execCommand('copy');this.textContent='✓ Copiado';}).call(this)" style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Copiar erro</button>
+          <button onclick="document.getElementById('erro-salvamento-box').remove()" style="background:#fff;color:#475569;border:1px solid #cbd5e1;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Fechar</button>
+        </div>
+      </div>
+    </div>`;
 }
 // Gerenciar usuários (apenas coord geral)
 function renderUsuarios(){
@@ -5206,8 +5234,8 @@ async function salvarProgresso(btnEl){
     }
   }catch(err){
     if(btn){ btn.disabled=false; btn.innerHTML=orig; }
-    sa('e','❌ Não deu para salvar agora ('+(err.message||'sem conexão')+'). '
-      + 'Seu rascunho está preservado na nuvem — tente novamente em instantes.');
+    mostrarErroSalvamento(err);
+    sa('e','❌ Não deu para salvar agora. Veja o erro exato na caixa vermelha (canto inferior) e me envie.');
   }
 }
 
@@ -5318,10 +5346,8 @@ async function salvar(){
     setTimeout(()=>mostrarModalVinculacao(rec), 800);
   }catch(err){
     btn.textContent='Salvar Atendimento ✓';btn.disabled=false;
-    // NÃO limpa o rascunho: o trabalho continua salvo em rascunhos_5d no Supabase
-    sa('e','❌ Não foi possível salvar no servidor agora ('+(err.message||'erro de conexão')+'). '
-      + 'Seu rascunho está preservado na nuvem — tente novamente em instantes. '
-      + 'Se persistir, verifique se o projeto Supabase está ativo.');
+    mostrarErroSalvamento(err);
+    sa('e','❌ Não foi possível salvar. Veja o erro exato na caixa vermelha (canto inferior) e me envie. Seu rascunho está preservado na nuvem.');
   }
 }
 
