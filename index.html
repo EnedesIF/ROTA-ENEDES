@@ -1224,16 +1224,14 @@ async function addUser(u){
   const _pu = {senha_hash: u.senha||u.senha_hash};
   CAMPOS_VALIDOS.forEach(k=>{ if(u[k]!==undefined && k!=='senha_hash') _pu[k]=u[k]; });
   try{
-    const r = await fetch(SU+'/rest/v1/usuarios_5d',{
-      method:'POST',
-      headers:{...SB_HEADERS,'Prefer':'return=minimal'},
-      body:JSON.stringify(_pu)
-    });
-    if(!r.ok){
-      const err = await r.text();
-      console.error('[addUser] Supabase erro:', r.status, err);
+    const res = await sbEscreve('POST', SU+'/rest/v1/usuarios_5d', _pu);
+    if(!res.ok){
+      console.error('[addUser] Supabase erro:', res.status, res.erro);
+      return {ok:false, erro:res.erro};
     }
-  }catch(e){ console.error('[addUser] fetch erro:', e.message); }
+    if(res.removidas.length) console.warn('[addUser] Colunas inexistentes ignoradas (rode o ALTER TABLE):', res.removidas.join(', '));
+    return {ok:true, removidas:res.removidas};
+  }catch(e){ console.error('[addUser] fetch erro:', e.message); return {ok:false, erro:e.message}; }
 }
 
 async function removeUserByIndex(i){
@@ -1987,40 +1985,50 @@ async function lerParamsURL(){
   }catch(e){ console.error('Erro ao processar link de acesso:',e); }
 }
 
+// Grava no Supabase de forma resiliente: se o banco reclamar de uma coluna
+// inexistente (ex.: campo novo ainda sem ALTER TABLE), remove só aquele campo
+// e tenta de novo, para não perder o registro inteiro.
+async function sbEscreve(method, url, payload){
+  let body = {...payload};
+  const removidas = [];
+  for(let i=0;i<25;i++){
+    const r = await fetch(url, {method, headers:{...SB_HEADERS,'Prefer':'return=representation'}, body: JSON.stringify(body)});
+    if(r.ok){ let data=null; try{ data=await r.json(); }catch(_){}; return {ok:true, status:r.status, data, removidas}; }
+    let txt=''; try{ txt=await r.text(); }catch(_){}
+    const m = txt.match(/Could not find the '([^']+)' column/i)
+           || txt.match(/column "([^"]+)" of relation/i)
+           || txt.match(/'([^']+)' column/i);
+    const col = m && m[1];
+    if(col && Object.prototype.hasOwnProperty.call(body, col)){
+      delete body[col]; removidas.push(col); continue; // tenta de novo sem a coluna problemática
+    }
+    return {ok:false, status:r.status, erro:txt, removidas}; // erro não relacionado a coluna
+  }
+  return {ok:false, status:0, erro:'muitas colunas ausentes no banco', removidas};
+}
+
 async function saveData(rec, editIndex){
   // Salvamento 100% Supabase, com até 4 tentativas em caso de rede instável.
-  // Sem fallback local: se falhar, o rascunho no Supabase preserva o trabalho.
   let ultimoErro='';
   for(let tentativa=1; tentativa<=4; tentativa++){
     try{
-      if(editIndex !== undefined && editIndex >= 0 && ALL[editIndex]?.id){
-        const id = ALL[editIndex].id;
-        const r = await fetch(SU+'/rest/v1/atendimentos_5d?id=eq.'+id, {
-          method:'PATCH',
-          headers:{...SB_HEADERS, 'Prefer':'return=representation'},
-          body: JSON.stringify(rec)
-        });
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        const updated = await r.json();
-        ALL[editIndex] = updated[0]||rec;
+      let res, editing = (editIndex !== undefined && editIndex >= 0 && ALL[editIndex]?.id);
+      if(editing){
+        res = await sbEscreve('PATCH', SU+'/rest/v1/atendimentos_5d?id=eq.'+ALL[editIndex].id, rec);
       } else {
-        const r = await fetch(SU+'/rest/v1/atendimentos_5d', {
-          method:'POST',
-          headers:{...SB_HEADERS, 'Prefer':'return=representation'},
-          body: JSON.stringify(rec)
-        });
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        const inserted = await r.json();
-        ALL.unshift(inserted[0]||rec);
+        res = await sbEscreve('POST', SU+'/rest/v1/atendimentos_5d', rec);
       }
-      return { ok:true, mode:'cloud' };
+      if(!res.ok) throw new Error('HTTP '+res.status+(res.erro?' — '+res.erro.slice(0,180):''));
+      if(res.removidas.length) console.warn('[saveData] Colunas inexistentes ignoradas (rode o ALTER TABLE):', res.removidas.join(', '));
+      const row = (res.data&&res.data[0]) || rec;
+      if(editing) ALL[editIndex]=row; else ALL.unshift(row);
+      return { ok:true, mode:'cloud', removidas:res.removidas };
     }catch(e){
       ultimoErro = e.message;
       console.warn('Supabase falhou (tentativa '+tentativa+'/4):', e.message);
       if(tentativa<4) await new Promise(res=>setTimeout(res, 700*tentativa));
     }
   }
-  // Todas as tentativas falharam → NÃO grava local. Lança erro para o chamador tratar.
   throw new Error('Servidor indisponível ('+ultimoErro+')');
 }
 // Gerenciar usuários (apenas coord geral)
@@ -3364,6 +3372,7 @@ function renderDetalhe(){
       ${sec("🔎 1D — Diagnosticar","sg2",`
         <div class="dg">
           ${row("Negócio",r.negocio)}${row("CNPJ",r.cnpj)}${row("Segmento",r.segmento)}
+          ${r.cnae_codigo?`<div class="dr" style="grid-column:1/-1;"><div class="dl">🏷️ CNAE</div><div class="dv"><strong>${e(r.cnae_codigo)}</strong> — ${e(r.cnae_descricao)}${r.cnae_classe?` <span style="color:var(--muted);font-size:12px;">(Classe ${e(r.cnae_classe)} · ${e(r.cnae_classe_desc)})</span>`:''}</div></div>`:''}
           ${row("Estágio",r.estagio)}${row("Consultor",r.mentor)}${row("Campus",r.campus)}
           ${row("Desafios",r.desafios)}${row("Formato",r.formato)}
           ${row("Responsável",r.mentor?e(r.mentor)+' · '+respTipo(r):'')}
@@ -3448,6 +3457,7 @@ function renderDetalhe(){
 function nf(){return{
   nome:"",negocio:"",cnpj:"",seg:"",data:"",fmt:"",mentor:USER_NAME||'',area:"",campus:"",telefone:"",email:"",est:"",desa:[],desaOutro:"",
   faturamento_faixa:"",
+  cnae_codigo:"",cnae_descricao:"",cnae_classe:"",cnae_classe_desc:"",
   empreendedor_interno:false,
   pils:{
     "Produto/Serviço":{n:"",c:"",o:"",resps:["","","",""]},
@@ -3645,6 +3655,7 @@ function editarAtendimento(){
   F.desaOutro = r.desafio_outro||'';
   F.faturamento_faixa = r.faturamento_faixa||'';
   F.empreendedor_interno = !!r.empreendedor_interno;
+  F.cnae_codigo=r.cnae_codigo||'';F.cnae_descricao=r.cnae_descricao||'';F.cnae_classe=r.cnae_classe||'';F.cnae_classe_desc=r.cnae_classe_desc||'';
   // Pilares
   const loadPilar = (key, campo) => {
     F.pils[key].n = r['pilar_'+campo+'_nota']||'';
@@ -4187,6 +4198,20 @@ function rP0(){
       <div class="fg"><label class="lbl">E-mail</label><input type="text" id="femail" value="${e(F.email)}" placeholder="email@exemplo.com"></div>
       <div class="fg"><label class="lbl">CNPJ (se houver)</label><input type="text" id="f2" value="${e(F.cnpj)}" placeholder="00.000.000/0001-00"></div>
       <div class="fg"><label class="lbl">Segmento</label><select id="f3"><option value="">Selecione</option>${SEGS.map(s=>`<option ${F.seg===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="fg full" style="position:relative;">
+        <label class="lbl">🏷️ CNAE — Classificação da atividade <span style="font-weight:400;color:var(--muted);">(busca oficial IBGE / CONCLA)</span></label>
+        <div id="f-cnae-selected" style="${F.cnae_codigo?'':'display:none;'}margin:6px 0 4px;">
+          <div style="display:flex;align-items:center;gap:10px;background:#eef6f1;border:1.5px solid #b7e4c7;border-radius:10px;padding:10px 14px;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:700;color:var(--green);">${F.cnae_codigo?e(F.cnae_codigo)+' — '+e(F.cnae_descricao):''}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;">${F.cnae_classe?'Classe '+e(F.cnae_classe)+' · '+e(F.cnae_classe_desc):''}</div>
+            </div>
+            <button type="button" onclick="limparCNAE()" style="background:#fff;border:1px solid #fecaca;color:#dc2626;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✕ trocar</button>
+          </div>
+        </div>
+        <input type="text" id="f-cnae-busca" autocomplete="off" placeholder="Digite a atividade (ex: padaria, software) ou o código CNAE..." style="${F.cnae_codigo?'display:none;':''}" oninput="buscarCNAEUI(this.value)">
+        <div id="f-cnae-results" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:60;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgba(15,38,68,.16);max-height:280px;overflow-y:auto;margin-top:2px;"></div>
+      </div>
       <div class="fg"><label class="lbl">Data do Atendimento</label><input type="date" id="f4" value="${F.data}"></div>
       ${mentorField}
       <div class="fg"><label class="lbl">Área de Atendimento</label><select id="f7"><option value="">Selecione</option>${["Gestão e Estratégia","Finanças e Contabilidade","Marketing e Vendas","Produção e Operações","Inovação e Tecnologia","Jurídico e Regularização","Design e Comunicação","Outro"].map(a=>`<option ${F.area===a?'selected':''}>${a}</option>`).join('')}</select></div>
@@ -4800,6 +4825,104 @@ function rAc(a,i){
   </div>`;
 }
 
+// ===== BUSCADOR CNAE (API oficial IBGE / CONCLA) =====
+let _CNAE_CACHE=null, _CNAE_LOADING=null, _cnaeTimer=null;
+function _cnaeNorm(s){ return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+// Formata id de 7 dígitos "0111301" → "0111-3/01"
+function _cnaeFmt(id){ const d=String(id||'').replace(/\D/g,''); return d.length===7 ? d.slice(0,4)+'-'+d.slice(4,5)+'/'+d.slice(5,7) : (id||''); }
+function _cnaeFmtClasse(id){ const d=String(id||'').replace(/\D/g,''); return d.length===5 ? d.slice(0,4)+'-'+d.slice(4,5) : (id||''); }
+
+// Carrega (uma vez) a lista de subclasses CNAE do IBGE e mantém em cache
+function carregarCNAE(){
+  if(_CNAE_CACHE) return Promise.resolve(_CNAE_CACHE);
+  if(_CNAE_LOADING) return _CNAE_LOADING;
+  _CNAE_LOADING = fetch('https://servicodados.ibge.gov.br/api/v2/cnae/subclasses')
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(list=>{
+      _CNAE_CACHE = (list||[]).map(sc=>({
+        id: sc.id,
+        fmt: _cnaeFmt(sc.id),
+        desc: sc.descricao||'',
+        classe: sc.classe?sc.classe.id:'',
+        classeFmt: sc.classe?_cnaeFmtClasse(sc.classe.id):'',
+        classeDesc: sc.classe?sc.classe.descricao:'',
+        _busca: _cnaeNorm((sc.id||'')+' '+(sc.descricao||'')+' '+(sc.classe?sc.classe.descricao:''))
+      }));
+      return _CNAE_CACHE;
+    })
+    .catch(err=>{ _CNAE_LOADING=null; throw err; });
+  return _CNAE_LOADING;
+}
+
+function _cnaeRender(html){ const box=document.getElementById('f-cnae-results'); if(!box) return; box.innerHTML=html; box.style.display='block'; }
+
+// Busca em tempo real (debounce) conforme o consultor digita
+function buscarCNAEUI(termo){
+  clearTimeout(_cnaeTimer);
+  const t=(termo||'').trim();
+  const box=document.getElementById('f-cnae-results');
+  if(!box) return;
+  if(t.length<2){ box.style.display='none'; box.innerHTML=''; return; }
+  _cnaeRender('<div style="padding:12px 14px;font-size:12px;color:#64748b;">🔎 Buscando no IBGE…</div>');
+  _cnaeTimer=setTimeout(()=>{
+    carregarCNAE().then(list=>{
+      const termos=_cnaeNorm(t).split(/\s+/).filter(Boolean);
+      const soDigitos=t.replace(/\D/g,'');
+      let res=list.filter(item=>{
+        if(soDigitos.length>=2 && item.id.replace(/\D/g,'').includes(soDigitos)) return true;
+        return termos.every(tt=>item._busca.includes(tt));
+      }).slice(0,25);
+      if(!res.length){ _cnaeRender('<div style="padding:12px 14px;font-size:12px;color:#64748b;">Nenhum CNAE encontrado para “'+e(t)+'”.</div>'); return; }
+      _cnaeRender(res.map(item=>`
+        <div onclick="selecionarCNAE('${item.id}')" style="padding:10px 14px;border-bottom:1px solid #f1f5f9;cursor:pointer;transition:background .12s;" onmouseover="this.style.background='#f6fbf8'" onmouseout="this.style.background='#fff'">
+          <div style="font-size:13px;font-weight:700;color:var(--navy);">${item.fmt} — ${e(item.desc)}</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px;">Classe ${item.classeFmt} · ${e(item.classeDesc)}</div>
+        </div>`).join(''));
+    }).catch(()=>{
+      _cnaeRender('<div style="padding:12px 14px;font-size:12px;color:#b45309;background:#fff8e1;">⚠️ Não foi possível consultar o IBGE agora. Você pode digitar o código manualmente no campo e seguir.</div>');
+    });
+  }, 350);
+}
+
+// Seleciona um CNAE da lista e grava em F
+function selecionarCNAE(id){
+  const item=(_CNAE_CACHE||[]).find(x=>x.id===id);
+  if(!item) return;
+  F.cnae_codigo=item.fmt; F.cnae_descricao=item.desc;
+  F.cnae_classe=item.classeFmt; F.cnae_classe_desc=item.classeDesc;
+  const box=document.getElementById('f-cnae-results'); if(box){box.style.display='none';box.innerHTML='';}
+  _cnaeRefreshUI();
+  if(typeof f5MarkDirty==='function') f5MarkDirty();
+}
+
+function limparCNAE(){
+  F.cnae_codigo='';F.cnae_descricao='';F.cnae_classe='';F.cnae_classe_desc='';
+  _cnaeRefreshUI();
+  const inp=document.getElementById('f-cnae-busca'); if(inp){inp.value='';inp.focus();}
+  if(typeof f5MarkDirty==='function') f5MarkDirty();
+}
+
+// Atualiza a UI do bloco CNAE sem re-renderizar o formulário todo
+function _cnaeRefreshUI(){
+  const sel=document.getElementById('f-cnae-selected');
+  const inp=document.getElementById('f-cnae-busca');
+  if(!sel||!inp) return;
+  if(F.cnae_codigo){
+    sel.style.display='block';
+    sel.innerHTML=`<div style="display:flex;align-items:center;gap:10px;background:#eef6f1;border:1.5px solid #b7e4c7;border-radius:10px;padding:10px 14px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:var(--green);">${e(F.cnae_codigo)} — ${e(F.cnae_descricao)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${F.cnae_classe?'Classe '+e(F.cnae_classe)+' · '+e(F.cnae_classe_desc):''}</div>
+      </div>
+      <button type="button" onclick="limparCNAE()" style="background:#fff;border:1px solid #fecaca;color:#dc2626;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✕ trocar</button>
+    </div>`;
+    inp.style.display='none';
+  } else {
+    sel.style.display='none'; sel.innerHTML='';
+    inp.style.display='';
+  }
+}
+
 function bindP(){
   const b=(id,fn)=>{const el=document.getElementById(id);if(el)el.addEventListener('input',ev=>fn(ev.target.value));};
   if(cp===0){
@@ -4809,6 +4932,8 @@ function bindP(){
     b('f-tempo',v=>F.tempo_atuacao=v);b('f-pontos',v=>F.pontos_atuacao=v.split(',').map(s=>s.trim()).filter(Boolean));
     const _fat=document.getElementById('f-fat'); if(_fat)_fat.addEventListener('change',ev=>F.faturamento_faixa=ev.target.value);
     const _int=document.getElementById('f-interno'); if(_int)_int.addEventListener('change',ev=>{F.empreendedor_interno=ev.target.checked; const lbl=ev.target.closest('label'); if(lbl){lbl.style.background=ev.target.checked?'#e8f2fc':'#f8fafb'; lbl.style.borderColor=ev.target.checked?'#7fb2e0':'var(--border)';}});
+    // Fecha a lista de CNAE ao clicar fora do bloco
+    if(!window._cnaeOutsideBound){ window._cnaeOutsideBound=true; document.addEventListener('click',ev=>{ const box=document.getElementById('f-cnae-results'); const inp=document.getElementById('f-cnae-busca'); if(box&&box.style.display!=='none'&&!box.contains(ev.target)&&ev.target!==inp){ box.style.display='none'; } }); }
     if(F.acao_contexto) bindContextoExtras();
 
     q('[name=fmt]').forEach(r=>r.addEventListener('change',ev=>F.fmt=ev.target.value));
@@ -5069,6 +5194,7 @@ async function salvar(){
     estagio:F.est,desafios:F.desa.join(', '),desafio_outro:F.desaOutro,
     faturamento_faixa:F.faturamento_faixa,
     empreendedor_interno:!!F.empreendedor_interno,
+    cnae_codigo:F.cnae_codigo,cnae_descricao:F.cnae_descricao,cnae_classe:F.cnae_classe,cnae_classe_desc:F.cnae_classe_desc,
     // Pilares
     pilar_produto_nota:F.pils['Produto/Serviço'].n,pilar_produto_classe:F.pils['Produto/Serviço'].c,pilar_produto_obs:F.pils['Produto/Serviço'].o,
     pilar_produto_resps:JSON.stringify(F.pils['Produto/Serviço'].resps||[]),
@@ -5146,7 +5272,12 @@ async function salvar(){
     _f5Suppress = true;
     await f5ClearDraft();
     const acao = editIndex !== undefined ? 'atualizado' : 'salvo';
-    sa('o', '✅ Atendimento '+acao+' com sucesso na nuvem!');
+    if(res && res.removidas && res.removidas.length){
+      sa('e','✅ Atendimento '+acao+', mas alguns campos novos NÃO foram gravados porque as colunas não existem no banco: '
+        + res.removidas.join(', ') + '. Rode o ALTER TABLE no Supabase para passar a salvar esses dados.');
+    } else {
+      sa('o', '✅ Atendimento '+acao+' com sucesso na nuvem!');
+    }
     // Mostrar modal de vinculação ao programa após breve pausa
     setTimeout(()=>mostrarModalVinculacao(rec), 800);
   }catch(err){
