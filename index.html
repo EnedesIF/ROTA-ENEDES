@@ -7792,6 +7792,16 @@ async function renderFase2() {
   <div class="f2-sec" id="f2-farol">
     <div class="f2-card">
       <div class="f2-card-title"><span>🔦</span> Farol de Acompanhamento Mensal — 12 Meses</div>
+      <datalist id="f2-consultores-dl">${(()=>{
+        const nomes = new Set();
+        getUsers().filter(u=>['consul','apoio_tec'].includes(u.perfil)).forEach(u=>{ if(u.nome) nomes.add(u.nome); });
+        ALL.forEach(a=>{ if(a.mentor) nomes.add(a.mentor); if(a.consultor_trilha) nomes.add(a.consultor_trilha); });
+        (F2.sessoes||[]).forEach(s=>{
+          if(s&&s.consul) nomes.add(s.consul);
+          (s&&Array.isArray(s.atendimentos)?s.atendimentos:[]).forEach(at=>{ if(at.consultor) nomes.add(at.consultor); });
+        });
+        return [...nomes].sort().map(c=>`<option value="${e(c)}">`).join('');
+      })()}</datalist>
       <div style="background:var(--soft);border-radius:10px;padding:12px 16px;font-size:13px;color:var(--muted);margin-bottom:16px;">
         Registre cada sessão mensal do Programa de Incubação ENEDES. O farol indica o status de evolução do empreendedor ao longo dos 12 meses.
       </div>
@@ -7854,7 +7864,7 @@ async function renderFase2() {
                     ${['Pendente','Em andamento','Realizada'].map(st=>`<option value="${st}" ${(s.status||'Pendente')===st?'selected':''}>${st}</option>`).join('')}
                   </select>
                   <label class="f2-lbl">Consultor</label>
-                  <input class="f2-inp" id="f2-sess-consul-${i}" value="${e(s.consul||meu.consultor_trilha||meu.mentor||'')}" placeholder="Nome do consultor">
+                  <input class="f2-inp" id="f2-sess-consul-${i}" list="f2-consultores-dl" value="${e(s.consul||meu.consultor_trilha||meu.mentor||'')}" placeholder="Nome do consultor (digite para buscar)">
                 </div>
                 <div>
                   <label class="f2-lbl">Faturamento no Mês (R$)</label>
@@ -7871,6 +7881,7 @@ async function renderFase2() {
                 <div style="font-size:11px;color:#4a6fa5;margin-bottom:10px;">Registre cada atendimento com data, horário e consultor. Útil quando o empreendedor passa por <strong>vários consultores no mesmo mês</strong>.</div>
                 <div id="f2-sess-atends-list-${i}">${_f2RenderAtends(i, s.atendimentos)}</div>
                 <div style="background:#fff;border:1px dashed #bcd3ee;border-radius:10px;padding:12px;margin-top:10px;">
+                  <div id="f2-sess-at-modo-${i}" style="display:none;font-size:11px;font-weight:800;color:#1d3557;margin-bottom:8px;">✏️ Editando registro — altere e salve.</div>
                   <div style="display:flex;gap:8px;flex-wrap:wrap;">
                     <div style="flex:1;min-width:120px;">
                       <label class="f2-lbl" style="margin-top:0;">Data</label>
@@ -7882,18 +7893,16 @@ async function renderFase2() {
                     </div>
                     <div style="flex:2;min-width:160px;">
                       <label class="f2-lbl" style="margin-top:0;">Consultor</label>
-                      <input class="f2-inp" id="f2-sess-at-consul-${i}" placeholder="Nome do consultor" style="margin-top:0;">
+                      <input class="f2-inp" id="f2-sess-at-consul-${i}" list="f2-consultores-dl" placeholder="Nome do consultor" style="margin-top:0;">
                     </div>
                   </div>
                   <label class="f2-lbl" style="margin-top:8px;">O que foi orientado</label>
                   <textarea class="f2-ta" id="f2-sess-at-orient-${i}" rows="2" placeholder="Descreva a orientação dada neste atendimento..." style="margin-top:0;"></textarea>
-                  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
-                    <div style="flex:1;min-width:180px;">
-                      <label class="f2-lbl" style="margin-top:0;">Tarefa vinculada</label>
-                      <input class="f2-inp" id="f2-sess-at-tarefa-${i}" list="f2-sess-tarefas-dl-${i}" placeholder="Tarefa relacionada (opcional)" style="margin-top:0;">
-                      <datalist id="f2-sess-tarefas-dl-${i}">${(Array.isArray(s.tarefas)?s.tarefas:[]).map(t=>`<option value="${e(t.t||'')}">`).join('')}</datalist>
-                    </div>
-                    <button type="button" onclick="f2AddAtend(${i})" style="background:#1d3557;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;height:38px;">＋ Registrar atendimento</button>
+                  <label class="f2-lbl" style="margin-top:8px;">Tarefa vinculada</label>
+                  <div id="f2-sess-at-tarefa-wrap-${i}">${_f2RenderAtendTarefaSelect(i, s.tarefas)}</div>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                    <button type="button" id="f2-sess-at-btn-${i}" onclick="f2SalvarAtend(${i})" style="background:#1d3557;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;height:38px;">＋ Registrar atendimento</button>
+                    <button type="button" id="f2-sess-at-cancel-${i}" onclick="f2CancelarEditAtend(${i})" style="display:none;background:#fff;color:#64748b;border:1.5px solid var(--border);border-radius:9px;padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;height:38px;">Cancelar edição</button>
                   </div>
                 </div>
               </div>
@@ -7905,6 +7914,7 @@ async function renderFase2() {
                 <div style="font-size:12px;font-weight:800;color:#1a5e3a;margin-bottom:2px;display:flex;align-items:center;gap:6px;">📌 Tarefas atribuídas ao Empreendedor</div>
                 <div style="font-size:11px;color:#4a7a60;margin-bottom:10px;">Cada tarefa com prazo aparece automaticamente no <strong>Portal do Empreendedor</strong>.</div>
                 <div id="f2-sess-tarefas-list-${i}">${_f2RenderTarefasEmp(i, s.tarefas)}</div>
+                <div id="f2-sess-tarefa-modo-${i}" style="display:none;font-size:11px;font-weight:800;color:#1a5e3a;margin:10px 0 4px;">✏️ Editando tarefa — altere e salve.</div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;">
                   <div style="flex:2;min-width:180px;">
                     <label class="f2-lbl" style="margin-top:0;">Descrição da tarefa</label>
@@ -7914,7 +7924,8 @@ async function renderFase2() {
                     <label class="f2-lbl" style="margin-top:0;">Prazo de entrega</label>
                     <input class="f2-inp" type="date" id="f2-sess-tarefa-prazo-${i}" style="margin-top:0;">
                   </div>
-                  <button type="button" onclick="f2AddTarefaEmp(${i})" style="background:#1a5e3a;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;height:38px;">＋ Atribuir</button>
+                  <button type="button" id="f2-sess-tarefa-btn-${i}" onclick="f2AddTarefaEmp(${i})" style="background:#1a5e3a;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;height:38px;">＋ Atribuir</button>
+                  <button type="button" id="f2-sess-tarefa-cancel-${i}" onclick="f2CancelarEditTarefa(${i})" style="display:none;background:#fff;color:#64748b;border:1.5px solid var(--border);border-radius:9px;padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;height:38px;">Cancelar</button>
                 </div>
               </div>
 
@@ -8909,6 +8920,41 @@ function _f2FmtPrazo(p){
 }
 
 // ===== REGISTROS DE ATENDIMENTO DO MÊS (múltiplos consultores) =====
+let _f2AtendEdit = {}; // por mês: índice do registro em edição (ou undefined)
+
+// Monta o seletor de tarefa vinculada (tarefas do mês + opção de nova)
+function _f2RenderAtendTarefaSelect(i, tarefas, selected){
+  tarefas = Array.isArray(tarefas) ? tarefas : [];
+  const opts = tarefas.map(t=>`<option value="${e(t.t||'')}" ${selected===(t.t||'')?'selected':''}>${e(t.t||'')}</option>`).join('');
+  return `<select class="f2-sel" id="f2-sess-at-tarefa-sel-${i}" onchange="f2AtendTarefaSelChange(${i})" style="margin-top:0;">
+      <option value="">— sem tarefa —</option>
+      ${opts}
+      <option value="__nova__">➕ Adicionar nova tarefa…</option>
+    </select>
+    <div id="f2-sess-at-tarefa-new-wrap-${i}" style="display:none;gap:8px;margin-top:8px;">
+      <input class="f2-inp" id="f2-sess-at-tarefa-new-${i}" placeholder="Descreva a nova tarefa" style="margin-top:0;">
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-top:8px;">
+        <div style="flex:1;">
+          <label class="f2-lbl" style="margin-top:0;font-size:10px;">Prazo da nova tarefa (opcional)</label>
+          <input class="f2-inp" type="date" id="f2-sess-at-tarefa-new-prazo-${i}" style="margin-top:0;">
+        </div>
+      </div>
+      <div style="font-size:10px;color:#4a7a60;margin-top:4px;">A nova tarefa também será atribuída ao empreendedor e aparecerá no portal.</div>
+    </div>`;
+}
+
+function f2AtendTarefaSelChange(i){
+  const sel=document.getElementById('f2-sess-at-tarefa-sel-'+i);
+  const wrap=document.getElementById('f2-sess-at-tarefa-new-wrap-'+i);
+  if(wrap) wrap.style.display = (sel && sel.value==='__nova__') ? 'block' : 'none';
+}
+
+// Reconstroi o seletor de tarefa (após adicionar tarefa nova) mantendo seleção
+function _f2RefreshAtendTarefaSelect(i, tarefas, selected){
+  const wrap=document.getElementById('f2-sess-at-tarefa-wrap-'+i);
+  if(wrap) wrap.innerHTML=_f2RenderAtendTarefaSelect(i, tarefas, selected||'');
+}
+
 function _f2RenderAtends(i, atends){
   atends = Array.isArray(atends) ? atends : [];
   if(!atends.length) return '<div style="font-size:11px;color:#94a3b8;font-style:italic;">Nenhum atendimento registrado neste mês.</div>';
@@ -8920,7 +8966,10 @@ function _f2RenderAtends(i, atends){
         <span style="font-size:14px;">🗓️</span>
         <span style="font-size:12px;font-weight:700;color:#0f2644;">${e(quando||'sem data')}</span>
         <span style="background:#e7effa;color:#1d3557;font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;">👤 ${e(a.consultor||'consultor não informado')}</span>
-        <button type="button" onclick="f2RemoverAtend(${i},${ai})" title="Remover registro" style="margin-left:auto;background:#fff5f5;border:1px solid #fca5a5;color:#e53e3e;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;font-family:inherit;">🗑</button>
+        <div style="margin-left:auto;display:flex;gap:6px;">
+          <button type="button" onclick="f2EditarAtend(${i},${ai})" title="Editar registro" style="background:#eff6ff;border:1px solid #93c5fd;color:#1d4ed8;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">✏️ Editar</button>
+          <button type="button" onclick="f2RemoverAtend(${i},${ai})" title="Remover registro" style="background:#fff5f5;border:1px solid #fca5a5;color:#e53e3e;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;font-family:inherit;">🗑</button>
+        </div>
       </div>
       ${a.orientacao?`<div style="font-size:12px;color:#334155;margin-top:6px;white-space:pre-wrap;">${e(a.orientacao)}</div>`:''}
       ${a.tarefa?`<div style="font-size:11px;color:#1a5e3a;font-weight:600;margin-top:6px;">📌 Tarefa vinculada: ${e(a.tarefa)}</div>`:''}
@@ -8928,26 +8977,96 @@ function _f2RenderAtends(i, atends){
   }).join('');
 }
 
-function f2AddAtend(i){
+// Lê os campos do formulário de atendimento e resolve a tarefa (existente ou nova)
+function _f2LerFormAtend(i, dt){
   const g=id=>document.getElementById(id+i);
   const data=g('f2-sess-at-data-')?.value||'';
   const hora=g('f2-sess-at-hora-')?.value||'';
   const consultor=(g('f2-sess-at-consul-')?.value||'').trim();
   const orientacao=(g('f2-sess-at-orient-')?.value||'').trim();
-  const tarefa=(g('f2-sess-at-tarefa-')?.value||'').trim();
-  if(!consultor && !orientacao && !data){
-    const el=g('f2-sess-at-consul-'); if(el){ el.focus(); el.style.borderColor='#dc2626'; setTimeout(()=>el.style.borderColor='',1500);} return;
+  const sel=g('f2-sess-at-tarefa-sel-');
+  let tarefa='';
+  if(sel){
+    if(sel.value==='__nova__'){
+      const nova=(g('f2-sess-at-tarefa-new-')?.value||'').trim();
+      const prazo=g('f2-sess-at-tarefa-new-prazo-')?.value||'';
+      if(nova){
+        // cria a tarefa no mês (também vai para o portal)
+        if(!Array.isArray(dt.sessoes[i].tarefas)) dt.sessoes[i].tarefas=[];
+        dt.sessoes[i].tarefas.push({t:nova, prazo:prazo, concluida:false, criada:new Date().toISOString().slice(0,10)});
+        tarefa=nova;
+      }
+    } else {
+      tarefa=sel.value||'';
+    }
   }
+  return {data,hora,consultor,orientacao,tarefa};
+}
+
+function f2SalvarAtend(i){
   const empNome=f2GetEmpNome();
   const dt=getFase2DataSync(empNome);
   if(!dt.sessoes) dt.sessoes=Array(12).fill(null).map(()=>({}));
   if(!dt.sessoes[i]) dt.sessoes[i]={};
   if(!Array.isArray(dt.sessoes[i].atendimentos)) dt.sessoes[i].atendimentos=[];
-  dt.sessoes[i].atendimentos.push({data,hora,consultor,orientacao,tarefa,criada:new Date().toISOString().slice(0,10)});
+  const rec=_f2LerFormAtend(i, dt);
+  if(!rec.consultor && !rec.orientacao && !rec.data){
+    const el=document.getElementById('f2-sess-at-consul-'+i); if(el){ el.focus(); el.style.borderColor='#dc2626'; setTimeout(()=>el.style.borderColor='',1500);} return;
+  }
+  const editing = _f2AtendEdit[i];
+  if(editing!==undefined && editing!==null && dt.sessoes[i].atendimentos[editing]){
+    // preserva a data de criação original
+    rec.criada = dt.sessoes[i].atendimentos[editing].criada || new Date().toISOString().slice(0,10);
+    dt.sessoes[i].atendimentos[editing]=rec;
+  } else {
+    rec.criada=new Date().toISOString().slice(0,10);
+    dt.sessoes[i].atendimentos.push(rec);
+  }
   saveFase2Data(empNome, dt).catch(console.error);
+  // Atualiza a lista de atendimentos, a lista de tarefas e o seletor
   const list=document.getElementById('f2-sess-atends-list-'+i);
   if(list) list.innerHTML=_f2RenderAtends(i, dt.sessoes[i].atendimentos);
-  ['f2-sess-at-data-','f2-sess-at-hora-','f2-sess-at-consul-','f2-sess-at-orient-','f2-sess-at-tarefa-'].forEach(p=>{ const el=g(p); if(el) el.value=''; });
+  const tlist=document.getElementById('f2-sess-tarefas-list-'+i);
+  if(tlist) tlist.innerHTML=_f2RenderTarefasEmp(i, dt.sessoes[i].tarefas);
+  f2CancelarEditAtend(i); // limpa o formulário e sai do modo edição
+  _f2RefreshAtendTarefaSelect(i, dt.sessoes[i].tarefas, '');
+}
+
+function f2EditarAtend(i, ai){
+  const empNome=f2GetEmpNome();
+  const dt=getFase2DataSync(empNome);
+  const a=dt.sessoes?.[i]?.atendimentos?.[ai];
+  if(!a) return;
+  const set=(id,val)=>{ const el=document.getElementById(id+i); if(el) el.value=val||''; };
+  set('f2-sess-at-data-', a.data);
+  set('f2-sess-at-hora-', a.hora);
+  set('f2-sess-at-consul-', a.consultor);
+  set('f2-sess-at-orient-', a.orientacao);
+  // seleciona a tarefa vinculada no seletor (se ainda existir na lista)
+  _f2RefreshAtendTarefaSelect(i, dt.sessoes[i].tarefas, a.tarefa||'');
+  const sel=document.getElementById('f2-sess-at-tarefa-sel-'+i);
+  if(sel && a.tarefa && sel.value!==a.tarefa){
+    // tarefa não está na lista atual → adiciona como opção avulsa selecionada
+    const opt=document.createElement('option'); opt.value=a.tarefa; opt.textContent=a.tarefa; opt.selected=true;
+    sel.insertBefore(opt, sel.querySelector('option[value="__nova__"]'));
+  }
+  _f2AtendEdit[i]=ai;
+  const modo=document.getElementById('f2-sess-at-modo-'+i); if(modo) modo.style.display='block';
+  const btn=document.getElementById('f2-sess-at-btn-'+i); if(btn) btn.textContent='💾 Salvar alterações';
+  const cancel=document.getElementById('f2-sess-at-cancel-'+i); if(cancel) cancel.style.display='inline-block';
+  // rola até o formulário
+  document.getElementById('f2-sess-at-modo-'+i)?.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+function f2CancelarEditAtend(i){
+  _f2AtendEdit[i]=null;
+  ['f2-sess-at-data-','f2-sess-at-hora-','f2-sess-at-consul-','f2-sess-at-orient-'].forEach(p=>{ const el=document.getElementById(p+i); if(el) el.value=''; });
+  const empNome=f2GetEmpNome();
+  const dt=getFase2DataSync(empNome);
+  _f2RefreshAtendTarefaSelect(i, dt.sessoes?.[i]?.tarefas||[], '');
+  const modo=document.getElementById('f2-sess-at-modo-'+i); if(modo) modo.style.display='none';
+  const btn=document.getElementById('f2-sess-at-btn-'+i); if(btn) btn.textContent='＋ Registrar atendimento';
+  const cancel=document.getElementById('f2-sess-at-cancel-'+i); if(cancel) cancel.style.display='none';
 }
 
 function f2RemoverAtend(i, ai){
@@ -8958,6 +9077,7 @@ function f2RemoverAtend(i, ai){
   saveFase2Data(empNome, dt).catch(console.error);
   const list=document.getElementById('f2-sess-atends-list-'+i);
   if(list) list.innerHTML=_f2RenderAtends(i, dt.sessoes[i].atendimentos);
+  if(_f2AtendEdit[i]!==undefined && _f2AtendEdit[i]!==null) f2CancelarEditAtend(i);
 }
 
 function _f2RenderTarefasEmp(i, tarefas){
@@ -8980,10 +9100,13 @@ function _f2RenderTarefasEmp(i, tarefas){
         <div style="font-size:12px;font-weight:600;color:#1a2035;${concl?'text-decoration:line-through;color:#94a3b8;':''}">${e(t.t||'')}</div>
         <div style="font-size:11px;font-weight:600;color:${concl?'#16a34a':prazoCor};">${concl?'Concluída pelo empreendedor':prazoTxt}</div>
       </div>
+      <button type="button" onclick="f2EditarTarefaEmp(${i},${ti})" title="Editar tarefa" style="background:#eff6ff;border:1px solid #93c5fd;color:#1d4ed8;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">✏️ Editar</button>
       <button type="button" onclick="f2RemoverTarefaEmp(${i},${ti})" title="Remover tarefa" style="background:#fff5f5;border:1px solid #fca5a5;color:#e53e3e;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;font-family:inherit;">🗑</button>
     </div>`;
   }).join('');
 }
+
+let _f2TarefaEdit = {}; // por mês: índice da tarefa em edição
 
 function f2AddTarefaEmp(i){
   const descEl=document.getElementById('f2-sess-tarefa-desc-'+i);
@@ -8996,12 +9119,48 @@ function f2AddTarefaEmp(i){
   if(!data.sessoes) data.sessoes=Array(12).fill(null).map(()=>({}));
   if(!data.sessoes[i]) data.sessoes[i]={};
   if(!Array.isArray(data.sessoes[i].tarefas)) data.sessoes[i].tarefas=[];
-  data.sessoes[i].tarefas.push({t:desc, prazo:prazo, concluida:false, criada:new Date().toISOString().slice(0,10)});
+  const editing=_f2TarefaEdit[i];
+  if(editing!==undefined && editing!==null && data.sessoes[i].tarefas[editing]){
+    // preserva status de conclusão e data de criação ao editar
+    const antiga=data.sessoes[i].tarefas[editing];
+    data.sessoes[i].tarefas[editing]={t:desc, prazo:prazo, concluida:!!antiga.concluida, concluida_em:antiga.concluida_em, criada:antiga.criada||new Date().toISOString().slice(0,10)};
+  } else {
+    data.sessoes[i].tarefas.push({t:desc, prazo:prazo, concluida:false, criada:new Date().toISOString().slice(0,10)});
+  }
   saveFase2Data(empNome, data).catch(console.error);
   const list=document.getElementById('f2-sess-tarefas-list-'+i);
   if(list) list.innerHTML=_f2RenderTarefasEmp(i, data.sessoes[i].tarefas);
+  // mantém o seletor de tarefa do bloco de atendimentos em sincronia
+  if(document.getElementById('f2-sess-at-tarefa-wrap-'+i)) _f2RefreshAtendTarefaSelect(i, data.sessoes[i].tarefas, '');
+  f2CancelarEditTarefa(i); // limpa formulário e sai do modo edição
+}
+
+function f2EditarTarefaEmp(i, ti){
+  const empNome=f2GetEmpNome();
+  const data=getFase2DataSync(empNome);
+  const t=data.sessoes?.[i]?.tarefas?.[ti];
+  if(!t) return;
+  const descEl=document.getElementById('f2-sess-tarefa-desc-'+i);
+  const prazoEl=document.getElementById('f2-sess-tarefa-prazo-'+i);
+  if(descEl) descEl.value=t.t||'';
+  if(prazoEl) prazoEl.value=t.prazo||'';
+  _f2TarefaEdit[i]=ti;
+  const modo=document.getElementById('f2-sess-tarefa-modo-'+i); if(modo) modo.style.display='block';
+  const btn=document.getElementById('f2-sess-tarefa-btn-'+i); if(btn) btn.textContent='💾 Salvar alterações';
+  const cancel=document.getElementById('f2-sess-tarefa-cancel-'+i); if(cancel) cancel.style.display='inline-block';
+  descEl?.scrollIntoView({behavior:'smooth',block:'center'});
+  descEl?.focus();
+}
+
+function f2CancelarEditTarefa(i){
+  _f2TarefaEdit[i]=null;
+  const descEl=document.getElementById('f2-sess-tarefa-desc-'+i);
+  const prazoEl=document.getElementById('f2-sess-tarefa-prazo-'+i);
   if(descEl) descEl.value='';
   if(prazoEl) prazoEl.value='';
+  const modo=document.getElementById('f2-sess-tarefa-modo-'+i); if(modo) modo.style.display='none';
+  const btn=document.getElementById('f2-sess-tarefa-btn-'+i); if(btn) btn.textContent='＋ Atribuir';
+  const cancel=document.getElementById('f2-sess-tarefa-cancel-'+i); if(cancel) cancel.style.display='none';
 }
 
 function f2RemoverTarefaEmp(i, ti){
@@ -9012,6 +9171,7 @@ function f2RemoverTarefaEmp(i, ti){
   saveFase2Data(empNome, data).catch(console.error);
   const list=document.getElementById('f2-sess-tarefas-list-'+i);
   if(list) list.innerHTML=_f2RenderTarefasEmp(i, data.sessoes[i].tarefas);
+  if(document.getElementById('f2-sess-at-tarefa-wrap-'+i)) _f2RefreshAtendTarefaSelect(i, data.sessoes[i].tarefas, '');
 }
 
 function f2SalvarSessao(i){
