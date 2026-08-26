@@ -7865,6 +7865,39 @@ async function renderFase2() {
               </div>
               <label class="f2-lbl">Resumo / Evolução da Sessão</label>
               <textarea class="f2-ta" id="f2-sess-resumo-${i}" rows="3" placeholder="O que foi discutido? Quais avanços? Desafios?">${s.resumo||''}</textarea>
+
+              <div style="background:#eef4fb;border:1.5px solid #bcd3ee;border-radius:12px;padding:14px 16px;margin:10px 0 14px;">
+                <div style="font-size:12px;font-weight:800;color:#0f2644;margin-bottom:2px;display:flex;align-items:center;gap:6px;">📋 Registros de Atendimento do Mês</div>
+                <div style="font-size:11px;color:#4a6fa5;margin-bottom:10px;">Registre cada atendimento com data, horário e consultor. Útil quando o empreendedor passa por <strong>vários consultores no mesmo mês</strong>.</div>
+                <div id="f2-sess-atends-list-${i}">${_f2RenderAtends(i, s.atendimentos)}</div>
+                <div style="background:#fff;border:1px dashed #bcd3ee;border-radius:10px;padding:12px;margin-top:10px;">
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:120px;">
+                      <label class="f2-lbl" style="margin-top:0;">Data</label>
+                      <input class="f2-inp" type="date" id="f2-sess-at-data-${i}" style="margin-top:0;">
+                    </div>
+                    <div style="flex:1;min-width:90px;">
+                      <label class="f2-lbl" style="margin-top:0;">Horário</label>
+                      <input class="f2-inp" type="time" id="f2-sess-at-hora-${i}" style="margin-top:0;">
+                    </div>
+                    <div style="flex:2;min-width:160px;">
+                      <label class="f2-lbl" style="margin-top:0;">Consultor</label>
+                      <input class="f2-inp" id="f2-sess-at-consul-${i}" placeholder="Nome do consultor" style="margin-top:0;">
+                    </div>
+                  </div>
+                  <label class="f2-lbl" style="margin-top:8px;">O que foi orientado</label>
+                  <textarea class="f2-ta" id="f2-sess-at-orient-${i}" rows="2" placeholder="Descreva a orientação dada neste atendimento..." style="margin-top:0;"></textarea>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
+                    <div style="flex:1;min-width:180px;">
+                      <label class="f2-lbl" style="margin-top:0;">Tarefa vinculada</label>
+                      <input class="f2-inp" id="f2-sess-at-tarefa-${i}" list="f2-sess-tarefas-dl-${i}" placeholder="Tarefa relacionada (opcional)" style="margin-top:0;">
+                      <datalist id="f2-sess-tarefas-dl-${i}">${(Array.isArray(s.tarefas)?s.tarefas:[]).map(t=>`<option value="${e(t.t||'')}">`).join('')}</datalist>
+                    </div>
+                    <button type="button" onclick="f2AddAtend(${i})" style="background:#1d3557;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;height:38px;">＋ Registrar atendimento</button>
+                  </div>
+                </div>
+              </div>
+
               <label class="f2-lbl">Ações Definidas nesta Sessão</label>
               <textarea class="f2-ta" id="f2-sess-acoes-${i}" rows="2" placeholder="Liste as ações acordadas para o próximo mês...">${s.acoes||''}</textarea>
 
@@ -8875,6 +8908,58 @@ function _f2FmtPrazo(p){
   try{ return new Date(p+'T00:00:00').toLocaleDateString('pt-BR'); }catch(_){ return p; }
 }
 
+// ===== REGISTROS DE ATENDIMENTO DO MÊS (múltiplos consultores) =====
+function _f2RenderAtends(i, atends){
+  atends = Array.isArray(atends) ? atends : [];
+  if(!atends.length) return '<div style="font-size:11px;color:#94a3b8;font-style:italic;">Nenhum atendimento registrado neste mês.</div>';
+  return atends.map((a,ai)=>{
+    const dataFmt = a.data ? (()=>{try{return new Date(a.data+'T00:00:00').toLocaleDateString('pt-BR');}catch(_){return a.data;}})() : '';
+    const quando = [dataFmt, a.hora].filter(Boolean).join(' · ');
+    return `<div style="background:#fff;border:1px solid #cddcf0;border-radius:9px;padding:10px 12px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:14px;">🗓️</span>
+        <span style="font-size:12px;font-weight:700;color:#0f2644;">${e(quando||'sem data')}</span>
+        <span style="background:#e7effa;color:#1d3557;font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;">👤 ${e(a.consultor||'consultor não informado')}</span>
+        <button type="button" onclick="f2RemoverAtend(${i},${ai})" title="Remover registro" style="margin-left:auto;background:#fff5f5;border:1px solid #fca5a5;color:#e53e3e;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;font-family:inherit;">🗑</button>
+      </div>
+      ${a.orientacao?`<div style="font-size:12px;color:#334155;margin-top:6px;white-space:pre-wrap;">${e(a.orientacao)}</div>`:''}
+      ${a.tarefa?`<div style="font-size:11px;color:#1a5e3a;font-weight:600;margin-top:6px;">📌 Tarefa vinculada: ${e(a.tarefa)}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function f2AddAtend(i){
+  const g=id=>document.getElementById(id+i);
+  const data=g('f2-sess-at-data-')?.value||'';
+  const hora=g('f2-sess-at-hora-')?.value||'';
+  const consultor=(g('f2-sess-at-consul-')?.value||'').trim();
+  const orientacao=(g('f2-sess-at-orient-')?.value||'').trim();
+  const tarefa=(g('f2-sess-at-tarefa-')?.value||'').trim();
+  if(!consultor && !orientacao && !data){
+    const el=g('f2-sess-at-consul-'); if(el){ el.focus(); el.style.borderColor='#dc2626'; setTimeout(()=>el.style.borderColor='',1500);} return;
+  }
+  const empNome=f2GetEmpNome();
+  const dt=getFase2DataSync(empNome);
+  if(!dt.sessoes) dt.sessoes=Array(12).fill(null).map(()=>({}));
+  if(!dt.sessoes[i]) dt.sessoes[i]={};
+  if(!Array.isArray(dt.sessoes[i].atendimentos)) dt.sessoes[i].atendimentos=[];
+  dt.sessoes[i].atendimentos.push({data,hora,consultor,orientacao,tarefa,criada:new Date().toISOString().slice(0,10)});
+  saveFase2Data(empNome, dt).catch(console.error);
+  const list=document.getElementById('f2-sess-atends-list-'+i);
+  if(list) list.innerHTML=_f2RenderAtends(i, dt.sessoes[i].atendimentos);
+  ['f2-sess-at-data-','f2-sess-at-hora-','f2-sess-at-consul-','f2-sess-at-orient-','f2-sess-at-tarefa-'].forEach(p=>{ const el=g(p); if(el) el.value=''; });
+}
+
+function f2RemoverAtend(i, ai){
+  const empNome=f2GetEmpNome();
+  const dt=getFase2DataSync(empNome);
+  if(!dt.sessoes?.[i]?.atendimentos) return;
+  dt.sessoes[i].atendimentos.splice(ai,1);
+  saveFase2Data(empNome, dt).catch(console.error);
+  const list=document.getElementById('f2-sess-atends-list-'+i);
+  if(list) list.innerHTML=_f2RenderAtends(i, dt.sessoes[i].atendimentos);
+}
+
 function _f2RenderTarefasEmp(i, tarefas){
   tarefas = Array.isArray(tarefas) ? tarefas : [];
   if(!tarefas.length) return '<div style="font-size:11px;color:#94a3b8;font-style:italic;">Nenhuma tarefa atribuída ainda.</div>';
@@ -8951,6 +9036,7 @@ function f2SalvarSessao(i){
   });
 
   const tarefasPrev = (data.sessoes[i]||{}).tarefas || [];
+  const atendsPrev = (data.sessoes[i]||{}).atendimentos || [];
   data.sessoes[i] = {
     data: f2GetVal('f2-sess-data-'+i),
     status: f2GetVal('f2-sess-status-'+i),
@@ -8965,6 +9051,7 @@ function f2SalvarSessao(i){
     pilar3: f2GetVal('f2-sess-pilar3-'+i),
     acoes_vinc: acoesVinc,
     tarefas: tarefasPrev,
+    atendimentos: atendsPrev,
   };
   saveFase2Data(empNome, data).catch(console.error);
 
