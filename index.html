@@ -6315,6 +6315,19 @@ async function vincularPrograma(sim){
         const patch={vinculado_programa:true, programa_inicio:new Date().toLocaleDateString('pt-BR'), programa_status:'ativo'};
         const consultorTrilha=document.getElementById('mv-consultor')?.value.trim()||rec.mentor||'';
         if(consultorTrilha) patch.consultor_trilha=consultorTrilha;
+        // Se ainda não há conta de empreendedor vinculada, tenta casar automaticamente por CPF/CNPJ/e-mail/nome
+        if(!rec.empreendedor_usuario){
+          const _norm = s => (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+          const cpfR=(rec.cpf||'').replace(/\D/g,''), cnpjR=(rec.cnpj||'').replace(/\D/g,'');
+          const emailR=(rec.email||'').toLowerCase().trim(), nomeR=_norm(rec.nome);
+          const emp = getUsers().find(u=>u.perfil==='empreend' && (
+            (cpfR && (u.cpf||'').replace(/\D/g,'')===cpfR) ||
+            (cnpjR && (u.cnpj||'').replace(/\D/g,'')===cnpjR) ||
+            (emailR && (u.email||'').toLowerCase().trim()===emailR) ||
+            (nomeR && _norm(u.nome)===nomeR)
+          ));
+          if(emp){ patch.empreendedor_usuario = emp.usuario; }
+        }
         await fetch(SU+'/rest/v1/atendimentos_5d?id=eq.'+rec.id,{
           method:'PATCH', headers:{...SB_HEADERS,'Prefer':'return=minimal'}, body:JSON.stringify(patch)
         });
@@ -6438,18 +6451,31 @@ async function renderEmpPainel(){
   await loadData();
   const data=ALL;
   const usuarioLogado = getUsers().find(u=>u.usuario===USER_NAME) || null;
-  // Busca todos os atendimentos vinculados a este empreendedor por email (conector principal)
+  // Normaliza texto para comparação (remove acentos, espaços extras e caixa)
+  const _norm = s => (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
   const cpfUser = (usuarioLogado?.cpf||'').replace(/\D/g,'');
   const cnpjUser = (usuarioLogado?.cnpj||'').replace(/\D/g,'');
+  const emailUser = (usuarioLogado?.email||'').toLowerCase().trim();
+  const nomeUser = _norm(usuarioLogado?.nome);
+  // Casa o atendimento do empreendedor por: usuário vinculado, CPF, CNPJ, e-mail ou nome (normalizado)
   const todos = data.filter(r=>
     r.empreendedor_usuario===USER_NAME ||
     (cpfUser && (r.cpf||'').replace(/\D/g,'')===cpfUser) ||
     (cnpjUser && (r.cnpj||'').replace(/\D/g,'')===cnpjUser) ||
-    (usuarioLogado?.email && r.email && r.email.toLowerCase()===usuarioLogado.email.toLowerCase()) ||
-    (!r.empreendedor_usuario && r.nome?.toLowerCase()===usuarioLogado?.nome?.toLowerCase())
+    (emailUser && r.email && r.email.toLowerCase().trim()===emailUser) ||
+    (nomeUser && r.nome && _norm(r.nome)===nomeUser)
   );
   const meu = todos[0] || null; // mais recente
   _empMeuRec = meu; // disponibiliza para gerar/baixar o documento
+
+  // Auto-vincula o atendimento a esta conta se ainda não estiver vinculado (para casar Fase 2 e evidências)
+  if(meu && meu.empreendedor_usuario!==USER_NAME && meu.id){
+    meu.empreendedor_usuario = USER_NAME;
+    fetch(SU+'/rest/v1/atendimentos_5d?id=eq.'+meu.id,{
+      method:'PATCH',headers:{...SB_HEADERS,'Prefer':'return=minimal'},
+      body:JSON.stringify({empreendedor_usuario:USER_NAME})
+    }).catch(console.error);
+  }
 
   if(!meu){
     document.getElementById('app-main').innerHTML=`
