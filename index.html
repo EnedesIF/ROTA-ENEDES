@@ -1584,6 +1584,7 @@ async function showView(view){
   }
   else if(view === 'painel') { await renderEmpPainel(); }
   else if(view === 'fase2')  {
+    await loadUsers().catch(()=>{});
     // Garante selRec populado para coord/consul
     if(!isEmpreend() && !selRec && ALL.length){
       // Tenta encontrar atendimento onde o próprio consul é o mentor
@@ -7864,7 +7865,7 @@ async function renderFase2() {
                     ${['Pendente','Em andamento','Realizada'].map(st=>`<option value="${st}" ${(s.status||'Pendente')===st?'selected':''}>${st}</option>`).join('')}
                   </select>
                   <label class="f2-lbl">Consultor</label>
-                  <input class="f2-inp" id="f2-sess-consul-${i}" list="f2-consultores-dl" value="${e(s.consul||meu.consultor_trilha||meu.mentor||'')}" placeholder="Nome do consultor (digite para buscar)">
+                  ${_f2ConsultorCombo('f2-sess-consul-'+i, (s.consul||meu.consultor_trilha||meu.mentor||''), 'f2-sess-consul-sel-'+i)}
                 </div>
                 <div>
                   <label class="f2-lbl">Faturamento no Mês (R$)</label>
@@ -7893,7 +7894,7 @@ async function renderFase2() {
                     </div>
                     <div style="flex:2;min-width:160px;">
                       <label class="f2-lbl" style="margin-top:0;">Consultor</label>
-                      <input class="f2-inp" id="f2-sess-at-consul-${i}" list="f2-consultores-dl" placeholder="Nome do consultor" style="margin-top:0;">
+                      <div id="f2-sess-at-consul-wrap-${i}">${_f2ConsultorCombo('f2-sess-at-consul-'+i, '', 'f2-sess-at-consul-sel-'+i)}</div>
                     </div>
                   </div>
                   <label class="f2-lbl" style="margin-top:8px;">O que foi orientado</label>
@@ -8922,6 +8923,45 @@ function _f2FmtPrazo(p){
 // ===== REGISTROS DE ATENDIMENTO DO MÊS (múltiplos consultores) =====
 let _f2AtendEdit = {}; // por mês: índice do registro em edição (ou undefined)
 
+// Lista de consultores/apoio técnico disponíveis (cadastrados + já usados)
+function _f2ListaConsultores(){
+  const nomes=new Set();
+  try{
+    getUsers().filter(u=>['consul','apoio_tec'].includes(u.perfil)).forEach(u=>{ if(u.nome) nomes.add(u.nome); });
+    ALL.forEach(a=>{ if(a.mentor) nomes.add(a.mentor); if(a.consultor_trilha) nomes.add(a.consultor_trilha); });
+    const empNome=f2GetEmpNome();
+    const dt=getFase2DataSync(empNome);
+    (dt.sessoes||[]).forEach(s=>{
+      if(s&&s.consul) nomes.add(s.consul);
+      (s&&Array.isArray(s.atendimentos)?s.atendimentos:[]).forEach(at=>{ if(at.consultor) nomes.add(at.consultor); });
+    });
+  }catch(_){}
+  return [...nomes].filter(Boolean).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+}
+
+// Monta um <select> de consultores com opção "outro (digitar)". base = id-base do input de texto.
+function _f2ConsultorCombo(baseId, atual, selId){
+  const lista=_f2ListaConsultores();
+  atual=atual||'';
+  const naLista=lista.includes(atual);
+  const opts=lista.map(c=>`<option value="${e(c)}" ${atual===c?'selected':''}>${e(c)}</option>`).join('');
+  return `<select class="f2-sel" id="${selId}" onchange="f2ConsulComboChange('${selId}','${baseId}')" style="margin-top:0;">
+      <option value="">— selecione o consultor —</option>
+      ${opts}
+      <option value="__outro__" ${(!naLista&&atual)?'selected':''}>✏️ Outro (digitar nome)</option>
+    </select>
+    <input class="f2-inp" id="${baseId}" value="${e(atual)}" placeholder="Digite o nome do consultor" style="margin-top:6px;display:${(naLista||!atual)?'none':'block'};">`;
+}
+
+// Sincroniza o input de texto com a escolha do select
+function f2ConsulComboChange(selId, baseId){
+  const sel=document.getElementById(selId);
+  const inp=document.getElementById(baseId);
+  if(!sel||!inp) return;
+  if(sel.value==='__outro__'){ inp.style.display='block'; inp.value=''; inp.focus(); }
+  else { inp.value=sel.value; inp.style.display='none'; }
+}
+
 // Monta o seletor de tarefa vinculada (tarefas do mês + opção de nova)
 function _f2RenderAtendTarefaSelect(i, tarefas, selected){
   tarefas = Array.isArray(tarefas) ? tarefas : [];
@@ -9040,8 +9080,10 @@ function f2EditarAtend(i, ai){
   const set=(id,val)=>{ const el=document.getElementById(id+i); if(el) el.value=val||''; };
   set('f2-sess-at-data-', a.data);
   set('f2-sess-at-hora-', a.hora);
-  set('f2-sess-at-consul-', a.consultor);
   set('f2-sess-at-orient-', a.orientacao);
+  // reconstrói o combo de consultor já com o nome selecionado
+  const cw=document.getElementById('f2-sess-at-consul-wrap-'+i);
+  if(cw) cw.innerHTML=_f2ConsultorCombo('f2-sess-at-consul-'+i, a.consultor||'', 'f2-sess-at-consul-sel-'+i);
   // seleciona a tarefa vinculada no seletor (se ainda existir na lista)
   _f2RefreshAtendTarefaSelect(i, dt.sessoes[i].tarefas, a.tarefa||'');
   const sel=document.getElementById('f2-sess-at-tarefa-sel-'+i);
@@ -9060,7 +9102,9 @@ function f2EditarAtend(i, ai){
 
 function f2CancelarEditAtend(i){
   _f2AtendEdit[i]=null;
-  ['f2-sess-at-data-','f2-sess-at-hora-','f2-sess-at-consul-','f2-sess-at-orient-'].forEach(p=>{ const el=document.getElementById(p+i); if(el) el.value=''; });
+  ['f2-sess-at-data-','f2-sess-at-hora-','f2-sess-at-orient-'].forEach(p=>{ const el=document.getElementById(p+i); if(el) el.value=''; });
+  const cw=document.getElementById('f2-sess-at-consul-wrap-'+i);
+  if(cw) cw.innerHTML=_f2ConsultorCombo('f2-sess-at-consul-'+i, '', 'f2-sess-at-consul-sel-'+i);
   const empNome=f2GetEmpNome();
   const dt=getFase2DataSync(empNome);
   _f2RefreshAtendTarefaSelect(i, dt.sessoes?.[i]?.tarefas||[], '');
