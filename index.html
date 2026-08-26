@@ -587,10 +587,10 @@ const ESTS=["Ideação","Validação","Operação","Tração","Scale up"];
 // Valores: 'full' | 'simples' | null
 const ESTAGIO_DS = {
   "Ideação":   [null, null, null, null],   // só 1D; 2-5D ocultos
-  "Validação": ["simples", null, null, null], // 2D simplificado; 3-5D ocultos
-  "Operação":  ["full", "simples", null, null], // 2D completo, 3D simples, 4-5D ocultos
-  "Tração":    ["full", "full", "simples", null], // tudo menos 5D simples
-  "Scale up":  ["full", "full", "full", "full"],  // todos completos
+  "Validação": ["simples", null, null, null], // 1D + 2D simplificado; 3-5D ocultos
+  "Operação":  ["full", "full", "full", "full"], // todas as etapas
+  "Tração":    ["full", "full", "full", "full"], // todas as etapas
+  "Scale up":  ["full", "full", "full", "full"],  // todas as etapas
 };
 // Mensagens explicativas por estágio para cada D
 const ESTAGIO_MSG = {
@@ -2124,6 +2124,15 @@ function renderUsuarios(){
       <div style="margin-top:10px;">${apiKeyStatus}</div>
     </div>` : ''}
     <div class="lh"><div class="lt">👥 Gerenciar Usuários</div></div>
+    <div style="background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <div style="flex:1;min-width:220px;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">🔍 Buscar usuário</div>
+        <input id="usuarios-busca" type="text" placeholder="Nome, usuário, perfil ou programa..."
+          style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;color:var(--text);background:var(--soft);outline:none;box-sizing:border-box;"
+          oninput="filtrarUsuarios()">
+      </div>
+      <div id="usuarios-count" style="font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap;">${users.length} usuários</div>
+    </div>
     <div style="background:#fff;border:1.5px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px;">
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead><tr style="background:#f4f7fb;">
@@ -2135,7 +2144,7 @@ function renderUsuarios(){
           <th style="padding:12px 16px;text-align:center;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase;">Ações</th>
         </tr></thead>
         <tbody>
-          ${users.map((u,i)=>`<tr style="border-top:1px solid var(--border);">
+          ${users.map((u,i)=>`<tr class="urow" data-usearch="${e(((u.nome||'')+' '+(u.usuario||'')+' '+(pNome[u.perfil]||u.perfil||'')+' '+(u.programa||'')+' '+(u.cnpj||'')).toLowerCase())}" style="border-top:1px solid var(--border);">
             <td style="padding:12px 16px;font-weight:600;">${e(u.nome)}</td>
             <td style="padding:12px 16px;font-family:monospace;color:var(--green);">${e(u.usuario)}</td>
             <td style="padding:12px 16px;">
@@ -2148,9 +2157,11 @@ function renderUsuarios(){
             <td style="padding:12px 16px;font-size:12px;color:var(--muted);">${u.cnpj?e(u.cnpj):'<span style="opacity:.4">—</span>'}</td>
             <td style="padding:12px 16px;text-align:center;display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;">
               ${u.perfil==='empreend'?`<button onclick="gerarLinkAcesso('${u.usuario}')" style="padding:4px 12px;border-radius:6px;border:1.5px solid #86efac;background:#f0fdf4;color:#16a34a;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">🔗 Link de Acesso</button>`:''}
+              <button onclick="editarUsuario(${i})" style="padding:4px 12px;border-radius:6px;border:1.5px solid #93c5fd;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">✏️ Editar</button>
               ${u.usuario!=='coordenador'?`<button onclick="removerUsuario(${i})" style="padding:4px 12px;border-radius:6px;border:1.5px solid #fca5a5;background:#fff5f5;color:#e53e3e;cursor:pointer;font-size:12px;font-family:inherit;">Remover</button>`:'<span style="color:var(--muted);font-size:12px;">padrão</span>'}
             </td>
           </tr>`).join('')}
+          <tr id="urow-empty" style="display:none;"><td colspan="6" style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">Nenhum usuário encontrado com esse termo.</td></tr>
         </tbody>
       </table>
     </div>
@@ -2216,6 +2227,101 @@ async function removerUsuario(i){
   if(!confirm(`Remover o usuário "${users[i].nome}"?`)) return;
   await removeUserByIndex(i);
   renderUsuarios();
+}
+
+// Filtra as linhas da tabela de usuários sem recriar o campo (mantém o foco ao digitar)
+function filtrarUsuarios(){
+  const termo=(document.getElementById('usuarios-busca')?.value||'').toLowerCase().trim();
+  const rows=document.querySelectorAll('tr.urow');
+  let visiveis=0;
+  rows.forEach(r=>{
+    const alvo=r.getAttribute('data-usearch')||'';
+    const ok=!termo||alvo.includes(termo);
+    r.style.display=ok?'':'none';
+    if(ok) visiveis++;
+  });
+  const empty=document.getElementById('urow-empty');
+  if(empty) empty.style.display=visiveis?'none':'';
+  const count=document.getElementById('usuarios-count');
+  if(count) count.textContent = termo ? (visiveis+' de '+rows.length+' usuários') : (rows.length+' usuários');
+}
+
+// PATCH de um único usuário no Supabase (mais leve que salvar todos)
+async function _patchUserUnico(u){
+  const CAMPOS_U=['perfil','nome','programa','email','cnpj','telefone','cpf','ativo','supervisor'];
+  const _pp={};
+  CAMPOS_U.forEach(k=>{ if(u[k]!==undefined) _pp[k]=u[k]; });
+  try{
+    await fetch(SU+'/rest/v1/usuarios_5d?usuario=eq.'+encodeURIComponent(u.usuario),{method:'PATCH',headers:{...SB_HEADERS,'Prefer':'return=minimal'},body:JSON.stringify(_pp)});
+  }catch(e){ console.error('[_patchUserUnico]',e); }
+}
+
+// Abre modal para editar o cadastro de um usuário
+function editarUsuario(i){
+  const users=getUsers();
+  const u=users[i];
+  if(!u) return;
+  const perfis=[['empreend','Empreendedor'],['consul','Consultor'],['apoio_tec','Apoio Técnico'],['coord_prog','Coordenador de Programa'],['coord_abdi','Coordenador ABDI'],['coord','Coordenador Geral']];
+  document.getElementById('edituser-overlay')?.remove();
+  const ov=document.createElement('div');
+  ov.id='edituser-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.innerHTML=`
+    <div style="background:#fff;border-radius:16px;max-width:560px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto;">
+      <div style="background:linear-gradient(135deg,#0f2644,#1a5e3a);border-radius:16px 16px 0 0;padding:20px 24px;color:#fff;">
+        <div style="font-size:16px;font-weight:800;">✏️ Editar Cadastro</div>
+        <div style="font-size:12px;opacity:.7;margin-top:2px;">Usuário: <span style="font-family:monospace;">${e(u.usuario)}</span></div>
+      </div>
+      <div style="padding:22px 24px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div class="fg" style="margin:0;grid-column:1/-1;"><label class="lbl">Nome completo</label><input class="inp" id="eu-nome" value="${e(u.nome||'')}"></div>
+          <div class="fg" style="margin:0;grid-column:1/-1;"><label class="lbl">Perfil</label>
+            <select class="inp" id="eu-perfil" onchange="document.getElementById('eu-sup-wrap').style.display=this.value==='apoio_tec'?'block':'none';">
+              ${perfis.map(p=>`<option value="${p[0]}" ${u.perfil===p[0]?'selected':''}>${p[1]}</option>`).join('')}
+            </select>
+          </div>
+          <div class="fg" style="margin:0;"><label class="lbl">Programa</label><input class="inp" id="eu-prog" value="${e(u.programa||'')}" placeholder="ex: ABDI, IFB…"></div>
+          <div class="fg" style="margin:0;"><label class="lbl">E-mail</label><input class="inp" id="eu-email" value="${e(u.email||'')}" placeholder="email@exemplo.com"></div>
+          <div class="fg" style="margin:0;"><label class="lbl">CNPJ / Identificador</label><input class="inp" id="eu-cnpj" value="${e(u.cnpj||'')}" placeholder="00.000.000/0001-00"></div>
+          <div class="fg" style="margin:0;"><label class="lbl">Telefone</label><input class="inp" id="eu-tel" value="${e(u.telefone||'')}" placeholder="(61) 9 0000-0000"></div>
+          <div class="fg" style="margin:0;grid-column:1/-1;display:${u.perfil==='apoio_tec'?'block':'none'};" id="eu-sup-wrap"><label class="lbl">Supervisor (Apoio Técnico)</label><input class="inp" id="eu-sup" value="${e(u.supervisor||'')}" placeholder="Nome do consultor supervisor"></div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:12px;background:var(--soft);padding:8px 12px;border-radius:8px;">O nome de usuário (login) não pode ser alterado, pois é o identificador do cadastro no sistema.</div>
+        <div id="eu-err" style="display:none;background:#fff5f5;color:#e53e3e;border-radius:8px;padding:8px 12px;margin-top:10px;font-size:12px;"></div>
+      </div>
+      <div style="padding:0 24px 22px;display:flex;gap:10px;justify-content:flex-end;">
+        <button onclick="document.getElementById('edituser-overlay').remove()" style="background:#fff;border:1.5px solid var(--border);color:var(--navy);border-radius:10px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Cancelar</button>
+        <button onclick="salvarEdicaoUsuario(${i})" style="background:linear-gradient(135deg,#1a5e3a,#267a4e);border:none;color:#fff;border-radius:10px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">💾 Salvar alterações</button>
+      </div>
+    </div>`;
+  ov.addEventListener('click',ev=>{ if(ev.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+
+async function salvarEdicaoUsuario(i){
+  const users=getUsers();
+  const u=users[i];
+  if(!u) return;
+  const nome=(document.getElementById('eu-nome')?.value||'').trim();
+  if(!nome){ const err=document.getElementById('eu-err'); if(err){err.textContent='⚠️ O nome não pode ficar vazio.';err.style.display='block';} return; }
+  u.nome=nome;
+  u.perfil=document.getElementById('eu-perfil')?.value||u.perfil;
+  u.programa=(document.getElementById('eu-prog')?.value||'').trim();
+  u.email=(document.getElementById('eu-email')?.value||'').trim();
+  u.cnpj=(document.getElementById('eu-cnpj')?.value||'').trim();
+  u.telefone=(document.getElementById('eu-tel')?.value||'').trim();
+  u.supervisor=(document.getElementById('eu-sup')?.value||'').trim();
+  // Atualiza cache + localStorage
+  USERS_CACHE=users; try{ _lsSave(users); }catch(_){}
+  await _patchUserUnico(u);
+  document.getElementById('edituser-overlay')?.remove();
+  renderUsuarios();
+  // Toast de confirmação
+  const toast=document.createElement('div');
+  toast.style.cssText='position:fixed;bottom:28px;right:28px;z-index:99999;background:linear-gradient(135deg,#0d2a1a,#1a5e3a);color:#fff;padding:14px 22px;border-radius:12px;font-size:14px;font-weight:700;box-shadow:0 16px 40px rgba(0,0,0,.25);';
+  toast.innerHTML='✅ Cadastro atualizado!';
+  document.body.appendChild(toast);
+  setTimeout(()=>{toast.style.transition='opacity .4s';toast.style.opacity='0';setTimeout(()=>toast.remove(),400);},2500);
 }
 function gerarSenhaAuto(){
   const adj=['verde','forte','rapido','novo','bom','vivo','real','ativo'];
@@ -3251,7 +3357,7 @@ function renderListaFiltrada(){
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">Buscar</div>
         <input id="lista-busca" type="text" placeholder="Nome ou negócio..." value="${curBusca}"
           style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;color:var(--text);background:var(--soft);outline:none;box-sizing:border-box;"
-          oninput="renderListaFiltrada()">
+          oninput="filtrarListaResultados()">
       </div>
       <div style="flex:1;min-width:130px;">
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">Campus</div>
@@ -3274,10 +3380,45 @@ function renderListaFiltrada(){
           ${estagios.map(c=>`<option value="${e(c)}" ${curEstagio===c?'selected':''}>${e(c)}</option>`).join('')}
         </select>
       </div>
-      ${(busca||fCampus||fConsultor||fEstagio)?`<button onclick="limparFiltrosLista()" style="padding:9px 14px;border:1.5px solid #fca5a5;border-radius:9px;background:#fee2e2;color:#dc2626;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✕ Limpar</button>`:''}
+      <button id="btn-limpar-lista" onclick="limparFiltrosLista()" style="padding:9px 14px;border:1.5px solid #fca5a5;border-radius:9px;background:#fee2e2;color:#dc2626;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:${(busca||fCampus||fConsultor||fEstagio)?'inline-block':'none'};">✕ Limpar</button>
     </div>
-    ${mostrando<total?`<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Mostrando <strong>${mostrando}</strong> de <strong>${total}</strong> atendimentos</div>`:''}
-    ${!data.length?'<div class="empty">Nenhum atendimento encontrado com esses filtros.</div>'
+    <div id="lista-count"></div>
+    <div id="lista-results"></div>`;
+  _pintarResultadosLista();
+}
+
+// Recalcula apenas os resultados, sem recriar o campo de busca (mantém o foco/cursor)
+function filtrarListaResultados(){
+  const busca = (document.getElementById('lista-busca')?.value||'').toLowerCase().trim();
+  const fCampus = document.getElementById('lista-filter-campus')?.value||'';
+  const fConsultor = document.getElementById('lista-filter-consultor')?.value||'';
+  const fEstagio = document.getElementById('lista-filter-estagio')?.value||'';
+  const btnLimpar = document.getElementById('btn-limpar-lista');
+  if(btnLimpar) btnLimpar.style.display = (busca||fCampus||fConsultor||fEstagio)?'inline-block':'none';
+  _pintarResultadosLista();
+}
+
+// Gera o HTML dos cards de atendimento a partir dos filtros atuais
+function _pintarResultadosLista(){
+  const results = document.getElementById('lista-results');
+  const countEl = document.getElementById('lista-count');
+  if(!results) return;
+  const busca = (document.getElementById('lista-busca')?.value||'').toLowerCase().trim();
+  const fCampus = document.getElementById('lista-filter-campus')?.value||'';
+  const fConsultor = document.getElementById('lista-filter-consultor')?.value||'';
+  const fEstagio = document.getElementById('lista-filter-estagio')?.value||'';
+
+  let data = ALL;
+  if(busca) data = data.filter(r=>(r.nome||'').toLowerCase().includes(busca)||(r.negocio||'').toLowerCase().includes(busca));
+  if(fCampus) data = data.filter(r=>r.campus===fCampus);
+  if(fConsultor) data = data.filter(r=>r.mentor===fConsultor);
+  if(fEstagio) data = data.filter(r=>r.estagio===fEstagio);
+
+  const total = ALL.length;
+  const mostrando = data.length;
+  if(countEl) countEl.innerHTML = mostrando<total?`<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Mostrando <strong>${mostrando}</strong> de <strong>${total}</strong> atendimentos</div>`:'';
+
+  results.innerHTML = !data.length?'<div class="empty">Nenhum atendimento encontrado com esses filtros.</div>'
     :data.map((r,i)=>{
       const idxOrig = ALL.indexOf(r);
       const ns=PILS.map(p=>+r['pilar_'+p.k.toLowerCase().replace('/','_').replace(/\s/g,'_')+'_nota']||0).filter(Boolean);
@@ -3306,7 +3447,9 @@ function renderListaFiltrada(){
           return '<div style="margin-top:5px;font-size:11px;color:#64748b;">📅 Retorno agendado: '+ret.toLocaleDateString('pt-BR')+'</div>';
         })()}
         ${r.empreendedor_usuario?`<div style="margin-top:6px;display:flex;align-items:center;gap:8px;"><span id="ev-badge-${r.id}" style="display:none;background:#ef4444;color:#fff;border-radius:20px;padding:2px 10px;font-size:10px;font-weight:800;"></span><button onclick="event.stopPropagation();(async()=>{selRec=ALL[${idxOrig}];await abrirPainelEvidencias(ALL[${idxOrig}].nome||'');})()" style="background:#eff6ff;color:#0369a1;border:1.5px solid #bfdbfe;border-radius:8px;padding:3px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">📎 Ver Evidências</button></div>`:''}      </div>`;
-    }).join('')}`;
+    }).join('');
+  // Recarrega badges de evidências para os cards visíveis
+  setTimeout(()=>{ try{ carregarBadgesEvidencias(ALL); }catch(_){} }, 300);
 }
 
 function limparFiltrosLista(){
@@ -3361,6 +3504,36 @@ function renderDetalhe(){
       ${r.email?`<button onclick="abrirPortalSSO('${e(r.nome||'')}','${e(r.email||'')}','${e(r.cpf||r.cnpj||'')}','${e(r.telefone||'')}')" style="background:linear-gradient(135deg,#f5a100,#e08c00);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📅 Agendar no Portal</button>`:'<span style="font-size:12px;color:#e08c00;background:#fff8e1;border:1px solid #f59e0b;border-radius:8px;padding:8px 12px;">⚠️ Cadastre o e-mail para liberar agendamento no portal</span>'}
       ${['coord','coord_abdi','coord_prog'].includes(PERFIL)?`<button onclick="excluirAtendimento()" style="background:#dc2626;color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:auto;">🗑 Excluir</button>`:''}
     </div>
+    ${['coord','coord_abdi','coord_prog'].includes(PERFIL)?(()=>{
+      const consultoresLista=[...new Set([
+        ...getUsers().filter(u=>['consul','apoio_tec'].includes(u.perfil)).map(u=>u.nome).filter(Boolean),
+        ...ALL.map(a=>a.mentor).filter(Boolean)
+      ])].sort();
+      const opts=consultoresLista.map(c=>`<option value="${e(c)}" ${r.mentor===c?'selected':''}>${e(c)}</option>`).join('');
+      const jaVinc=!!r.vinculado_programa;
+      return `<div class="card" style="margin-bottom:14px;border:1.5px solid #cdd9ee;background:#f7f9fd;">
+        <div style="font-size:13px;font-weight:800;color:var(--navy);margin-bottom:12px;display:flex;align-items:center;gap:6px;">🛠️ Ações do Coordenador</div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end;">
+          <div style="flex:1;min-width:240px;">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">Consultor responsável</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <select id="coord-consultor-sel" style="flex:1;min-width:180px;padding:9px 10px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;background:#fff;">
+                <option value="">— selecione —</option>
+                ${opts}
+                ${r.mentor&&!consultoresLista.includes(r.mentor)?`<option value="${e(r.mentor)}" selected>${e(r.mentor)}</option>`:''}
+              </select>
+              <button onclick="coordAlterarConsultor('${r.id}')" style="background:var(--navy);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Alterar</button>
+            </div>
+          </div>
+          <div style="min-width:220px;">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">Programa 12 Meses</div>
+            ${jaVinc
+              ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><span style="background:#dcfce7;color:#16a34a;font-weight:700;font-size:12px;padding:6px 12px;border-radius:20px;">✅ Vinculado</span><button onclick="selRec=ALL.find(x=>x.id==='${r.id}')||selRec;showView('fase2');" style="background:linear-gradient(135deg,#0369a1,#1d4ed8);color:#fff;border:none;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📘 Abrir Fase 2</button></div>`
+              : `<button onclick="coordVincularPrograma('${r.id}')" style="background:linear-gradient(135deg,#0d2a1a,#1a5e3a);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">🚀 Vincular ao Programa 12 Meses</button>`}
+          </div>
+        </div>
+      </div>`;
+    })():''}
     ${(()=>{
       const empU = r.empreendedor_usuario||'';
       const podeVincular = ['coord','coord_abdi','coord_prog','consul','apoio_tec'].includes(PERFIL);
@@ -3511,6 +3684,34 @@ function renderDetalhe(){
     }
     _bEv.addEventListener('click',()=>abrirPainelEvidencias(selRec?.nome||''));
   }
+}
+
+// Coordenador altera o consultor responsável pelo atendimento
+async function coordAlterarConsultor(id){
+  const sel=document.getElementById('coord-consultor-sel');
+  const novo=(sel?.value||'').trim();
+  if(!novo){ alert('Selecione um consultor.'); return; }
+  const rec=ALL.find(r=>String(r.id)===String(id));
+  if(!rec){ alert('Atendimento não encontrado.'); return; }
+  rec.mentor=novo;
+  if(selRec && String(selRec.id)===String(id)) selRec.mentor=novo;
+  try{
+    await fetch(SU+'/rest/v1/atendimentos_5d?id=eq.'+id,{method:'PATCH',headers:{...SB_HEADERS,'Prefer':'return=minimal'},body:JSON.stringify({mentor:novo})});
+  }catch(e){ console.error('[coordAlterarConsultor]',e); }
+  renderDetalhe();
+  const toast=document.createElement('div');
+  toast.style.cssText='position:fixed;bottom:28px;right:28px;z-index:99999;background:linear-gradient(135deg,#0d2a1a,#1a5e3a);color:#fff;padding:14px 22px;border-radius:12px;font-size:14px;font-weight:700;box-shadow:0 16px 40px rgba(0,0,0,.25);';
+  toast.innerHTML='✅ Consultor atualizado para <strong>'+e(novo)+'</strong>';
+  document.body.appendChild(toast);
+  setTimeout(()=>{toast.style.transition='opacity .4s';toast.style.opacity='0';setTimeout(()=>toast.remove(),400);},2500);
+}
+
+// Coordenador vincula o atendimento ao Programa 12 Meses (abre o fluxo padrão)
+function coordVincularPrograma(id){
+  const rec=ALL.find(r=>String(r.id)===String(id));
+  if(!rec){ alert('Atendimento não encontrado.'); return; }
+  selRec=rec;
+  mostrarModalVinculacao(rec);
 }
 
 function nf(){return{
@@ -3941,6 +4142,7 @@ function renderForm(){
       <button onclick="descartarRascunho()" style="background:#fff;border:1px solid #cbd5e1;color:#475569;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🗑 Começar em branco</button>
     </div>`:''}
     <div class="save-bar" id="save-bar">
+      <button class="save-bar-btn" id="bnt-voltar-lista-topo" onclick="voltarParaLista()" title="Voltar à lista de atendimentos (o rascunho fica salvo)" style="background:#0f2644;">← Atendimentos</button>
       <span id="f5-autosave-ind" class="save-bar-ind">☁️ rascunho automático na nuvem</span>
       <button class="save-bar-btn" id="bnt-salvar-topo" onclick="salvarProgresso(this)" title="Salvar o progresso atual no Supabase">💾 Salvar agora</button>
     </div>
@@ -3950,9 +4152,55 @@ function renderForm(){
       <div id="ao" class="aok" style="display:none"></div>
     </div>
     <div class="nav"><button class="bk" id="bbk">Cancelar</button><button class="bs" id="bnt-salvar-parcial" style="display:none;background:#2d6a4f;font-size:13px;padding:10px 16px;" title="Salvar o progresso atual e ver resumo">💾 Salvar</button><button class="bn" id="bnt">Próximo →</button></div>
+    <div id="vinc-prog-bar" style="margin-top:12px;text-align:center;display:none;">
+      <button id="btn-vinc-programa" onclick="vincularProgramaAtual()" style="background:linear-gradient(135deg,#0d2a1a,#1a5e3a);color:#fff;border:none;border-radius:12px;padding:12px 26px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;box-shadow:0 8px 24px rgba(26,94,58,.25);">🚀 Vincular ao Programa 12 Meses</button>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Salve o atendimento para vincular o empreendedor à trilha de incubação.</div>
+    </div>
     <div class="prog" id="prg"></div>
     <button id="fab-salvar" onclick="salvarProgresso(this)" title="Salvar o progresso atual no Supabase"><span class="fab-ico">💾</span> Salvar</button>`;
-  rPB(); rPH(); rPC(); rNav(); rPrg();
+  rPB(); rPH(); rPC(); rNav(); rPrg(); atualizarBotaoVincProg();
+}
+
+// Mostra/oculta o botão "Vincular ao Programa 12 Meses" conforme o atendimento já foi salvo
+function atualizarBotaoVincProg(){
+  const bar=document.getElementById('vinc-prog-bar');
+  if(!bar) return;
+  const rec = (F._editIndex>=0 && ALL[F._editIndex]) ? ALL[F._editIndex] : null;
+  const salvo = !!(rec && rec.id);
+  const jaVinc = !!(rec && rec.vinculado_programa);
+  bar.style.display = salvo ? 'block' : 'none';
+  const btn=document.getElementById('btn-vinc-programa');
+  if(btn){
+    if(jaVinc){
+      btn.textContent='✅ Já vinculado — abrir Fase 2';
+      btn.style.background='linear-gradient(135deg,#0369a1,#1d4ed8)';
+    } else {
+      btn.textContent='🚀 Vincular ao Programa 12 Meses';
+      btn.style.background='linear-gradient(135deg,#0d2a1a,#1a5e3a)';
+    }
+  }
+}
+
+// Abre o fluxo de vinculação para o atendimento atualmente em edição
+function vincularProgramaAtual(){
+  const rec = (F._editIndex>=0 && ALL[F._editIndex]) ? ALL[F._editIndex] : null;
+  if(!rec || !rec.id){
+    sa('e','⚠️ Salve o atendimento primeiro para poder vincular ao Programa 12 Meses.');
+    return;
+  }
+  if(rec.vinculado_programa){
+    selRec = rec;
+    showView('fase2');
+    return;
+  }
+  _vincOffered = true;
+  mostrarModalVinculacao(rec);
+}
+
+// Volta direto à lista de atendimentos de qualquer fase do 5D, salvando o rascunho antes.
+async function voltarParaLista(){
+  try{ if(typeof f5SaveDraftNow==='function') await f5SaveDraftNow(); }catch(_){}
+  showView('lista');
 }
 
 function rPB(){
@@ -4002,14 +4250,26 @@ function rPrg(){
   document.getElementById('prg').innerHTML=PH5.map((_,i)=>`<div class="pb" style="background:${i<=cp?cs[i]:'#dde3ec'}"></div>`).join('');
 }
 
+// Retorna o índice da última fase (0-4) disponível para o estágio atual
+function ultimaFaseDisponivel(){
+  let ultima = 0; // 1D sempre disponível
+  for(let i=1;i<=4;i++){ if(getEstagioD(i-1)!==null) ultima = i; }
+  return ultima;
+}
+
 function rNav(){
   const bk=document.getElementById('bbk'),nt=document.getElementById('bnt');
   const cs=["#2d6a4f","#1d3557","#7b2d8b","#e07a5f","#1a6b6b"];
   bk.textContent=cp===0?'Cancelar':'← Etapa anterior';
   bk.onclick=()=>{if(cp===0)showView('lista');else{cp--;renderForm();}};
-  if(cp<4){
-    nt.textContent=`Próxima etapa → ${PH5[cp+1].icon}`;nt.style.background=cs[cp+1];nt.className='bn';nt.onclick=nxt;
-    // Botão "Salvar" da barra inferior desativado: a barra fixa "Salvar agora" cobre isso
+  const ultima = ultimaFaseDisponivel();
+  // Se ainda há fase disponível à frente → "Próxima etapa"; senão → "Salvar Atendimento"
+  if(cp < ultima){
+    // Descobre a próxima fase realmente disponível
+    let prox = cp+1;
+    while(prox<=4 && getEstagioD(prox-1)===null) prox++;
+    if(prox>4) prox = cp; // fallback
+    nt.textContent=`Próxima etapa → ${PH5[prox].icon}`;nt.style.background=cs[prox];nt.className='bn';nt.onclick=nxt;
     const salvarParcial=document.getElementById('bnt-salvar-parcial');
     if(salvarParcial) salvarParcial.style.display='none';
   }
@@ -5249,6 +5509,8 @@ async function salvarProgresso(btnEl){
       sa('o','✅ Progresso salvo na nuvem. Você pode continuar preenchendo.');
     }
     setTimeout(()=>{ if(btn){ btn.disabled=false; btn.innerHTML=orig; btn.style.background=''; } }, 2000);
+    // Revela o botão "Vincular ao Programa 12 Meses" agora que o atendimento tem id
+    try{ atualizarBotaoVincProg(); }catch(_){}
     // Oferece vincular ao Programa 12 Meses — uma vez, e só se ainda não vinculado
     const recSalvo = (F._editIndex>=0 && ALL[F._editIndex]) ? ALL[F._editIndex] : rec;
     if(!_vincOffered && !recSalvo.vinculado_programa){
@@ -6036,6 +6298,8 @@ function radarChart(id,obj){const k=Object.keys(obj),v=Object.values(obj);new Ch
 function mostrarModalVinculacao(rec){
   document.getElementById('mv-nome').textContent=rec.nome||'Empreendedor';
   document.getElementById('mv-neg').textContent=(rec.negocio||'')+(rec.segmento?' · '+rec.segmento:'');
+  const mvC=document.getElementById('mv-consultor');
+  if(mvC && !mvC.value) mvC.value=rec.mentor||rec.consultor_trilha||'';
   document.getElementById('modal-vinculacao').style.display='flex';
   // Guardar referência ao registro atual
   window._recVinculacao=rec;
@@ -6138,6 +6402,10 @@ function _renderEmpTarefas(tarefas){
     var evFeedback = (t.evidencia_obs&&evSt==='ajuste')?'<div style="margin-top:4px;font-size:11px;color:#d97706;background:#fef9c3;padding:6px 10px;border-radius:6px;">💬 Feedback: '+e(t.evidencia_obs)+'</div>':'';
     var btnEntregar = (t.idx>=0 && t.status!=='recomendado' && t.status!=='concluida' && evSt!=='aguardando')
       ?'<button onclick="empAbrirEvidencia('+t.idx+','+ti+')" style="margin-top:8px;background:#1a5e3a;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📎 Entregar Evidência</button>':'';
+    // Tarefas do Farol: empreendedor pode marcar como concluída
+    var btnFarol = (t.farol && t.status!=='concluida')
+      ?'<button onclick="empConcluirTarefaFarol('+t.mes+','+t.tid+')" style="margin-top:8px;background:#1a5e3a;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Marcar como concluída</button>':'';
+    var pilarTag = t.pilar?'<span style="font-size:10px;color:#64748b;">'+e(t.pilar)+'</span>':'';
     return '<div class="emp-task" id="emp-task-'+ti+'">'
       +'<div class="emp-task-icon">'+statusIcon+'</div>'
       +'<div class="emp-task-body" style="flex:1;">'
@@ -6146,11 +6414,24 @@ function _renderEmpTarefas(tarefas){
       +'<span>Prazo: '+e(t.prazo)+'</span>'
       +'<span style="background:'+statusBg+';color:'+statusColor+';padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">'+statusLabel+'</span>'
       +(t.impacto?'<span style="font-size:10px;color:#64748b;">⚡ '+e(t.impacto)+'</span>':'')
+      +pilarTag
       +evBadge
       +'</div>'
-      +evLink+evFeedback+btnEntregar
+      +evLink+evFeedback+btnEntregar+btnFarol
       +'</div></div>';
   }).join('');
+}
+
+// Empreendedor marca tarefa do Farol como concluída (reflete para o consultor)
+async function empConcluirTarefaFarol(mes, tid){
+  const nome = _empMeuRec?.nome;
+  if(!nome) return;
+  const F2 = await getFase2Data(nome);
+  if(!F2.sessoes?.[mes]?.tarefas?.[tid]) return;
+  F2.sessoes[mes].tarefas[tid].concluida = true;
+  F2.sessoes[mes].tarefas[tid].concluida_em = new Date().toISOString().slice(0,10);
+  await saveFase2Data(nome, F2);
+  renderEmpPainel();
 }
 
 async function renderEmpPainel(){
@@ -6208,6 +6489,27 @@ async function renderEmpPainel(){
     if(meu.acoes_json){ try{ const ac=JSON.parse(meu.acoes_json); ac.forEach((a,i)=>{ if(a.a) tarefas.push({idx:i,titulo:a.a,prazo:a.q||'—',status:'pendente',pilar:'Plano de Ação',evidencia_link:'',evidencia_obs:'',evidencia_status:''}); }); }catch(e){} }
     if(!tarefas.length && meu.acao1) tarefas.push({idx:0,titulo:meu.acao1,prazo:'—',status:'pendente',pilar:'Plano de Ação',evidencia_link:'',evidencia_obs:'',evidencia_status:''});
   }
+  // Tarefas atribuídas pelo consultor no Farol de Acompanhamento (com prazo)
+  const _hojeP=new Date(); _hojeP.setHours(0,0,0,0);
+  (F2Painel.sessoes||[]).forEach((s,mi)=>{
+    (s&&Array.isArray(s.tarefas)?s.tarefas:[]).forEach((t,ti)=>{
+      let prazoLabel = t.prazo ? new Date(t.prazo+'T00:00:00').toLocaleDateString('pt-BR') : 'sem prazo';
+      if(t.prazo && !t.concluida){
+        const d=new Date(t.prazo+'T00:00:00'); const diff=Math.ceil((d-_hojeP)/(1000*60*60*24));
+        if(diff<0) prazoLabel='⚠️ Vencida em '+prazoLabel;
+        else if(diff===0) prazoLabel='📅 Vence HOJE';
+        else if(diff<=7) prazoLabel='📅 '+prazoLabel+' ('+diff+'d)';
+      }
+      tarefas.push({
+        farol:true, mes:mi, tid:ti, idx:-100,
+        titulo:t.t||'', prazo:prazoLabel,
+        status: t.concluida?'concluida':'pendente',
+        pilar:'🔦 Farol · Mês '+(mi+1),
+        evidencia_link:'', evidencia_obs:'', evidencia_status:''
+      });
+    });
+  });
+
   if(meu.encaminhamento) tarefas.push({idx:-1,titulo:'Capacitação: '+meu.encaminhamento,prazo:'—',status:'recomendado',pilar:'5D – Desdobrar',evidencia_link:'',evidencia_obs:'',evidencia_status:''});
   if(meu.comunidade) tarefas.push({idx:-2,titulo:'Inserção em comunidade: '+meu.comunidade,prazo:'—',status:'recomendado',pilar:'5D – Desdobrar',evidencia_link:'',evidencia_obs:'',evidencia_status:''});
 
@@ -6673,7 +6975,10 @@ async function renderFase2() {
     <div class="f2-hero-left">
       <h1>📘 Programa 12 Meses</h1>
       <p>Acompanhamento Estruturado de Negócio — ENEDES / IFB</p>
-      <span class="f2-hero-badge">✅ Fase 2 — Ativa</span>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span class="f2-hero-badge">✅ Fase 2 — Ativa</span>
+        <button onclick="f2SalvarAgora();showView('lista');" title="Voltar à lista de atendimentos" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">← Atendimentos</button>
+      </div>
     </div>
     <div class="f2-hero-right">
       <div class="emp-name" id="f2-emp-nome-display">${e(empNome)}</div>
@@ -7536,6 +7841,24 @@ async function renderFase2() {
               <textarea class="f2-ta" id="f2-sess-resumo-${i}" rows="3" placeholder="O que foi discutido? Quais avanços? Desafios?">${s.resumo||''}</textarea>
               <label class="f2-lbl">Ações Definidas nesta Sessão</label>
               <textarea class="f2-ta" id="f2-sess-acoes-${i}" rows="2" placeholder="Liste as ações acordadas para o próximo mês...">${s.acoes||''}</textarea>
+
+              <div style="background:#f0faf4;border:1.5px solid #a7d8bf;border-radius:12px;padding:14px 16px;margin:6px 0 14px;">
+                <div style="font-size:12px;font-weight:800;color:#1a5e3a;margin-bottom:2px;display:flex;align-items:center;gap:6px;">📌 Tarefas atribuídas ao Empreendedor</div>
+                <div style="font-size:11px;color:#4a7a60;margin-bottom:10px;">Cada tarefa com prazo aparece automaticamente no <strong>Portal do Empreendedor</strong>.</div>
+                <div id="f2-sess-tarefas-list-${i}">${_f2RenderTarefasEmp(i, s.tarefas)}</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;">
+                  <div style="flex:2;min-width:180px;">
+                    <label class="f2-lbl" style="margin-top:0;">Descrição da tarefa</label>
+                    <input class="f2-inp" id="f2-sess-tarefa-desc-${i}" placeholder="Ex: Enviar 3 orçamentos para novos clientes" style="margin-top:0;">
+                  </div>
+                  <div style="flex:1;min-width:140px;">
+                    <label class="f2-lbl" style="margin-top:0;">Prazo de entrega</label>
+                    <input class="f2-inp" type="date" id="f2-sess-tarefa-prazo-${i}" style="margin-top:0;">
+                  </div>
+                  <button type="button" onclick="f2AddTarefaEmp(${i})" style="background:#1a5e3a;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;height:38px;">＋ Atribuir</button>
+                </div>
+              </div>
+
               <label class="f2-lbl">Indicador de Progresso dos Pilares neste Mês</label>
               <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;">
                 ${['Produto','Vendas','Finanças','Gestão'].map((p,pi)=>`
@@ -8520,6 +8843,66 @@ function f2ToggleSess(i){
   if(arrow) arrow.textContent = open?'▲':'▼';
 }
 
+// ===== TAREFAS DO FAROL ATRIBUÍDAS AO EMPREENDEDOR =====
+function _f2FmtPrazo(p){
+  if(!p) return 'sem prazo';
+  try{ return new Date(p+'T00:00:00').toLocaleDateString('pt-BR'); }catch(_){ return p; }
+}
+
+function _f2RenderTarefasEmp(i, tarefas){
+  tarefas = Array.isArray(tarefas) ? tarefas : [];
+  if(!tarefas.length) return '<div style="font-size:11px;color:#94a3b8;font-style:italic;">Nenhuma tarefa atribuída ainda.</div>';
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  return tarefas.map((t,ti)=>{
+    const concl = !!t.concluida;
+    let prazoTxt = _f2FmtPrazo(t.prazo), prazoCor='#64748b';
+    if(t.prazo && !concl){
+      const d=new Date(t.prazo+'T00:00:00'); const diff=Math.ceil((d-hoje)/(1000*60*60*24));
+      if(diff<0){ prazoTxt='⚠️ Vencida em '+prazoTxt; prazoCor='#dc2626'; }
+      else if(diff===0){ prazoTxt='📅 Vence HOJE'; prazoCor='#d97706'; }
+      else if(diff<=7){ prazoTxt='📅 '+prazoTxt+' ('+diff+'d)'; prazoCor='#d97706'; }
+      else { prazoTxt='📅 '+prazoTxt; }
+    }
+    return `<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #d7ebe0;border-radius:8px;padding:8px 10px;margin-bottom:6px;">
+      <span style="font-size:15px;">${concl?'✅':'📌'}</span>
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:600;color:#1a2035;${concl?'text-decoration:line-through;color:#94a3b8;':''}">${e(t.t||'')}</div>
+        <div style="font-size:11px;font-weight:600;color:${concl?'#16a34a':prazoCor};">${concl?'Concluída pelo empreendedor':prazoTxt}</div>
+      </div>
+      <button type="button" onclick="f2RemoverTarefaEmp(${i},${ti})" title="Remover tarefa" style="background:#fff5f5;border:1px solid #fca5a5;color:#e53e3e;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;font-family:inherit;">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+function f2AddTarefaEmp(i){
+  const descEl=document.getElementById('f2-sess-tarefa-desc-'+i);
+  const prazoEl=document.getElementById('f2-sess-tarefa-prazo-'+i);
+  const desc=(descEl?.value||'').trim();
+  const prazo=prazoEl?.value||'';
+  if(!desc){ if(descEl){ descEl.focus(); descEl.style.borderColor='#dc2626'; setTimeout(()=>descEl.style.borderColor='',1500);} return; }
+  const empNome=f2GetEmpNome();
+  const data=getFase2DataSync(empNome);
+  if(!data.sessoes) data.sessoes=Array(12).fill(null).map(()=>({}));
+  if(!data.sessoes[i]) data.sessoes[i]={};
+  if(!Array.isArray(data.sessoes[i].tarefas)) data.sessoes[i].tarefas=[];
+  data.sessoes[i].tarefas.push({t:desc, prazo:prazo, concluida:false, criada:new Date().toISOString().slice(0,10)});
+  saveFase2Data(empNome, data).catch(console.error);
+  const list=document.getElementById('f2-sess-tarefas-list-'+i);
+  if(list) list.innerHTML=_f2RenderTarefasEmp(i, data.sessoes[i].tarefas);
+  if(descEl) descEl.value='';
+  if(prazoEl) prazoEl.value='';
+}
+
+function f2RemoverTarefaEmp(i, ti){
+  const empNome=f2GetEmpNome();
+  const data=getFase2DataSync(empNome);
+  if(!data.sessoes?.[i]?.tarefas) return;
+  data.sessoes[i].tarefas.splice(ti,1);
+  saveFase2Data(empNome, data).catch(console.error);
+  const list=document.getElementById('f2-sess-tarefas-list-'+i);
+  if(list) list.innerHTML=_f2RenderTarefasEmp(i, data.sessoes[i].tarefas);
+}
+
 function f2SalvarSessao(i){
   const empNome = f2GetEmpNome();
   const data = getFase2DataSync(empNome);
@@ -8541,6 +8924,7 @@ function f2SalvarSessao(i){
     }
   });
 
+  const tarefasPrev = (data.sessoes[i]||{}).tarefas || [];
   data.sessoes[i] = {
     data: f2GetVal('f2-sess-data-'+i),
     status: f2GetVal('f2-sess-status-'+i),
@@ -8554,6 +8938,7 @@ function f2SalvarSessao(i){
     pilar2: f2GetVal('f2-sess-pilar2-'+i),
     pilar3: f2GetVal('f2-sess-pilar3-'+i),
     acoes_vinc: acoesVinc,
+    tarefas: tarefasPrev,
   };
   saveFase2Data(empNome, data).catch(console.error);
 
