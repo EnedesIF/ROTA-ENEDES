@@ -5372,6 +5372,7 @@ function sn(n){F.nps=String(n);rPC();}
 
 function nxt(){
   if(cp===0&&!F.nome.trim()){sa('e','⚠️ Informe o nome do empreendedor.');return;}
+  if(cp===0){ try{ _harvestSocio(); }catch(_){} } // captura Perfil Socioeconômico antes de sair da 1D
   ha();cp++;renderForm();
 }
 
@@ -5563,7 +5564,33 @@ async function salvarProgresso(btnEl){
   }
 }
 
+// Lê os campos do Perfil Socioeconômico direto do DOM (garante que o que está
+// na tela seja salvo, mesmo se algum evento onchange não tiver disparado).
+function _harvestSocio(){
+  try{
+    const g=id=>document.getElementById(id);
+    const rc=name=>{ const el=document.querySelector('input[name="'+name+'"]:checked'); return el?el.value:undefined; };
+    const chk=cls=>Array.from(document.querySelectorAll('.'+cls+':checked')).map(c=>c.value);
+
+    if(g('f-faixa')) F.faixa_etaria = g('f-faixa').value;
+    if(g('f-esc'))   F.escolaridade = g('f-esc').value;
+    const gen=rc('f-gen'); if(gen!==undefined) F.genero = gen;
+    if(g('f-tempo')) F.tempo_atuacao = g('f-tempo').value;
+    const renda=rc('f-renda'); if(renda!==undefined) F.fonte_renda = renda;
+    const prec=rc('f-prec'); if(prec!==undefined) F.metodo_precificacao = prec;
+    const cap=rc('f-cap'); if(cap!==undefined) F.interesse_capacitacao = cap;
+    const mod=rc('f-mod'); if(mod!==undefined) F.modalidade_pref = mod;
+    if(g('f-pontos')) F.pontos_atuacao = g('f-pontos').value.split(',').map(s=>s.trim()).filter(Boolean);
+    // Só sobrescreve listas de checkbox se o bloco correspondente estiver na tela
+    if(document.querySelector('.cv-check')) F.canais_venda = chk('cv-check');
+    if(document.querySelector('.ti-check')) F.temas_interesse = chk('ti-check');
+    if(document.querySelector('.hr-check')) F.horarios_disponiveis = chk('hr-check');
+    if(document.querySelector('.dd-check')) F.dias_disponiveis = chk('dd-check');
+  }catch(_){}
+}
+
 function buildRecFromF(){
+  _harvestSocio(); // captura o Perfil Socioeconômico da tela antes de montar o registro
   // Build SMART meta if not manual
   const smartFull=F.meta||[F.meta_s,F.meta_m,F.meta_a,F.meta_r,F.meta_t].filter(Boolean).join(' · ');
   const rec={
