@@ -1558,6 +1558,21 @@ function buildNav(){
 }
 
 async function showView(view){
+  // === Proteção: evitar sair de um atendimento que ainda é só rascunho ===
+  if(atendimentoNaoEfetivado()){
+    const nome = (F.nome||'este atendimento').trim();
+    const querSalvar = confirm(
+      '⚠️ "'+nome+'" ainda NÃO foi salvo no sistema — por enquanto existe apenas como RASCUNHO.\n\n'+
+      'OK  = salvar agora antes de sair\n'+
+      'Cancelar = sair mesmo assim (fica só o rascunho, dá para retomar depois)'
+    );
+    if(querSalvar){
+      await salvarProgresso(document.getElementById('bnt-salvar-topo'));
+      // Se a gravação não efetivou na nuvem (ficou local), não navega:
+      // deixa a pessoa ver a caixa vermelha com o erro.
+      if(atendimentoNaoEfetivado()) return;
+    }
+  }
   currentView = view;
   // atualiza botão ativo no nav
   document.querySelectorAll('#h-nav button').forEach(b => b.classList.remove('active'));
@@ -3965,6 +3980,14 @@ function editarAtendimento(){
   F.comunidade = r.comunidade||'';
   F.micro = r.micro_aceleracao||'';
   F.resultado = r.resultado_case||'';
+  // NPS + acompanhamento (evita sobrescrever com vazio ao reeditar)
+  F.nps = r.nps||'';
+  F.cnps = r.comentario_nps||'';
+  F.impl = r.implementado||'';
+  F.func = r.funcionou||'';
+  F.ajus = r.ajustes||'';
+  F.prox = r.proximos_passos||'';
+  F.retorno = r.data_retorno||'';
   // MVP
   F.mvp_o_que = r.mvp_o_que||'';
   F.mvp_funciona = r.mvp_funciona||'';
@@ -4144,7 +4167,7 @@ function renderForm(){
     </div>`:''}
     <div class="save-bar" id="save-bar">
       <button class="save-bar-btn" id="bnt-voltar-lista-topo" onclick="voltarParaLista()" title="Voltar à lista de atendimentos (o rascunho fica salvo)" style="background:#0f2644;">← Atendimentos</button>
-      <span id="f5-autosave-ind" class="save-bar-ind">☁️ rascunho automático na nuvem</span>
+      <span id="f5-autosave-ind" class="save-bar-ind" title="Isto é só um backup temporário. O atendimento só entra no sistema quando você clica em Salvar.">📝 rascunho automático · NÃO é o salvamento final</span>
       <button class="save-bar-btn" id="bnt-salvar-topo" onclick="salvarProgresso(this)" title="Salvar o progresso atual no Supabase">💾 Salvar agora</button>
     </div>
     <div class="phases5d" id="phbar"></div>
@@ -4198,9 +4221,9 @@ function vincularProgramaAtual(){
   mostrarModalVinculacao(rec);
 }
 
-// Volta direto à lista de atendimentos de qualquer fase do 5D, salvando o rascunho antes.
-async function voltarParaLista(){
-  try{ if(typeof f5SaveDraftNow==='function') await f5SaveDraftNow(); }catch(_){}
+// Volta direto à lista de atendimentos de qualquer fase do 5D.
+// A guarda em showView cuida de avisar/salvar caso ainda seja rascunho.
+function voltarParaLista(){
   showView('lista');
 }
 
@@ -5377,6 +5400,21 @@ function f5TemConteudo(){
   return false;
 }
 
+// O atendimento aberto tem conteúdo mas ainda NÃO foi gravado na nuvem
+// (atendimentos_5d). True = só existe como rascunho, pode se perder ao sair.
+function atendimentoNaoEfetivado(){
+  try{
+    if(!f5FormAberto()) return false;   // não há formulário aberto
+    if(!f5TemConteudo()) return false;  // vazio, nada a perder
+    const idx = F._editIndex;
+    if(idx===undefined || idx===null || idx<0) return true;   // nunca commitado
+    const rec = ALL[idx];
+    if(!rec || !rec.id) return true;
+    if(String(rec.id).indexOf('local_')===0) return true;     // só salvou local
+    return false;                                             // tem id real na nuvem
+  }catch(_){ return false; }
+}
+
 // Timer de segurança: grava o rascunho mesmo em mudanças feitas por clique
 function f5StartSafetyTimer(){
   if(_f5SafetyTimer) return;
@@ -5410,7 +5448,7 @@ async function f5SaveDraftNow(){
     });
     if(!r.ok) throw new Error('HTTP '+r.status);
     _f5DirtyFlag = false;
-    _f5Ind('✓ rascunho salvo na nuvem','1'); setTimeout(()=>_f5Ind('☁️ rascunho automático na nuvem','.55'), 1800);
+    _f5Ind('✓ rascunho guardado — lembre de clicar em Salvar','1'); setTimeout(()=>_f5Ind('📝 rascunho automático · clique em Salvar para efetivar','.6'), 1800);
   }catch(e){
     // Rascunho não subiu: avisa sem apagar nada (o usuário continua digitando)
     _f5Ind('⚠️ sem conexão — rascunho não salvo','1');
