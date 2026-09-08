@@ -1545,7 +1545,8 @@ function buildNav(){
     if(canConfig()) views.push({id:'configuracoes', label:'⚙️ Config'});
   } else {
     views.push({id:'painel', label:'Meu Painel'});
-    views.push({id:'fase2', label:'Plano de Negócio'});
+    // O empreendedor não acessa o editor completo da Fase 2.
+    // Tarefas do Farol são exibidas no painel somente para envio de evidências.
   }
   if(!isEmpreend()) views.push({id:'portal_enedes', label:'📅 Portal ENEDES'});
   views.push({id:'ferramentas', label:'🧰 Ferramentas'});
@@ -1558,6 +1559,11 @@ function buildNav(){
 }
 
 async function showView(view){
+  // O portal do empreendedor é somente leitura para os dados do consultor.
+  if(isEmpreend() && ['fase2','lista','detalhe','novo','usuarios','dash','relatorios','backup','configuracoes','notificacoes','portal_enedes'].includes(view)){
+    if(view!=='fase2') return showView('painel');
+    view='painel';
+  }
   // === Proteção: evitar sair de um atendimento que ainda é só rascunho ===
   if(atendimentoNaoEfetivado()){
     const nome = (F.nome||'este atendimento').trim();
@@ -6479,11 +6485,12 @@ function _renderEmpTarefas(tarefas){
                  :evSt==='aguardando'?'<span style="font-size:10px;font-weight:700;color:#2563eb;">⏳ Aguardando avaliação</span>':'';
     var evLink = t.evidencia_link?'<div style="margin-top:6px;font-size:11px;"><a href="'+e(t.evidencia_link)+'" target="_blank" style="color:#1a5e3a;font-weight:600;">🔗 Ver evidência enviada</a></div>':'';
     var evFeedback = (t.evidencia_obs&&evSt==='ajuste')?'<div style="margin-top:4px;font-size:11px;color:#d97706;background:#fef9c3;padding:6px 10px;border-radius:6px;">💬 Feedback: '+e(t.evidencia_obs)+'</div>':'';
-    var btnEntregar = (t.idx>=0 && t.status!=='recomendado' && t.status!=='concluida' && evSt!=='aguardando')
-      ?'<button onclick="empAbrirEvidencia('+t.idx+','+ti+')" style="margin-top:8px;background:#1a5e3a;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📎 Entregar Evidência</button>':'';
-    // Tarefas do Farol: empreendedor pode marcar como concluída
-    var btnFarol = (t.farol && t.status!=='concluida')
-      ?'<button onclick="empConcluirTarefaFarol('+t.mes+','+t.tid+')" style="margin-top:8px;background:#1a5e3a;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Marcar como concluída</button>':'';
+    var podeEntregar = t.status!=='recomendado' && t.status!=='concluida' && evSt!=='aguardando';
+    var btnEntregar = podeEntregar
+      ?'<button onclick="empAbrirEvidencia('+t.idx+','+ti+','+(t.farol?t.mes:'null')+','+(t.farol?t.tid:'null')+')" style="margin-top:8px;background:#1a5e3a;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📎 Entregar Comprovante</button>':'';
+    // Tarefa do Farol não pode ser editada/concluída pelo empreendedor.
+    // O consultor valida a evidência e então atualiza o status.
+    var btnFarol = '';
     var pilarTag = t.pilar?'<span style="font-size:10px;color:#64748b;">'+e(t.pilar)+'</span>':'';
     return '<div class="emp-task" id="emp-task-'+ti+'">'
       +'<div class="emp-task-icon">'+statusIcon+'</div>'
@@ -6503,6 +6510,8 @@ function _renderEmpTarefas(tarefas){
 
 // Empreendedor marca tarefa do Farol como concluída (reflete para o consultor)
 async function empConcluirTarefaFarol(mes, tid){
+  alert('A conclusão desta tarefa é feita pelo consultor após validar o comprovante.');
+  return;
   const nome = _empMeuRec?.nome;
   if(!nome) return;
   const F2 = await getFase2Data(nome);
@@ -6523,25 +6532,33 @@ async function renderEmpPainel(){
   const cnpjUser = (usuarioLogado?.cnpj||'').replace(/\D/g,'');
   const emailUser = (usuarioLogado?.email||'').toLowerCase().trim();
   const nomeUser = _norm(usuarioLogado?.nome);
-  // Casa o atendimento do empreendedor por: usuário vinculado, CPF, CNPJ, e-mail ou nome (normalizado)
-  const todos = data.filter(r=>
-    r.empreendedor_usuario===USER_NAME ||
-    (cpfUser && (r.cpf||'').replace(/\D/g,'')===cpfUser) ||
-    (cnpjUser && (r.cnpj||'').replace(/\D/g,'')===cnpjUser) ||
-    (emailUser && r.email && r.email.toLowerCase().trim()===emailUser) ||
-    (nomeUser && r.nome && _norm(r.nome)===nomeUser)
-  );
-  const meu = todos[0] || null; // mais recente
-  _empMeuRec = meu; // disponibiliza para gerar/baixar o documento
-
-  // Auto-vincula o atendimento a esta conta se ainda não estiver vinculado (para casar Fase 2 e evidências)
-  if(meu && meu.empreendedor_usuario!==USER_NAME && meu.id){
-    meu.empreendedor_usuario = USER_NAME;
-    fetch(SU+'/rest/v1/atendimentos_5d?id=eq.'+meu.id,{
-      method:'PATCH',headers:{...SB_HEADERS,'Prefer':'return=minimal'},
-      body:JSON.stringify({empreendedor_usuario:USER_NAME})
-    }).catch(console.error);
+  // Segurança: primeiro usa o vínculo explícito. Fallback só é permitido quando
+  // há um identificador único; nunca lista registros de outros empreendedores.
+  let meu = data.find(r=>r.empreendedor_usuario===USER_NAME) || null;
+  if(!meu){
+    const candidatos = data.filter(r=>
+      (cpfUser && (r.cpf||'').replace(/\D/g,'')===cpfUser) ||
+      (cnpjUser && (r.cnpj||'').replace(/\D/g,'')===cnpjUser) ||
+      (emailUser && r.email && r.email.toLowerCase().trim()===emailUser) ||
+      (nomeUser && r.nome && _norm(r.nome)===nomeUser)
+    );
+    // Nome isolado não é suficiente quando há mais de um registro compatível.
+    const identificadorForte = data.filter(r=>
+      (cpfUser && (r.cpf||'').replace(/\D/g,'')===cpfUser) ||
+      (cnpjUser && (r.cnpj||'').replace(/\D/g,'')===cnpjUser) ||
+      (emailUser && r.email && r.email.toLowerCase().trim()===emailUser)
+    );
+    meu = identificadorForte.length===1 ? identificadorForte[0] : (candidatos.length===1 ? candidatos[0] : null);
+    if(meu && meu.id){
+      meu.empreendedor_usuario = USER_NAME;
+      fetch(SU+'/rest/v1/atendimentos_5d?id=eq.'+meu.id,{
+        method:'PATCH',headers:{...SB_HEADERS,'Prefer':'return=minimal'},
+        body:JSON.stringify({empreendedor_usuario:USER_NAME})
+      }).catch(console.error);
+    }
   }
+  const todos = meu ? data.filter(r=>r.empreendedor_usuario===USER_NAME) : [];
+  _empMeuRec = meu; // disponibiliza somente o próprio registro
 
   if(!meu){
     document.getElementById('app-main').innerHTML=`
@@ -8356,17 +8373,8 @@ setTimeout(()=>{
 
 function f2GetEmpNome(){
   if(isEmpreend()){
-    const usuarioLogado = getUsers().find(u => u.usuario === USER_NAME);
-    const cpfUser = (usuarioLogado?.cpf||'').replace(/\D/g,'');
-    const cnpjUser = (usuarioLogado?.cnpj||'').replace(/\D/g,'');
-    const meu = ALL.find(r =>
-      r.empreendedor_usuario === USER_NAME ||
-      (cpfUser && (r.cpf||'').replace(/\D/g,'') === cpfUser) ||
-      (cnpjUser && (r.cnpj||'').replace(/\D/g,'') === cnpjUser) ||
-      (usuarioLogado?.email && r.email && r.email.toLowerCase() === usuarioLogado.email.toLowerCase()) ||
-      (usuarioLogado?.nome && r.nome && r.nome.toLowerCase() === usuarioLogado.nome.toLowerCase())
-    );
-    return meu?.nome || usuarioLogado?.nome || null;
+    // Nunca resolve pelo nome de outro cadastro: usa apenas o registro já vinculado.
+    return _empMeuRec?.empreendedor_usuario===USER_NAME ? (_empMeuRec.nome||null) : null;
   }
   // Coord/consul: SEMPRE usa selRec — nunca fallback para USER_NAME
   return selRec?.nome || null;
@@ -9491,7 +9499,8 @@ function f2OrgAtualizarVisual(funcoes){
 }
 
 // ===== EVIDÊNCIAS DE AÇÕES =====
-function empAbrirEvidencia(acaoIdx, taskIdx){
+function empAbrirEvidencia(acaoIdx, taskIdx, farolMes=null, farolTid=null){
+  _evArquivoSelecionado = null;
   const overlay = document.createElement('div');
   overlay.id = 'emp-evidencia-modal';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
@@ -9526,7 +9535,7 @@ function empAbrirEvidencia(acaoIdx, taskIdx){
 
       <div id="ev-sending" style="display:none;text-align:center;padding:12px;color:#0369a1;font-size:13px;font-weight:600;">⏳ Enviando evidência…</div>
       <div style="display:flex;gap:10px;">
-        <button onclick="empSalvarEvidencia(${acaoIdx})" id="ev-btn-enviar" style="flex:1;background:#1a5e3a;color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">📤 Enviar para o Consultor</button>
+        <button onclick="empSalvarEvidencia(${acaoIdx},${farolMes===null?'null':farolMes},${farolTid===null?'null':farolTid})" id="ev-btn-enviar" style="flex:1;background:#1a5e3a;color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">📤 Enviar para o Consultor</button>
         <button onclick="document.getElementById('emp-evidencia-modal').remove()" style="background:#f1f5f9;color:#64748b;border:none;border-radius:10px;padding:12px 20px;font-size:14px;cursor:pointer;font-family:inherit;">Cancelar</button>
       </div>
     </div>
@@ -9535,16 +9544,19 @@ function empAbrirEvidencia(acaoIdx, taskIdx){
   overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
 }
 
-async function empSalvarEvidencia(acaoIdx){
+async function empSalvarEvidencia(acaoIdx, farolMes=null, farolTid=null){
   const link = document.getElementById('ev-link')?.value.trim()||'';
   const obs  = document.getElementById('ev-obs')?.value.trim()||'';
   if(!link && !obs && !_evArquivoSelecionado){ alert('Preencha o link, a descrição ou anexe um arquivo.'); return; }
 
-  const empNome = f2GetEmpNome() || (getUsers().find(u=>u.usuario===USER_NAME)?.nome||'');
-  if(!empNome){ alert('Não foi possível identificar o empreendedor.'); return; }
+  const empNome = f2GetEmpNome();
+  if(!empNome || !_empMeuRec || _empMeuRec.empreendedor_usuario!==USER_NAME){ alert('Não foi possível identificar o atendimento vinculado à sua conta.'); return; }
 
   const data = getFase2DataSync(empNome);
-  if(!data.acoes || !data.acoes[acaoIdx]){ alert('Ação não encontrada.'); return; }
+  const alvo = (farolMes!==null && farolTid!==null)
+    ? data.sessoes?.[farolMes]?.tarefas?.[farolTid]
+    : data.acoes?.[acaoIdx];
+  if(!alvo){ alert('Tarefa não encontrada.'); return; }
 
   // Mostrar loading
   const sending = document.getElementById('ev-sending');
@@ -9558,14 +9570,14 @@ async function empSalvarEvidencia(acaoIdx){
     arquivoInfo = await empUploadArquivoEvidencia(empNome, acaoIdx);
   }
 
-  data.acoes[acaoIdx].evidencia_link   = link || (arquivoInfo?.signedUrl||'');
-  data.acoes[acaoIdx].evidencia_obs    = obs;
-  data.acoes[acaoIdx].evidencia_status = 'aguardando';
-  data.acoes[acaoIdx].evidencia_data   = new Date().toLocaleString('pt-BR');
+  alvo.evidencia_link   = link || (arquivoInfo?.signedUrl||'');
+  alvo.evidencia_obs    = obs;
+  alvo.evidencia_status = 'aguardando';
+  alvo.evidencia_data   = new Date().toLocaleString('pt-BR');
   if(arquivoInfo){
-    data.acoes[acaoIdx].evidencia_arquivo_path = arquivoInfo.path;
-    data.acoes[acaoIdx].evidencia_arquivo_nome = arquivoInfo.nome;
-    if(arquivoInfo.signedUrl && !link) data.acoes[acaoIdx].evidencia_link = arquivoInfo.signedUrl;
+    alvo.evidencia_arquivo_path = arquivoInfo.path;
+    alvo.evidencia_arquivo_nome = arquivoInfo.nome;
+    if(arquivoInfo.signedUrl && !link) alvo.evidencia_link = arquivoInfo.signedUrl;
   }
   _evArquivoSelecionado = null; // reset
 
@@ -9581,10 +9593,12 @@ async function empSalvarEvidencia(acaoIdx){
         para: mentor,
         tipo: 'evidencia',
         titulo: '📎 Nova evidência de '+empNome,
-        mensagem: 'A ação "'+data.acoes[acaoIdx].texto.substring(0,60)+'" foi entregue para avaliação.',
-        link_evidencia: link,
+        mensagem: 'A tarefa "'+String(alvo.texto||alvo.t||'').substring(0,60)+'" foi entregue para avaliação.',
+        link_evidencia: link || (arquivoInfo?.signedUrl||''),
         emp_nome: empNome,
-        acao_idx: acaoIdx,
+        acao_idx: farolMes!==null ? -100 : acaoIdx,
+        farol_mes: farolMes,
+        farol_tarefa_idx: farolTid,
         lida: false,
         created_at: new Date().toISOString()
       })
@@ -10270,16 +10284,23 @@ async function abrirPainelEvidencias(empNome){
   // Carrega dados
   const data = await getFase2Data(empNome);
   const acoes = data.acoes||[];
+  // Inclui também as tarefas atribuídas no Farol de Acompanhamento.
+  const evidencias = [
+    ...acoes.map((a,i)=>({...a,_acaoIdx:i})),
+    ...(data.sessoes||[]).flatMap((sessao,mes)=>(sessao?.tarefas||[]).map((t,tid)=>({
+      ...t, texto:t.t||'', pilar:'🔦 Farol · Mês '+(mes+1), _farolMes:mes, _farolTid:tid
+    })))
+  ];
 
   const stLabel = { '': '', 'aguardando': '⏳ Aguardando', 'aprovada': '✅ Aprovada', 'ajuste': '🔄 Ajuste solicitado' };
   const stColor = { '': '#94a3b8', 'aguardando': '#d97706', 'aprovada': '#16a34a', 'ajuste': '#7c3aed' };
   const stBg    = { '': '#f1f5f9', 'aguardando': '#fef9c3', 'aprovada': '#dcfce7', 'ajuste': '#ede9fe' };
 
-  const comEvidencia = acoes.filter((a,i)=>a.evidencia_link||a.evidencia_obs||a.evidencia_status==='aguardando');
+  const comEvidencia = evidencias.filter(a=>a.evidencia_link||a.evidencia_obs||a.evidencia_status==='aguardando');
 
   const rows = comEvidencia.length === 0
     ? '<div style="text-align:center;padding:40px;color:#94a3b8;font-size:14px;">📭 Nenhuma evidência enviada ainda pelo empreendedor.</div>'
-    : acoes.map((a,i)=>{
+    : evidencias.map((a,i)=>{
         if(!a.evidencia_link && !a.evidencia_obs && a.evidencia_status!=='aguardando') return '';
         const st = a.evidencia_status||'aguardando';
         return `
@@ -10320,11 +10341,11 @@ async function abrirPainelEvidencias(empNome){
             </div>`:''}
             ${st!=='aprovada'?`
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
-              <button onclick="avaliarEvidenciaInline('${e(empNome)}',${i},'aprovada')" 
+              <button onclick="avaliarEvidenciaInline('${e(empNome)}',${a._acaoIdx??'null'},'aprovada',${a._farolMes??'null'},${a._farolTid??'null'})" 
                 style="background:#dcfce7;color:#16a34a;border:1.5px solid #86efac;border-radius:9px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;flex:1;">
                 ✅ Aprovar Evidência
               </button>
-              <button onclick="pedirAjusteEvidenciaInline('${e(empNome)}',${i})"
+              <button onclick="pedirAjusteEvidenciaInline('${e(empNome)}',${a._acaoIdx??'null'},${a._farolMes??'null'},${a._farolTid??'null'})"
                 style="background:#ede9fe;color:#7c3aed;border:1.5px solid #c4b5fd;border-radius:9px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;flex:1;">
                 🔄 Solicitar Ajuste
               </button>
@@ -10352,13 +10373,15 @@ async function abrirPainelEvidencias(empNome){
     </div>`;
 }
 
-async function avaliarEvidenciaInline(empNome, acaoIdx, status){
+async function avaliarEvidenciaInline(empNome, acaoIdx, status, farolMes=null, farolTid=null){
   const data = getFase2DataSync(empNome);
-  if(!data.acoes||!data.acoes[acaoIdx]){ alert('Ação não encontrada.'); return; }
-  data.acoes[acaoIdx].evidencia_status = status;
+  const alvo = (farolMes!==null && farolTid!==null) ? data.sessoes?.[farolMes]?.tarefas?.[farolTid] : data.acoes?.[acaoIdx];
+  if(!alvo){ alert('Evidência não encontrada.'); return; }
+  alvo.evidencia_status = status;
   if(status==='aprovada'){
-    data.acoes[acaoIdx].done = true;
-    data.acoes[acaoIdx].status = 'concluida';
+    alvo.done = true;
+    alvo.concluida = true;
+    alvo.status = 'concluida';
   }
   await saveFase2Data(empNome, data);
   // Notifica empreendedor
@@ -10371,7 +10394,7 @@ async function avaliarEvidenciaInline(empNome, acaoIdx, status){
         para:empUser,
         tipo:'avaliacao',
         titulo:'✅ Evidência aprovada pelo consultor!',
-        mensagem:'Sua evidência para "'+data.acoes[acaoIdx].texto.substring(0,60)+'" foi aprovada. Ação marcada como concluída.',
+        mensagem:'Sua evidência para "'+String(alvo.texto||alvo.t||'tarefa').substring(0,60)+'" foi aprovada. Tarefa marcada como concluída.',
         lida:false,
         created_at:new Date().toISOString()
       })
@@ -10385,13 +10408,14 @@ async function avaliarEvidenciaInline(empNome, acaoIdx, status){
   abrirPainelEvidencias(empNome);
 }
 
-async function pedirAjusteEvidenciaInline(empNome, acaoIdx){
+async function pedirAjusteEvidenciaInline(empNome, acaoIdx, farolMes=null, farolTid=null){
   const feedback = prompt('Descreva o ajuste que o empreendedor deve fazer:');
   if(!feedback) return;
   const data = getFase2DataSync(empNome);
-  if(!data.acoes||!data.acoes[acaoIdx]) return;
-  data.acoes[acaoIdx].evidencia_status = 'ajuste';
-  data.acoes[acaoIdx].evidencia_obs_consultor = feedback;
+  const alvo = (farolMes!==null && farolTid!==null) ? data.sessoes?.[farolMes]?.tarefas?.[farolTid] : data.acoes?.[acaoIdx];
+  if(!alvo) return;
+  alvo.evidencia_status = 'ajuste';
+  alvo.evidencia_obs_consultor = feedback;
   await saveFase2Data(empNome, data);
   // Notifica empreendedor
   const empUser = selRec?.empreendedor_usuario||'';
