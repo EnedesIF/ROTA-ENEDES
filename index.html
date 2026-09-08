@@ -1545,8 +1545,7 @@ function buildNav(){
     if(canConfig()) views.push({id:'configuracoes', label:'⚙️ Config'});
   } else {
     views.push({id:'painel', label:'Meu Painel'});
-    // O empreendedor não acessa o editor completo da Fase 2.
-    // Tarefas do Farol são exibidas no painel somente para envio de evidências.
+    views.push({id:'fase2', label:'Acompanhamento Fase 2'});
   }
   if(!isEmpreend()) views.push({id:'portal_enedes', label:'📅 Portal ENEDES'});
   views.push({id:'ferramentas', label:'🧰 Ferramentas'});
@@ -1559,11 +1558,6 @@ function buildNav(){
 }
 
 async function showView(view){
-  // O portal do empreendedor é somente leitura para os dados do consultor.
-  if(isEmpreend() && ['fase2','lista','detalhe','novo','usuarios','dash','relatorios','backup','configuracoes','notificacoes','portal_enedes'].includes(view)){
-    if(view!=='fase2') return showView('painel');
-    view='painel';
-  }
   // === Proteção: evitar sair de um atendimento que ainda é só rascunho ===
   if(atendimentoNaoEfetivado()){
     const nome = (F.nome||'este atendimento').trim();
@@ -6100,14 +6094,21 @@ function buildDocFromRec(r){
   </div>`;
 }
 
-// Abre o documento do empreendedor (visualizar / salvar como PDF)
-function empVerDocumento(){
-  const r = _empMeuRec;
-  if(!r){ alert('Seu documento ainda não está disponível.'); return; }
-  const conteudo = buildDocFromRec(r);
-  const nome = (r.nome||'empreendedor').toLowerCase().replace(/\s+/g,'_');
+// Abre o relatório completo da Fase 2 (visualização e impressão/PDF).
+async function empVerDocumento(){
+  if(!_empMeuRec){ alert('Seu documento ainda não está disponível.'); return; }
+  if(isEmpreend()){
+    await showView('fase2');
+    setTimeout(()=>{
+      try{ f2GerarResumo(); }
+      catch(err){ console.error(err); alert('Não foi possível gerar o relatório completo da Fase 2.'); }
+    },250);
+    return;
+  }
+  const conteudo = buildDocFromRec(_empMeuRec);
+  const nome = (_empMeuRec.nome||'empreendedor').toLowerCase().replace(/\s+/g,'_');
   const hoje = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
-  _abrirIframePDF(conteudo, '📄 Meu Plano de Ação — '+(r.nome||''), 'plano_acao_'+nome+'_'+hoje);
+  _abrirIframePDF(conteudo, '📄 Meu Plano de Ação — '+(_empMeuRec.nome||''), 'plano_acao_'+nome+'_'+hoje);
 }
 
 // ===== DOCUMENTO DE FECHAMENTO =====
@@ -6647,8 +6648,8 @@ async function renderEmpPainel(){
     <div class="emp-doc-card">
       <div class="emp-doc-ico">📄</div>
       <div class="emp-doc-info">
-        <div class="emp-doc-title">Seu Diagnóstico & Plano de Ação</div>
-        <div class="emp-doc-sub">Documento completo da sua consultoria 5D — pronto para visualizar ou baixar em PDF.</div>
+        <div class="emp-doc-title">Seu Diagnóstico Completo & Acompanhamento da Fase 2</div>
+        <div class="emp-doc-sub">Visualize o acompanhamento completo da Fase 2 e use a impressão do navegador para salvar em PDF.</div>
       </div>
       <div class="emp-doc-actions">
         <button class="emp-doc-btn emp-doc-btn-primary" onclick="empVerDocumento()">👁 Visualizar / Baixar PDF</button>
@@ -8057,8 +8058,32 @@ async function renderFase2() {
   setTimeout(()=>{ try{ f2RenderGraficos(); }catch(e){ console.warn('f2RenderGraficos erro:',e.message); } }, 150);
   // Indicadores de progresso nas abas
   setTimeout(() => { try{ f2AtualizarProgressoAbas(F2); }catch(e){ console.warn('f2AtualizarProgressoAbas erro:',e.message); } }, 120);
+  f2AplicarModoEmpreendedor();
 } // fim renderFase2
 
+
+// Modo empreendedor: mantém toda a visualização da Fase 2, mas bloqueia edição.
+function f2AplicarModoEmpreendedor(){
+  if(!isEmpreend()) return;
+  const root=document.querySelector('.f2-wrap');
+  if(!root) return;
+  root.classList.add('f2-portal-readonly');
+  root.querySelectorAll('input, textarea, select').forEach(el=>{
+    el.disabled=true;
+    el.setAttribute('readonly','readonly');
+    el.style.cursor='default';
+  });
+  const bloqueados = /f2(Salvar|Add|Rem|Editar|Toggle|Alterar|Importar|Org|Mkt|Cancelar|Acao|SalvarAgora)/i;
+  root.querySelectorAll('button,[onclick]').forEach(el=>{
+    const oc=el.getAttribute('onclick')||'';
+    if(bloqueados.test(oc) || /f2-acao-check/.test(el.className||'')) el.style.display='none';
+  });
+  root.querySelectorAll('.f2-acao-check').forEach(el=>{el.style.display='none';});
+  const aviso=document.createElement('div');
+  aviso.style.cssText='background:#eff6ff;border:1.5px solid #bfdbfe;color:#1e40af;border-radius:10px;padding:10px 14px;margin:0 0 18px;font-size:12px;font-weight:600;';
+  aviso.textContent='👁️ Acompanhamento da Fase 2 em modo de consulta. Para cumprir tarefas, envie os comprovantes pelo Meu Painel.';
+  root.prepend(aviso);
+}
 
 // ===== GRÁFICOS DO FAROL =====
 let _f2Charts = {};
