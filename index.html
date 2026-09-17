@@ -1248,14 +1248,41 @@ function isCoordProg(){  return PERFIL==='coord_prog'; }
 function isConsul(){     return PERFIL==='consul'; }
 function isApoioTec(){   return PERFIL==='apoio_tec'; }
 function isEmpreend(){   return PERFIL==='empreend'; }
-// Pode ver todos os registros
-function canSeeAll(){    return ['coord','coord_abdi','coord_prog','apoio_tec'].includes(PERFIL); }
+// Pode ver TODOS os registros (Apoio Técnico agora vê só os vinculados a ele)
+function canSeeAll(){    return ['coord','coord_abdi','coord_prog'].includes(PERFIL); }
+
+// Nomes/usuários que "pertencem" ao Apoio Técnico (ele + o consultor que apoia)
+function _apoioVinculos(){
+  const me = getUsers().find(x=>x.usuario===USER_NAME) || {};
+  const nomes = new Set();
+  if(USER_NAME) nomes.add(USER_NAME);
+  if(me.nome) nomes.add(me.nome);
+  const supUser = me.supervisor||'';
+  if(supUser){
+    nomes.add(supUser);
+    const sup = getUsers().find(x=>x.usuario===supUser);
+    if(sup && sup.nome) nomes.add(sup.nome);
+  }
+  return nomes;
+}
+// Filtra a lista de atendimentos conforme o perfil (fonte única de verdade)
+function atendimentosVisiveis(base){
+  base = base || ALL;
+  if(canSeeAll()) return base;
+  if(PERFIL==='apoio_tec'){
+    const v = _apoioVinculos();
+    return base.filter(r => v.has(r.mentor) || v.has(r.consultor_trilha));
+  }
+  // consultor (e demais) veem apenas os próprios
+  const me = getUsers().find(x=>x.usuario===USER_NAME) || {};
+  return base.filter(r => r.mentor===USER_NAME || (me.nome && r.mentor===me.nome));
+}
 // Pode criar/editar atendimentos
 function canEdit(){      return ['coord','consul','apoio_tec'].includes(PERFIL); }
 // Pode gerenciar usuários
 function canManageUsers(){ return PERFIL==='coord'; }
-// Pode acessar relatórios/exportar
-function canExport(){    return ['coord','coord_abdi','coord_prog'].includes(PERFIL); }
+// Pode acessar relatórios/exportar (Apoio Técnico exporta só os vinculados)
+function canExport(){    return ['coord','coord_abdi','coord_prog','apoio_tec'].includes(PERFIL); }
 // Pode acessar configurações (contextos, etc.)
 function canConfig(){    return ['coord'].includes(PERFIL); }
 // Usuário enxerga painel empreendedor
@@ -1979,12 +2006,15 @@ function doLogout(){
 
 document.addEventListener('DOMContentLoaded',()=>lerParamsURL());
 document.addEventListener('keydown',e=>{
-  if(e.key==='Enter'){
-    const loginVisible=document.getElementById('panel-login').style.display!=='none';
-    const cadastroVisible=document.getElementById('panel-cadastro').style.display==='block';
-    if(loginVisible) doLogin();
-    else if(cadastroVisible) doCadastro();
-  }
+  if(e.key!=='Enter') return;
+  // Só age quando a TELA DE LOGIN está realmente visível.
+  // (Antes, checava panel-login.style que ficava vazio no app e disparava
+  //  um re-login que reiniciava o sistema e fechava o formulário.)
+  const loginScreen=document.getElementById('screen-login');
+  if(!loginScreen || loginScreen.style.display==='none') return;
+  const cadastroVisible=document.getElementById('panel-cadastro').style.display==='block';
+  if(cadastroVisible) doCadastro();
+  else doLogin();
 });
 
 async function lerParamsURL(){
@@ -2536,7 +2566,7 @@ function limparDashFiltros(){
 }
 
 function renderDashFiltrado(dataFull){
-  const base=canSeeAll()?dataFull:dataFull.filter(r=>r.mentor===USER_NAME);
+  const base=atendimentosVisiveis(dataFull);
   const consultores=[...new Set(base.map(r=>r.mentor).filter(Boolean))].sort();
   const campi=[...new Set(base.map(r=>r.campus).filter(Boolean))].sort();
   const estagios=[...new Set(base.map(r=>r.estagio).filter(Boolean))].sort();
@@ -2929,7 +2959,7 @@ function renderDashFiltrado(dataFull){
 async function loadAndRenderRelatorios(){
   document.getElementById('app-main').innerHTML='<div class="ld"><div class="spin"></div><br>Carregando…</div>';
   await loadData();
-  const base=canSeeAll()?ALL:ALL.filter(r=>r.mentor===USER_NAME);
+  const base=atendimentosVisiveis(ALL);
   const consultores=[...new Set(base.map(r=>r.mentor).filter(Boolean))].sort();
   const campi=[...new Set(base.map(r=>r.campus).filter(Boolean))].sort();
   document.getElementById('app-main').innerHTML=`
@@ -3033,7 +3063,7 @@ async function loadAndRenderRelatorios(){
 }
 
 function getRelData(){
-  const base=canSeeAll()?ALL:ALL.filter(r=>r.mentor===USER_NAME);
+  const base=atendimentosVisiveis(ALL);
   // Lê filtros da tela Relatórios (rf-) ou do Dashboard (df-) — o que estiver ativo
   const fC=document.getElementById('rf-consultor')?.value||document.getElementById('df-consultor')?.value||'';
   const fK=document.getElementById('rf-campus')?.value||document.getElementById('df-campus')?.value||'';
@@ -3343,19 +3373,20 @@ function renderListaFiltrada(){
   const fConsultor = document.getElementById('lista-filter-consultor')?.value||'';
   const fEstagio = document.getElementById('lista-filter-estagio')?.value||'';
   
-  let data = ALL;
+  const VIS = atendimentosVisiveis(ALL);
+  let data = VIS;
   if(busca) data = data.filter(r=>(r.nome||'').toLowerCase().includes(busca)||(r.negocio||'').toLowerCase().includes(busca));
   if(fCampus) data = data.filter(r=>r.campus===fCampus);
   if(fConsultor) data = data.filter(r=>r.mentor===fConsultor);
   if(fEstagio) data = data.filter(r=>r.estagio===fEstagio);
   
-  const total = ALL.length;
+  const total = VIS.length;
   const mostrando = data.length;
   
   // Listas únicas para os selects
-  const campi = [...new Set(ALL.map(r=>r.campus).filter(Boolean))].sort();
-  const consultores = [...new Set(ALL.map(r=>r.mentor).filter(Boolean))].sort();
-  const estagios = [...new Set(ALL.map(r=>r.estagio).filter(Boolean))].sort();
+  const campi = [...new Set(VIS.map(r=>r.campus).filter(Boolean))].sort();
+  const consultores = [...new Set(VIS.map(r=>r.mentor).filter(Boolean))].sort();
+  const estagios = [...new Set(VIS.map(r=>r.estagio).filter(Boolean))].sort();
   
   // Preserva valores de filtro atuais no re-render
   const curBusca = busca;
@@ -3424,13 +3455,14 @@ function _pintarResultadosLista(){
   const fConsultor = document.getElementById('lista-filter-consultor')?.value||'';
   const fEstagio = document.getElementById('lista-filter-estagio')?.value||'';
 
-  let data = ALL;
+  const VIS = atendimentosVisiveis(ALL);
+  let data = VIS;
   if(busca) data = data.filter(r=>(r.nome||'').toLowerCase().includes(busca)||(r.negocio||'').toLowerCase().includes(busca));
   if(fCampus) data = data.filter(r=>r.campus===fCampus);
   if(fConsultor) data = data.filter(r=>r.mentor===fConsultor);
   if(fEstagio) data = data.filter(r=>r.estagio===fEstagio);
 
-  const total = ALL.length;
+  const total = VIS.length;
   const mostrando = data.length;
   if(countEl) countEl.innerHTML = mostrando<total?`<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Mostrando <strong>${mostrando}</strong> de <strong>${total}</strong> atendimentos</div>`:'';
 
@@ -9499,28 +9531,96 @@ function f2OrgAtualizar(){
 
 function f2OrgAtualizarVisual(funcoes){
   const vis = document.getElementById('f2-org-visual');
-  if(!vis || !funcoes) return;
+  if(!vis) return;
+  if(!funcoes || !funcoes.length){ vis.innerHTML=''; return; }
   const e = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const trunc = (s,n)=>{ s=(s||'').toString(); return s.length>n ? s.slice(0,n-1)+'…' : s; };
   const corSit = s => s==='Empreendedor acumula'?'#f59e0b':s==='Colaborador contratado'?'#16a34a':s==='Freelancer/terceirizado'?'#7b2d8b':s==='Vago — precisa contratar'?'#dc2626':'#9ca3af';
   const bgSit  = s => s==='Empreendedor acumula'?'#fef9c3':s==='Colaborador contratado'?'#dcfce7':s==='Freelancer/terceirizado'?'#f3e8ff':s==='Vago — precisa contratar'?'#fee2e2':'#f1f5f9';
+
+  // Escolhe o "topo" do organograma (CEO / empreendedor / 1º)
+  let rootIdx = funcoes.findIndex(f=>/ceo|diretor|fundad|s[óo]cio|presidente|gestor\s*geral|propriet/i.test(f.cargo||''));
+  if(rootIdx<0) rootIdx = funcoes.findIndex(f=>f.situacao==='Empreendedor acumula');
+  if(rootIdx<0) rootIdx = 0;
+  const root = funcoes[rootIdx];
+  const children = funcoes.filter((_,i)=>i!==rootIdx);
+
+  const boxW=180, boxH=78, gapX=22, vGap=56, padX=24, padTop=16;
+  const n = Math.max(children.length,1);
+  const rowW = n*boxW + (n-1)*gapX;
+  const totalW = Math.max(rowW, boxW) + padX*2;
+  const rootY = padTop;
+  const childY = rootY + boxH + vGap;
+  const totalH = (children.length? childY + boxH : rootY + boxH) + padTop;
+  const rootX = totalW/2 - boxW/2;
+  const rootCx = rootX + boxW/2;
+  const busY = rootY + boxH + vGap/2;
+
+  const box = (x,y,f)=>{
+    const cor=corSit(f.situacao), bg=bgSit(f.situacao), prio=f.prioridade==='Alta';
+    return `
+      <rect x="${x}" y="${y}" width="${boxW}" height="${boxH}" rx="12" fill="${bg}" stroke="${cor}" stroke-width="2"/>
+      <rect x="${x}" y="${y}" width="6" height="${boxH}" rx="3" fill="${cor}"/>
+      <text x="${x+boxW/2}" y="${y+24}" text-anchor="middle" font-family="Sora,Arial,sans-serif" font-size="13" font-weight="700" fill="#0f2644">${e(trunc(f.cargo||'Sem título',24))}</text>
+      <text x="${x+boxW/2}" y="${y+43}" text-anchor="middle" font-family="Sora,Arial,sans-serif" font-size="11" fill="#475569">${e(trunc(f.pessoa||'—',26))}</text>
+      <text x="${x+boxW/2}" y="${y+62}" text-anchor="middle" font-family="Sora,Arial,sans-serif" font-size="9.5" font-weight="700" fill="${cor}">${e(trunc(f.situacao||'',30))}</text>
+      ${prio?`<circle cx="${x+boxW-15}" cy="${y+15}" r="8" fill="#dc2626"/><text x="${x+boxW-15}" y="${y+19}" text-anchor="middle" font-family="Arial" font-size="11" font-weight="700" fill="#fff">!</text>`:''}
+    `;
+  };
+
+  let conn='';
+  if(children.length){
+    const childCxs = children.map((_,i)=> padX + i*(boxW+gapX) + boxW/2);
+    conn += `<line x1="${rootCx}" y1="${rootY+boxH}" x2="${rootCx}" y2="${busY}" stroke="#94a3b8" stroke-width="1.5"/>`;
+    const minX=Math.min(...childCxs), maxX=Math.max(...childCxs);
+    conn += `<line x1="${minX}" y1="${busY}" x2="${maxX}" y2="${busY}" stroke="#94a3b8" stroke-width="1.5"/>`;
+    childCxs.forEach(cx=>{ conn += `<line x1="${cx}" y1="${busY}" x2="${cx}" y2="${childY}" stroke="#94a3b8" stroke-width="1.5"/>`; });
+  }
+
+  const svg = `<svg id="f2-org-svg" xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" style="height:auto;background:#fff;">
+    ${conn}${box(rootX,rootY,root)}${children.map((f,i)=>box(padX+i*(boxW+gapX),childY,f)).join('')}
+  </svg>`;
+
   const sob = funcoes.filter(f=>f.situacao==='Empreendedor acumula').length;
   const vag = funcoes.filter(f=>f.situacao==='Vago — precisa contratar').length;
+
   vis.innerHTML = `
-    <div style="margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;">
+    <div style="margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <div style="font-size:12px;font-weight:800;color:#0f2644;">🗂️ Organograma</div>
       ${sob?`<span style="background:#fef9c3;color:#854d0e;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;">⚠️ ${sob} função(ões) acumuladas pelo empreendedor</span>`:''}
       ${vag?`<span style="background:#fee2e2;color:#dc2626;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;">🔴 ${vag} vaga(s) urgente(s)</span>`:''}
+      <button type="button" onclick="f2OrgBaixarImagem()" style="margin-left:auto;background:#0f2644;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🖼️ Baixar organograma (PNG)</button>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
-      ${funcoes.map(f=>`
-        <div style="background:${bgSit(f.situacao)};border:2px solid ${corSit(f.situacao)};border-radius:12px;padding:12px;text-align:center;">
-          <div style="font-size:13px;font-weight:700;color:#0f2644;margin-bottom:4px;">${e(f.cargo||'Sem título')}</div>
-          <div style="font-size:12px;color:#475569;margin-bottom:6px;">${e(f.pessoa||'—')}</div>
-          <span style="font-size:10px;padding:2px 8px;border-radius:10px;background:${corSit(f.situacao)}30;color:${corSit(f.situacao)};font-weight:700;">${e(f.situacao||'')}</span>
-          ${f.prioridade==='Alta'?'<div style="font-size:10px;color:#dc2626;margin-top:4px;font-weight:700;">⚡ Alta prioridade</div>':''}
-        </div>
-      `).join('')}
-    </div>
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:12px;padding:14px;background:#fff;">${svg}</div>
   `;
+}
+
+// Converte o SVG do organograma em PNG e baixa
+function f2OrgBaixarImagem(){
+  const svg = document.getElementById('f2-org-svg');
+  if(!svg){ alert('Monte a estrutura primeiro (adicione funções e clique em Salvar Estrutura).'); return; }
+  try{
+    const w = +svg.getAttribute('width'), h = +svg.getAttribute('height');
+    const xml = new XMLSerializer().serializeToString(svg);
+    const src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(xml)));
+    const img = new Image();
+    img.onload = ()=>{
+      const scale = 2; // alta resolução
+      const c = document.createElement('canvas');
+      c.width = w*scale; c.height = h*scale;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0,0,c.width,c.height);
+      ctx.setTransform(scale,0,0,scale,0,0);
+      ctx.drawImage(img,0,0);
+      const nome = (f2GetEmpNome()||'organograma').toString().toLowerCase().replace(/\s+/g,'_');
+      const a = document.createElement('a');
+      a.download = 'organograma_'+nome+'.png';
+      a.href = c.toDataURL('image/png');
+      a.click();
+    };
+    img.onerror = ()=>alert('Não foi possível gerar a imagem do organograma.');
+    img.src = src;
+  }catch(err){ alert('Erro ao gerar imagem: '+err.message); }
 }
 
 // ===== EVIDÊNCIAS DE AÇÕES =====
