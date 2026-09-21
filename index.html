@@ -15,7 +15,7 @@
   --navy:#0f2644;--navy2:#1a3a6b;--amber:#c0622a;--abg:#fdf3ee;
   --purple:#5e1f82;--blue:#2e6494;--teal:#0e5252;
   --d1:#1a5e3a;--d2:#0f2644;--d3:#5e1f82;--d4:#c0622a;--d5:#0e5252;
-  --bg:#eaeff6;--card:#fff;--border:#d0d9e8;--text:#0d1b2e;--muted:#5a6e85;--soft:#f2f5fb;
+  --bg:#eef1f6;--card:#fff;--border:#e2e7f0;--text:#12233b;--muted:#5f7085;--soft:#f5f7fb;
   --abdi-gold:#9a6b00;--abdi-bg:#fffbee;
   --prog-violet:#4a2070;--prog-bg:#f5f0fc;
   --emp-blue:#0a4a7a;--emp-bg:#e8f2fc;
@@ -395,6 +395,28 @@ tbody tr:hover td{background:#fafcff;}
   .smart-row{grid-template-columns:1fr;}
 }
 @media(max-width:480px){.kpis{grid-template-columns:1fr;}}
+
+/* ===== POLISH CORPORATIVO (refino global, sem mudar a marca) ===== */
+*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+body{background:var(--bg);letter-spacing:-0.005em;}
+.card{border:1px solid var(--border);border-radius:14px;
+  box-shadow:0 1px 2px rgba(15,38,68,.04),0 2px 8px rgba(15,38,68,.05);}
+.bs,.bn{border-radius:10px;box-shadow:0 1px 2px rgba(15,38,68,.10);transition:filter .15s,box-shadow .15s,transform .15s;}
+.bs:hover,.bn:hover{filter:brightness(1.06);box-shadow:0 3px 10px rgba(15,38,68,.16);transform:none;}
+.bs:active,.bn:active{filter:brightness(.97);}
+.bk{border-radius:10px;transition:background .15s,border-color .15s;}
+.bk:hover{background:var(--soft);border-color:var(--muted);}
+header{box-shadow:0 4px 20px rgba(8,15,26,.28);}
+.hnav button{transition:background .15s,border-color .15s,color .15s;}
+.hnav button:hover{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.28);}
+input[type=text],input[type=date],input[type=number],input[type=time],select,textarea{border-radius:10px;transition:border-color .15s,box-shadow .15s;}
+input:focus,select:focus,textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(38,122,78,.12);}
+.lt{letter-spacing:-0.01em;}
+table{border-collapse:collapse;}
+.tg{letter-spacing:.01em;}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-thumb{background:#c5cfdd;border-radius:8px;border:2px solid var(--bg);}
+::-webkit-scrollbar-thumb:hover{background:#aab7c9;}
 </style>
 </head>
 <body>
@@ -1251,6 +1273,21 @@ function isEmpreend(){   return PERFIL==='empreend'; }
 // Pode ver TODOS os registros. Consultores e coordenadores veem tudo;
 // só o Apoio Técnico é restrito (ver atendimentosVisiveis).
 function canSeeAll(){    return ['coord','coord_abdi','coord_prog','consul'].includes(PERFIL); }
+
+// ===== Match de documento tolerante (CPF x CNPJ, ignora em qual campo está) =====
+// Junta cpf e cnpj de um objeto num conjunto de dígitos (>=11 = CPF/CNPJ válido).
+function _docsSet(o){
+  const s=new Set();
+  ['cpf','cnpj'].forEach(k=>{ const d=((o&&o[k])||'').replace(/\D/g,''); if(d.length>=11) s.add(d); });
+  return s;
+}
+// True se algum documento (cpf OU cnpj) de a coincide com algum de b.
+function _docsMatch(a,b){
+  const sa=_docsSet(a); if(!sa.size) return false;
+  const sb=_docsSet(b); if(!sb.size) return false;
+  for(const d of sa){ if(sb.has(d)) return true; }
+  return false;
+}
 
 // Nomes/usuários que "pertencem" ao Apoio Técnico (ele + o consultor que apoia)
 function _apoioVinculos(){
@@ -3594,19 +3631,26 @@ function renderDetalhe(){
           const opcoes = emps.length
             ? emps.map(u=>`<option value="${u.usuario}">${e(u.nome)} (${e(u.usuario)})</option>`).join('')
             : '';
-          bloco += `<div class="card" style="margin-bottom:14px;border:1.5px dashed #b7e4c7;background:#f6fbf8;">
-            <div style="font-size:13px;font-weight:800;color:var(--green);margin-bottom:8px;">🔗 Vincular Empreendedor ao Portal</div>
-            <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Conecte este atendimento a uma conta de empreendedor para que ele possa acompanhar sua evolução pelo portal.</div>
-            ${emps.length ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              <select id="sel-vinc-emp" style="padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;flex:1;min-width:200px;">
-                <option value="">— selecione o empreendedor —</option>
-                ${opcoes}
-              </select>
-              <button onclick="vincularEmpAtendimento('${r.id}')" style="background:var(--green);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">🔗 Vincular</button>
-            </div>`
-            : `<div style="font-size:12px;color:#b45309;background:#fff8e1;border:1px solid #f59e0b;border-radius:8px;padding:10px 12px;">
-                Ainda não há nenhuma conta de <strong>empreendedor</strong> cadastrada para vincular. O empreendedor precisa criar a conta dele (ou o coordenador cadastrá-lo em <strong>Usuários</strong>) para aparecer aqui.
-              </div>`}
+          bloco += `<div class="card" style="margin-bottom:14px;border:1px solid var(--border);background:var(--soft);">
+            <div style="font-size:12px;color:var(--muted);line-height:1.6;">
+              🔗 <strong style="color:var(--navy);">Acesso do empreendedor ao portal</strong> — a vinculação é <strong>automática</strong>: quando o empreendedor se cadastrar no portal com o mesmo <strong>CPF/CNPJ</strong> (ou e-mail/nome) deste atendimento, ele passa a ver os próprios dados, sem precisar fazer nada aqui.
+            </div>
+            <details style="margin-top:10px;">
+              <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--green);">Vincular manualmente (só se o automático não pegar)</summary>
+              <div style="margin-top:10px;">
+              ${emps.length ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <select id="sel-vinc-emp" style="padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;flex:1;min-width:200px;background:#fff;">
+                  <option value="">— selecione o empreendedor —</option>
+                  ${opcoes}
+                </select>
+                <button onclick="vincularEmpAtendimento('${r.id}')" style="background:var(--green);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Vincular</button>
+              </div>
+              <div style="font-size:11px;color:var(--muted);margin-top:8px;">Use só quando o empreendedor já tem conta mas não apareceu automaticamente (ex.: nome diferente ou CPF/CNPJ divergente).</div>`
+              : `<div style="font-size:12px;color:#b45309;background:#fff8e1;border:1px solid #f59e0b;border-radius:8px;padding:10px 12px;">
+                  Ainda não há nenhuma conta de <strong>empreendedor</strong> cadastrada. Assim que o empreendedor criar a conta dele no portal (ou for cadastrado em <strong>Usuários</strong>) com este CPF/CNPJ, o vínculo acontece sozinho.
+                </div>`}
+              </div>
+            </details>
           </div>`;
         } else {
           const empUser = emps.find(u=>u.usuario===empU);
@@ -6427,8 +6471,7 @@ async function vincularPrograma(sim){
           const cpfR=(rec.cpf||'').replace(/\D/g,''), cnpjR=(rec.cnpj||'').replace(/\D/g,'');
           const emailR=(rec.email||'').toLowerCase().trim(), nomeR=_norm(rec.nome);
           const emp = getUsers().find(u=>u.perfil==='empreend' && (
-            (cpfR && (u.cpf||'').replace(/\D/g,'')===cpfR) ||
-            (cnpjR && (u.cnpj||'').replace(/\D/g,'')===cnpjR) ||
+            _docsMatch(rec, u) ||
             (emailR && (u.email||'').toLowerCase().trim()===emailR) ||
             (nomeR && _norm(u.nome)===nomeR)
           ));
@@ -6571,15 +6614,13 @@ async function renderEmpPainel(){
   let meu = data.find(r=>r.empreendedor_usuario===USER_NAME) || null;
   if(!meu){
     const candidatos = data.filter(r=>
-      (cpfUser && (r.cpf||'').replace(/\D/g,'')===cpfUser) ||
-      (cnpjUser && (r.cnpj||'').replace(/\D/g,'')===cnpjUser) ||
+      _docsMatch(r, usuarioLogado) ||
       (emailUser && r.email && r.email.toLowerCase().trim()===emailUser) ||
       (nomeUser && r.nome && _norm(r.nome)===nomeUser)
     );
     // Nome isolado não é suficiente quando há mais de um registro compatível.
     const identificadorForte = data.filter(r=>
-      (cpfUser && (r.cpf||'').replace(/\D/g,'')===cpfUser) ||
-      (cnpjUser && (r.cnpj||'').replace(/\D/g,'')===cnpjUser) ||
+      _docsMatch(r, usuarioLogado) ||
       (emailUser && r.email && r.email.toLowerCase().trim()===emailUser)
     );
     meu = identificadorForte.length===1 ? identificadorForte[0] : (candidatos.length===1 ? candidatos[0] : null);
@@ -6886,8 +6927,7 @@ async function renderFase2() {
     const cnpjUser = (usuarioLogado?.cnpj||'').replace(/\D/g,'');
     meu = ALL.find(r =>
       r.empreendedor_usuario === USER_NAME ||
-      (cpfUser && (r.cpf||'').replace(/\D/g,'') === cpfUser) ||
-      (cnpjUser && (r.cnpj||'').replace(/\D/g,'') === cnpjUser) ||
+      _docsMatch(r, usuarioLogado) ||
       (usuarioLogado?.email && r.email && r.email.toLowerCase() === usuarioLogado.email.toLowerCase()) ||
       (usuarioLogado?.nome && r.nome && r.nome.toLowerCase() === usuarioLogado.nome.toLowerCase())
     ) || null;
