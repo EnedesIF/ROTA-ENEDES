@@ -6839,7 +6839,7 @@ function _f2ParseArrays(obj){
   if(!obj || typeof obj !== 'object') return {};
   // Supabase pode retornar campos JSON como string ou null — garante tipos corretos
   const arrayFields = ['acoes','sessoes','custos_fixos','custos_variaveis','metas','equipe','canvas_blocos','org_funcoes'];
-  const objFields   = ['financeiro','plano_negocio','config'];
+  const objFields   = ['financeiro','plano_negocio','config','objetivo_fin'];
   arrayFields.forEach(k=>{
     if(typeof obj[k]==='string'){ try{ const p=JSON.parse(obj[k]); obj[k]=Array.isArray(p)?p:[]; }catch(e){ obj[k]=[]; } }
     else if(!Array.isArray(obj[k])) obj[k]=[];
@@ -6900,7 +6900,7 @@ async function saveFase2Data(empNome, data){
     // Prefere o registro mais antigo (id menor) que é o original com dados completos
     const realEmpNome = rows[0]?.emp_nome || empNome;
     // Colunas válidas na tabela fase2v2 — filtrar para não causar erro 400
-    const COLS_VALIDAS = ['emp_nome','saved_at','negocio_nome','cnpj','fundacao','segmento','modelo','local','colaboradores','mercado','missao','visao','valores','proposito','meta_smart','cap_social','cap_integralizado','cap_giro','investimento','reserva','ticket','clientes','receita_calc','fonte_receita','cfixos','cvariaveis','total_custos','margem','p_nome','p_idade','p_genero','p_escolaridade','p_ocupacao','p_renda','p_compra','p_pagamento','p_online','p_objetivos','p_desafios','p_motivacoes','p_objecoes','p_redes','p_ia_resultado','p4_produto','p4_preco','p4_praca','p4_promocao','c4_cliente','c4_custo','c4_conv','c4_comunic','sw_forcas','sw_fraquezas','sw_oportunidades','sw_ameacas','sw_est_of','sw_est_mel','sw_est_def','sw_est_sob','sw_est_ia','mkt_m1','mkt_m2','mkt_m3','mkt_m4','mkt_m5','mkt_m6','mkt_m7','mkt_m8','mkt_m9','mkt_m10','mkt_m11','mkt_m12','mkt_perc','mkt_cat_midia','mkt_cat_producao','mkt_cat_servicos','mkt_cat_trade','mkt_cat_outros','custos_fixos','custos_variaveis','acoes','sessoes','org_tipo','org_total','org_obs','org_funcoes'];
+    const COLS_VALIDAS = ['emp_nome','saved_at','negocio_nome','cnpj','fundacao','segmento','modelo','local','colaboradores','mercado','missao','visao','valores','proposito','meta_smart','cap_social','cap_integralizado','cap_giro','investimento','reserva','ticket','clientes','receita_calc','fonte_receita','cfixos','cvariaveis','total_custos','margem','p_nome','p_idade','p_genero','p_escolaridade','p_ocupacao','p_renda','p_compra','p_pagamento','p_online','p_objetivos','p_desafios','p_motivacoes','p_objecoes','p_redes','p_ia_resultado','p4_produto','p4_preco','p4_praca','p4_promocao','c4_cliente','c4_custo','c4_conv','c4_comunic','sw_forcas','sw_fraquezas','sw_oportunidades','sw_ameacas','sw_est_of','sw_est_mel','sw_est_def','sw_est_sob','sw_est_ia','mkt_m1','mkt_m2','mkt_m3','mkt_m4','mkt_m5','mkt_m6','mkt_m7','mkt_m8','mkt_m9','mkt_m10','mkt_m11','mkt_m12','mkt_perc','mkt_cat_midia','mkt_cat_producao','mkt_cat_servicos','mkt_cat_trade','mkt_cat_outros','custos_fixos','custos_variaveis','acoes','sessoes','org_tipo','org_total','org_obs','org_funcoes','metas','objetivo_fin'];
     const raw = {...data, emp_nome:realEmpNome, saved_at:new Date().toLocaleString('pt-BR')};
     const payload = Object.fromEntries(Object.entries(raw).filter(([k])=>COLS_VALIDAS.includes(k)));
     if(rows.length){
@@ -7160,6 +7160,7 @@ async function renderFase2() {
       <p>Acompanhamento Estruturado de Negócio — ENEDES / IFB</p>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span class="f2-hero-badge">✅ Fase 2 — Ativa</span>
+        <button onclick="f2SalvarAgora();showView('detalhe');" title="Voltar à Fase 1 (diagnóstico 5D deste atendimento)" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">← Fase 1</button>
         <button onclick="f2SalvarAgora();showView('lista');" title="Voltar à lista de atendimentos" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">← Atendimentos</button>
       </div>
     </div>
@@ -7257,6 +7258,13 @@ async function renderFase2() {
         <label class="f2-lbl">Meta SMART Atualizada (Programa de Incubação)</label>
         <textarea class="f2-ta" id="f2-meta-smart" rows="2" placeholder="Atualize a meta conforme evolução do programa...">${F2.meta_smart||''}</textarea>
       </div>
+    </div>
+    <div class="f2-card">
+      <div class="f2-card-title"><span>🎯</span> Objetivo Financeiro & Metas</div>
+      <div style="background:var(--soft);border-radius:10px;padding:12px 16px;font-size:13px;color:var(--muted);margin-bottom:16px;">
+        Defina o <strong>objetivo financeiro</strong> do negócio para o programa e cadastre <strong>pelo menos 5 metas</strong> que levam a esse resultado.
+      </div>
+      ${_f2MetasSection(F2)}
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
       <button class="f2-btn-save" onclick="f2Salvar()">💾 Salvar Negócio</button>
@@ -8125,6 +8133,7 @@ async function renderFase2() {
 
   // Calcular financeiro ao carregar
   try{ f2CalcFin(); }catch(e){ console.warn('f2CalcFin erro:',e.message); }
+  try{ f2RenderObjProgresso(); }catch(e){ console.warn('f2RenderObjProgresso erro:',e.message); }
   // Ativar auto-save em todos os campos
   setTimeout(()=>{ try{ f2AttachAutoSave(); }catch(e){ console.warn('f2AttachAutoSave erro:',e.message); } }, 100);
   // Renderizar gráficos do Farol
@@ -8480,6 +8489,146 @@ function f2GetEmpNome(){
 
 function f2GetVal(id){ const el=document.getElementById(id); return el?el.value:''; }
 function f2GetNum(id){ return parseFloat(document.getElementById(id)?.value)||0; }
+
+// ===== OBJETIVO FINANCEIRO & METAS (Fase 2) =====
+let _f2MetaEdit = null;
+function _f2MetaEsc(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _f2Money(v){ return 'R$ '+(Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _f2PrazoBR(p){ if(!p) return 'sem prazo'; try{ return new Date(p+'T00:00:00').toLocaleDateString('pt-BR'); }catch(_){ return p; } }
+
+function _f2MetasSection(F2){
+  const obj = (F2 && F2.objetivo_fin) || {};
+  const metas = Array.isArray(F2 && F2.metas) ? F2.metas : [];
+  return `
+    <div class="f2-grid2">
+      <div>
+        <label class="f2-lbl" style="margin-top:0;">Objetivo financeiro — valor-alvo (R$)</label>
+        <input class="f2-inp" type="number" id="f2-obj-valor" value="${obj.valor||''}" placeholder="Ex.: 20000" style="margin-top:0;" oninput="f2ObjetivoSync()">
+      </div>
+      <div>
+        <label class="f2-lbl" style="margin-top:0;">Prazo do objetivo</label>
+        <input class="f2-inp" type="date" id="f2-obj-prazo" value="${obj.prazo||''}" style="margin-top:0;" oninput="f2ObjetivoSync()">
+      </div>
+    </div>
+    <label class="f2-lbl">Descrição do objetivo</label>
+    <textarea class="f2-ta" id="f2-obj-desc" rows="2" placeholder="Ex.: Atingir faturamento recorrente de R$ 20.000/mês com contratos de manutenção." oninput="f2ObjetivoSync()">${_f2MetaEsc(obj.descricao||'')}</textarea>
+    <div id="f2-obj-prog" style="margin:12px 0 4px;"></div>
+    <div style="font-size:12px;font-weight:800;color:#1a5e3a;margin:16px 0 6px;">📌 Metas vinculadas ao objetivo</div>
+    <div id="f2-metas-list">${_f2RenderMetas(metas, obj.valor)}</div>
+    <div style="background:#fff;border:1px dashed #bcd3ee;border-radius:10px;padding:12px;margin-top:10px;">
+      <div id="f2-meta-modo" style="display:none;font-size:11px;font-weight:800;color:#1d3557;margin-bottom:8px;">✏️ Editando meta — altere e salve.</div>
+      <div class="f2-grid2">
+        <div><label class="f2-lbl" style="margin-top:0;">Descrição da meta</label>
+          <input class="f2-inp" id="f2-meta-desc" placeholder="Ex.: Fechar 3 novos contratos" style="margin-top:0;"></div>
+        <div><label class="f2-lbl" style="margin-top:0;">Valor (R$)</label>
+          <input class="f2-inp" type="number" id="f2-meta-valor" placeholder="Ex.: 5000" style="margin-top:0;"></div>
+      </div>
+      <div class="f2-grid2">
+        <div><label class="f2-lbl">Prazo</label>
+          <input class="f2-inp" type="date" id="f2-meta-prazo" style="margin-top:0;"></div>
+        <div><label class="f2-lbl">Status</label>
+          <select class="f2-sel" id="f2-meta-status" style="margin-top:0;">
+            <option value="Pendente">Pendente</option>
+            <option value="Em andamento">Em andamento</option>
+            <option value="Concluída">Concluída</option>
+          </select></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button type="button" id="f2-meta-btn" onclick="f2AddMeta()" style="background:#1a5e3a;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">＋ Adicionar meta</button>
+        <button type="button" id="f2-meta-cancel" onclick="f2CancelarEditMeta()" style="display:none;background:#fff;color:#64748b;border:1.5px solid var(--border);border-radius:9px;padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+function _f2RenderMetas(metas, objValor){
+  metas = Array.isArray(metas) ? metas : [];
+  const stCor = s => s==='Concluída'?'#16a34a':s==='Em andamento'?'#d97706':'#64748b';
+  const stBg  = s => s==='Concluída'?'#dcfce7':s==='Em andamento'?'#fef9c3':'#f1f5f9';
+  let html='';
+  if(!metas.length){
+    html = '<div style="font-size:12px;color:#94a3b8;font-style:italic;">Nenhuma meta cadastrada ainda.</div>';
+  } else {
+    html = metas.map((m,i)=>`<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 12px;margin-bottom:6px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;color:#1a2035;">${_f2MetaEsc(m.t||'')}</div>
+        <div style="font-size:11px;color:#64748b;display:flex;gap:10px;flex-wrap:wrap;margin-top:2px;">
+          <span>${_f2Money(m.valor)}</span><span>📅 ${_f2PrazoBR(m.prazo)}</span>
+          <span style="background:${stBg(m.status)};color:${stCor(m.status)};padding:1px 8px;border-radius:10px;font-weight:700;">${_f2MetaEsc(m.status||'Pendente')}</span>
+        </div>
+      </div>
+      <button type="button" onclick="f2EditarMeta(${i})" title="Editar" style="background:#eff6ff;border:1px solid #93c5fd;color:#1d4ed8;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">✏️</button>
+      <button type="button" onclick="f2RemoverMeta(${i})" title="Remover" style="background:#fff5f5;border:1px solid #fca5a5;color:#e53e3e;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;font-family:inherit;">🗑</button>
+    </div>`).join('');
+  }
+  const falta = Math.max(0, 5 - metas.length);
+  html += `<div style="font-size:12px;margin-top:8px;font-weight:700;color:${falta?'#d97706':'#16a34a'};">${metas.length} meta(s) cadastrada(s)${falta?` — faltam ${falta} para o mínimo de 5`:' ✓ mínimo atingido'}</div>`;
+  return html;
+}
+
+function f2ObjetivoSync(){
+  const empNome=f2GetEmpNome(); if(!empNome) return;
+  const data=getFase2DataSync(empNome);
+  data.objetivo_fin = { valor:f2GetVal('f2-obj-valor'), prazo:f2GetVal('f2-obj-prazo'), descricao:f2GetVal('f2-obj-desc') };
+  saveFase2Data(empNome, data).catch(console.error);
+  f2RenderObjProgresso();
+}
+
+function f2RenderObjProgresso(){
+  const box=document.getElementById('f2-obj-prog'); if(!box) return;
+  const empNome=f2GetEmpNome(); if(!empNome){ box.innerHTML=''; return; }
+  const data=getFase2DataSync(empNome);
+  const alvo=Number((data.objetivo_fin||{}).valor)||0;
+  const metas=Array.isArray(data.metas)?data.metas:[];
+  const soma=metas.reduce((a,m)=>a+(Number(m.valor)||0),0);
+  if(!alvo){ box.innerHTML=''; return; }
+  const pct=Math.min(100,Math.round(soma/alvo*100));
+  const cor=pct>=100?'#16a34a':pct>=60?'#d97706':'#2563eb';
+  box.innerHTML=`<div style="font-size:12px;color:#475569;margin-bottom:4px;">Metas somam <strong>${_f2Money(soma)}</strong> de <strong>${_f2Money(alvo)}</strong> (${pct}%)</div>
+    <div style="height:10px;background:#e5e9f0;border-radius:6px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${cor};transition:width .3s;"></div></div>`;
+}
+
+function f2AddMeta(){
+  const desc=(f2GetVal('f2-meta-desc')||'').trim();
+  if(!desc){ const el=document.getElementById('f2-meta-desc'); if(el){ el.focus(); el.style.borderColor='#dc2626'; setTimeout(()=>el.style.borderColor='',1500);} return; }
+  const empNome=f2GetEmpNome(); const data=getFase2DataSync(empNome);
+  if(!Array.isArray(data.metas)) data.metas=[];
+  const rec={ t:desc, valor:f2GetVal('f2-meta-valor'), prazo:f2GetVal('f2-meta-prazo'), status:f2GetVal('f2-meta-status')||'Pendente' };
+  if(_f2MetaEdit!==null && data.metas[_f2MetaEdit]) data.metas[_f2MetaEdit]=rec;
+  else data.metas.push(rec);
+  saveFase2Data(empNome, data).catch(console.error);
+  const list=document.getElementById('f2-metas-list'); if(list) list.innerHTML=_f2RenderMetas(data.metas,(data.objetivo_fin||{}).valor);
+  f2CancelarEditMeta(); f2RenderObjProgresso();
+}
+
+function f2EditarMeta(i){
+  const empNome=f2GetEmpNome(); const data=getFase2DataSync(empNome);
+  const m=data.metas&&data.metas[i]; if(!m) return;
+  const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v||''; };
+  set('f2-meta-desc',m.t); set('f2-meta-valor',m.valor); set('f2-meta-prazo',m.prazo); set('f2-meta-status',m.status||'Pendente');
+  _f2MetaEdit=i;
+  const modo=document.getElementById('f2-meta-modo'); if(modo) modo.style.display='block';
+  const btn=document.getElementById('f2-meta-btn'); if(btn) btn.textContent='💾 Salvar alterações';
+  const c=document.getElementById('f2-meta-cancel'); if(c) c.style.display='inline-block';
+  document.getElementById('f2-meta-desc')?.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+function f2CancelarEditMeta(){
+  _f2MetaEdit=null;
+  ['f2-meta-desc','f2-meta-valor','f2-meta-prazo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  const st=document.getElementById('f2-meta-status'); if(st) st.value='Pendente';
+  const modo=document.getElementById('f2-meta-modo'); if(modo) modo.style.display='none';
+  const btn=document.getElementById('f2-meta-btn'); if(btn) btn.textContent='＋ Adicionar meta';
+  const c=document.getElementById('f2-meta-cancel'); if(c) c.style.display='none';
+}
+
+function f2RemoverMeta(i){
+  const empNome=f2GetEmpNome(); const data=getFase2DataSync(empNome);
+  if(!data.metas) return; data.metas.splice(i,1);
+  saveFase2Data(empNome, data).catch(console.error);
+  const list=document.getElementById('f2-metas-list'); if(list) list.innerHTML=_f2RenderMetas(data.metas,(data.objetivo_fin||{}).valor);
+  if(_f2MetaEdit!==null) f2CancelarEditMeta();
+  f2RenderObjProgresso();
+}
 
 // ── Custo rows ─────────────────────────────────────────────────────────────
 function f2CustoRow(tipo, c, i){
@@ -8863,6 +9012,9 @@ function f2Salvar(){
     valores: f2GetVal('f2-valores'),
     proposito: f2GetVal('f2-proposito'),
     meta_smart: f2GetVal('f2-meta-smart'),
+    // Objetivo financeiro & metas
+    objetivo_fin: { valor:f2GetVal('f2-obj-valor'), prazo:f2GetVal('f2-obj-prazo'), descricao:f2GetVal('f2-obj-desc') },
+    metas: (Array.isArray(existing.metas)?existing.metas:[]),
     // Financeiro
     cap_social: f2GetVal('f2-cap-social'),
     cap_integralizado: f2GetVal('f2-cap-integralizado'),
