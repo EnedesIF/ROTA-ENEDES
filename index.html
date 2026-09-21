@@ -1248,8 +1248,9 @@ function isCoordProg(){  return PERFIL==='coord_prog'; }
 function isConsul(){     return PERFIL==='consul'; }
 function isApoioTec(){   return PERFIL==='apoio_tec'; }
 function isEmpreend(){   return PERFIL==='empreend'; }
-// Pode ver TODOS os registros (Apoio Técnico agora vê só os vinculados a ele)
-function canSeeAll(){    return ['coord','coord_abdi','coord_prog'].includes(PERFIL); }
+// Pode ver TODOS os registros. Consultores e coordenadores veem tudo;
+// só o Apoio Técnico é restrito (ver atendimentosVisiveis).
+function canSeeAll(){    return ['coord','coord_abdi','coord_prog','consul'].includes(PERFIL); }
 
 // Nomes/usuários que "pertencem" ao Apoio Técnico (ele + o consultor que apoia)
 function _apoioVinculos(){
