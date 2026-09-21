@@ -4935,33 +4935,17 @@ function rP1(){
     </div>
 
     <div class="sep"></div>
-    <div class="tip-consul">🎯 <strong>Meta SMART do Objetivo Macro</strong><br>
-    Detalhe o objetivo acima em uma meta clara e mensurável (S·M·A·R·T).</div>
-    <div class="smart-block">
-      <h4>Meta SMART do Objetivo</h4>
-      <div class="smart-row">
-        <div class="smart-tag">S<span>Específica</span></div>
-        <div class="fg" style="margin:0"><input type="text" id="ms" value="${e(F.meta_s)}" placeholder="O que exatamente será alcançado?"></div>
-      </div>
-      <div class="smart-row">
-        <div class="smart-tag">M<span>Mensurável</span></div>
-        <div class="fg" style="margin:0"><input type="text" id="mm" value="${e(F.meta_m)}" placeholder="Como vai medir? Qual o número esperado?"></div>
-      </div>
-      <div class="smart-row">
-        <div class="smart-tag">A<span>Atingível</span></div>
-        <div class="fg" style="margin:0"><input type="text" id="ma" value="${e(F.meta_a)}" placeholder="É realista dado o cenário atual?"></div>
-      </div>
-      <div class="smart-row">
-        <div class="smart-tag">R<span>Relevante</span></div>
-        <div class="fg" style="margin:0"><input type="text" id="mr" value="${e(F.meta_r)}" placeholder="Por que essa meta é importante agora?"></div>
-      </div>
-      <div class="smart-row">
-        <div class="smart-tag">T<span>Temporal</span></div>
-        <div class="fg" style="margin:0"><input type="text" id="mt" value="${e(F.meta_t)}" placeholder="Em quanto tempo? Ex: 60 dias, até 30/06"></div>
+    <div style="background:#eef4fb;border:1.5px solid #bcd3ee;border-radius:12px;padding:16px 18px;">
+      <div style="font-size:13px;font-weight:800;color:#0f2644;margin-bottom:4px;">📏 Regra SMART — como escrever cada meta</div>
+      <div style="font-size:12px;color:#4a6fa5;margin-bottom:12px;">Isto é uma orientação: <strong>cada meta cadastrada abaixo</strong> deve seguir estes 5 critérios. Não é para preencher aqui.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">
+        ${[['S','Específica','O que exatamente será alcançado?'],['M','Mensurável','Tem número/valor para medir?'],['A','Atingível','É realista no cenário atual?'],['R','Relevante','Ajuda a chegar no objetivo macro?'],['T','Temporal','Tem prazo definido?']].map(x=>`
+          <div style="background:#fff;border:1px solid #d7e3f2;border-radius:9px;padding:10px;display:flex;gap:9px;align-items:flex-start;">
+            <span style="flex-shrink:0;width:26px;height:26px;border-radius:7px;background:var(--navy);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;">${x[0]}</span>
+            <div><div style="font-size:12px;font-weight:700;color:#0f2644;">${x[1]}</div><div style="font-size:11px;color:#64748b;line-height:1.3;">${x[2]}</div></div>
+          </div>`).join('')}
       </div>
     </div>
-    <div class="fg"><label class="lbl">Meta SMART — Síntese final</label>
-      <textarea id="g3" rows="2" placeholder="Consolide em uma frase: Ex: Aumentar faturamento em 20% em 60 dias via Instagram">${e(F.meta)}</textarea></div>
 
     <div class="sep"></div>
     <div class="tip-consul">📌 <strong>Metas para alcançar o objetivo</strong> (mínimo 5)<br>
