@@ -3823,6 +3823,7 @@ function nf(){return{
   meta:"",meta_s:"",meta_m:"",meta_a:"",meta_r:"",meta_t:"",
   kpi:"",prazo:"",
   acoes:[{a:"",c:"",q:"",r:"",ind:""}],comps:[],obs:"",
+  objetivo_fin:{valor:"",prazo:"",descricao:""},metas:[],kpis:[],
   retorno:"",impl:"",func:"",ajus:"",prox:"",nps:"",cnps:"",
   encaminhamento:"",comunidade:"",micro:"",resultado:"",
   id_modelo:"",id_para_quem:"",id_dor:"",id_oferta:"",id_diferencial:"",
@@ -4762,6 +4763,9 @@ function rPilarCard(p){
 function rP1(){
   const disp = getEstagioD(0);
   if(disp==='simples') return rP1Simples();
+  if(!F.objetivo_fin || typeof F.objetivo_fin!=='object') F.objetivo_fin={valor:"",prazo:"",descricao:""};
+  if(!Array.isArray(F.metas)) F.metas=[];
+  if(!Array.isArray(F.kpis)) F.kpis=[];
   const g=F.gut;const gt=(+g.G||0)*(+g.U||0)*(+g.T||0);
   // Auto-suggest worst-scored pilar
   const pScores=PILS.map(p=>({k:p.k,n:+F.pils[p.k].n||0,c:F.pils[p.k].c})).filter(x=>x.n>0);
@@ -4795,6 +4799,18 @@ function rP1(){
     </div>
 
     <div class="sep"></div>
+    <div class="tip-consul">🎯 <strong>Objetivo financeiro do negócio</strong><br>
+    Defina o resultado financeiro a alcançar — as metas e os KPIs abaixo devem levar até ele.</div>
+    <div class="g2">
+      <div class="fg"><label class="lbl">Objetivo — valor-alvo (R$)</label>
+        <input type="number" id="obj-valor" value="${e((F.objetivo_fin||{}).valor||'')}" placeholder="Ex: 20000" oninput="if(!F.objetivo_fin)F.objetivo_fin={};F.objetivo_fin.valor=this.value"></div>
+      <div class="fg"><label class="lbl">Prazo do objetivo</label>
+        <input type="date" id="obj-prazo" value="${(F.objetivo_fin||{}).prazo||''}" oninput="if(!F.objetivo_fin)F.objetivo_fin={};F.objetivo_fin.prazo=this.value"></div>
+    </div>
+    <div class="fg"><label class="lbl">Descrição do objetivo</label>
+      <textarea id="obj-desc" rows="2" placeholder="Ex: Atingir faturamento recorrente de R$ 20.000/mês com contratos de manutenção." oninput="if(!F.objetivo_fin)F.objetivo_fin={};F.objetivo_fin.descricao=this.value">${e((F.objetivo_fin||{}).descricao||'')}</textarea></div>
+
+    <div class="sep"></div>
     <div class="tip-consul">🎯 <strong>Construção da Meta SMART</strong><br>
     Ajude o empreendedor a transformar o problema em uma meta clara e mensurável.</div>
     <div class="smart-block">
@@ -4822,9 +4838,46 @@ function rP1(){
     </div>
     <div class="fg"><label class="lbl">Meta SMART — Síntese final</label>
       <textarea id="g3" rows="2" placeholder="Consolide em uma frase: Ex: Aumentar faturamento em 20% em 60 dias via Instagram">${e(F.meta)}</textarea></div>
-    <div class="g2">
-      <div class="fg"><label class="lbl">KPI — Indicador principal</label><input type="text" id="g4" value="${e(F.kpi)}" placeholder="Ex: Faturamento mensal"></div>
-      <div class="fg"><label class="lbl">Prazo para resultado inicial</label><input type="date" id="g5" value="${F.prazo}"></div>
+
+    <div class="sep"></div>
+    <div class="fg"><label class="lbl">📌 Metas (mínimo 5) vinculadas ao objetivo</label>
+      <div id="f1-metas-list">${f1RenderMetas()}</div>
+      <div style="background:#f8fbf9;border:1px dashed #b7e4c7;border-radius:10px;padding:12px;margin-top:8px;">
+        <div id="f1-meta-modo" style="display:none;font-size:11px;font-weight:800;color:#1a5e3a;margin-bottom:8px;">✏️ Editando meta — altere e salve.</div>
+        <div class="g2">
+          <div class="fg" style="margin:0"><label class="lbl">Descrição da meta</label><input type="text" id="f1-meta-desc" placeholder="Ex: Fechar 3 novos contratos"></div>
+          <div class="fg" style="margin:0"><label class="lbl">Valor (R$)</label><input type="number" id="f1-meta-valor" placeholder="Ex: 5000"></div>
+        </div>
+        <div class="g2">
+          <div class="fg" style="margin:0"><label class="lbl">Prazo</label><input type="date" id="f1-meta-prazo"></div>
+          <div class="fg" style="margin:0"><label class="lbl">Status</label>
+            <select id="f1-meta-status"><option>Pendente</option><option>Em andamento</option><option>Concluída</option></select></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+          <button type="button" class="bs" id="f1-meta-btn" style="padding:9px 18px;font-size:13px;" onclick="f1AddMeta()">＋ Adicionar meta</button>
+          <button type="button" class="bk" id="f1-meta-cancel" style="display:none;padding:9px 16px;font-size:13px;" onclick="f1CancelMeta()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sep"></div>
+    <div class="fg"><label class="lbl">📊 KPIs — Indicadores de acompanhamento (cadastre vários)</label>
+      <div id="f1-kpis-list">${f1RenderKpis()}</div>
+      <div style="background:#f4f7fb;border:1px dashed #bcd3ee;border-radius:10px;padding:12px;margin-top:8px;">
+        <div id="f1-kpi-modo" style="display:none;font-size:11px;font-weight:800;color:#1d3557;margin-bottom:8px;">✏️ Editando KPI — altere e salve.</div>
+        <div class="g2">
+          <div class="fg" style="margin:0"><label class="lbl">Indicador</label><input type="text" id="f1-kpi-nome" placeholder="Ex: Faturamento mensal"></div>
+          <div class="fg" style="margin:0"><label class="lbl">Valor-alvo</label><input type="text" id="f1-kpi-alvo" placeholder="Ex: R$ 20.000 / 50 clientes"></div>
+        </div>
+        <div class="g2">
+          <div class="fg" style="margin:0"><label class="lbl">Prazo</label><input type="date" id="f1-kpi-prazo"></div>
+          <div class="fg" style="margin:0"><label class="lbl">Valor atual / medição</label><input type="text" id="f1-kpi-atual" placeholder="Ex: R$ 8.000 (opcional)"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+          <button type="button" class="bs" id="f1-kpi-btn" style="padding:9px 18px;font-size:13px;background:var(--navy);" onclick="f1AddKpi()">＋ Adicionar KPI</button>
+          <button type="button" class="bk" id="f1-kpi-cancel" style="display:none;padding:9px 16px;font-size:13px;" onclick="f1CancelKpi()">Cancelar</button>
+        </div>
+      </div>
     </div>
     ${rBlocoMVP()}`;
 }
