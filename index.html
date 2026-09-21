@@ -4036,6 +4036,13 @@ function editarAtendimento(){
   F.meta_t = r.meta_t||'';
   F.kpi = r.kpi||'';
   F.prazo = r.prazo||'';
+  // Objetivo financeiro, metas e KPIs (2D)
+  try{ F.objetivo_fin = JSON.parse(r.objetivo_fin||'{}'); }catch(e){ F.objetivo_fin={valor:"",prazo:"",descricao:""}; }
+  if(!F.objetivo_fin||typeof F.objetivo_fin!=='object') F.objetivo_fin={valor:"",prazo:"",descricao:""};
+  try{ F.metas = JSON.parse(r.metas||'[]'); }catch(e){ F.metas=[]; }
+  if(!Array.isArray(F.metas)) F.metas=[];
+  try{ F.kpis = JSON.parse(r.kpis||'[]'); }catch(e){ F.kpis=[]; }
+  if(!Array.isArray(F.kpis)) F.kpis=[];
   // Desenvolver
   try{ F.acoes = JSON.parse(r.acoes_json||'[]'); }catch(e){}
   if(!F.acoes.length) F.acoes = [{a:r.acao1||'',c:'',q:'',r:'',ind:''},{a:r.acao2||'',c:'',q:'',r:'',ind:''},{a:r.acao3||'',c:'',q:'',r:'',ind:''}].filter(a=>a.a);
@@ -4760,12 +4767,126 @@ function rPilarCard(p){
 }
 
 // ===== 2D: DEFINIR =====
+// ===== METAS & KPIs da FASE 1 (2D Definir) — operam sobre F =====
+let _f1MetaEdit=null, _f1KpiEdit=null;
+function _f1Esc(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _f1Money(v){ return 'R$ '+(Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _f1PrazoBR(p){ if(!p) return 'sem prazo'; try{ return new Date(p+'T00:00:00').toLocaleDateString('pt-BR'); }catch(_){ return p; } }
+
+function f1RenderMetas(){
+  const metas=Array.isArray(F.metas)?F.metas:[];
+  const stCor=s=>s==='Concluída'?'#16a34a':s==='Em andamento'?'#d97706':'#64748b';
+  const stBg =s=>s==='Concluída'?'#dcfce7':s==='Em andamento'?'#fef9c3':'#f1f5f9';
+  let html = metas.length ? metas.map((m,i)=>`<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 12px;margin-bottom:6px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;color:#1a2035;">${_f1Esc(m.t)}</div>
+        <div style="font-size:11px;color:#64748b;display:flex;gap:10px;flex-wrap:wrap;margin-top:2px;">
+          <span>${_f1Money(m.valor)}</span><span>📅 ${_f1PrazoBR(m.prazo)}</span>
+          <span style="background:${stBg(m.status)};color:${stCor(m.status)};padding:1px 8px;border-radius:10px;font-weight:700;">${_f1Esc(m.status||'Pendente')}</span>
+        </div>
+      </div>
+      <button type="button" onclick="f1EditMeta(${i})" style="background:#eff6ff;border:1px solid #93c5fd;color:#1d4ed8;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">✏️</button>
+      <button type="button" onclick="f1DelMeta(${i})" style="background:#fff5f5;border:1px solid #fca5a5;color:#e53e3e;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;font-family:inherit;">🗑</button>
+    </div>`).join('') : '<div style="font-size:12px;color:#94a3b8;font-style:italic;">Nenhuma meta cadastrada ainda.</div>';
+  const falta=Math.max(0,5-metas.length);
+  html+=`<div style="font-size:12px;margin-top:8px;font-weight:700;color:${falta?'#d97706':'#16a34a'};">${metas.length} meta(s)${falta?` — faltam ${falta} para o mínimo de 5`:' ✓ mínimo atingido'}</div>`;
+  return html;
+}
+function f1AddMeta(){
+  const g=id=>document.getElementById(id);
+  const desc=(g('f1-meta-desc')?.value||'').trim();
+  if(!desc){ const el=g('f1-meta-desc'); if(el){el.focus();el.style.borderColor='#dc2626';setTimeout(()=>el.style.borderColor='',1500);} return; }
+  if(!Array.isArray(F.metas)) F.metas=[];
+  const rec={t:desc,valor:g('f1-meta-valor')?.value||'',prazo:g('f1-meta-prazo')?.value||'',status:g('f1-meta-status')?.value||'Pendente'};
+  if(_f1MetaEdit!==null && F.metas[_f1MetaEdit]) F.metas[_f1MetaEdit]=rec; else F.metas.push(rec);
+  const list=g('f1-metas-list'); if(list) list.innerHTML=f1RenderMetas();
+  f1CancelMeta(); _f5Dirty();
+}
+function f1EditMeta(i){
+  const m=F.metas&&F.metas[i]; if(!m) return;
+  const set=(id,v)=>{const el=document.getElementById(id); if(el) el.value=v||'';};
+  set('f1-meta-desc',m.t);set('f1-meta-valor',m.valor);set('f1-meta-prazo',m.prazo);set('f1-meta-status',m.status||'Pendente');
+  _f1MetaEdit=i;
+  const modo=document.getElementById('f1-meta-modo'); if(modo) modo.style.display='block';
+  const btn=document.getElementById('f1-meta-btn'); if(btn) btn.textContent='💾 Salvar alterações';
+  const c=document.getElementById('f1-meta-cancel'); if(c) c.style.display='inline-block';
+  document.getElementById('f1-meta-desc')?.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function f1CancelMeta(){
+  _f1MetaEdit=null;
+  ['f1-meta-desc','f1-meta-valor','f1-meta-prazo'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+  const st=document.getElementById('f1-meta-status'); if(st) st.value='Pendente';
+  const modo=document.getElementById('f1-meta-modo'); if(modo) modo.style.display='none';
+  const btn=document.getElementById('f1-meta-btn'); if(btn) btn.textContent='＋ Adicionar meta';
+  const c=document.getElementById('f1-meta-cancel'); if(c) c.style.display='none';
+}
+function f1DelMeta(i){
+  if(!F.metas) return; F.metas.splice(i,1);
+  const list=document.getElementById('f1-metas-list'); if(list) list.innerHTML=f1RenderMetas();
+  if(_f1MetaEdit!==null) f1CancelMeta(); _f5Dirty();
+}
+
+function f1RenderKpis(){
+  const kpis=Array.isArray(F.kpis)?F.kpis:[];
+  if(!kpis.length) return '<div style="font-size:12px;color:#94a3b8;font-style:italic;">Nenhum KPI cadastrado ainda.</div>';
+  return kpis.map((k,i)=>`<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 12px;margin-bottom:6px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;color:#1a2035;">${_f1Esc(k.nome)}</div>
+        <div style="font-size:11px;color:#64748b;display:flex;gap:10px;flex-wrap:wrap;margin-top:2px;">
+          <span>🎯 Alvo: <strong>${_f1Esc(k.alvo||'—')}</strong></span>
+          ${k.atual?`<span>📈 Atual: ${_f1Esc(k.atual)}</span>`:''}
+          <span>📅 ${_f1PrazoBR(k.prazo)}</span>
+        </div>
+      </div>
+      <button type="button" onclick="f1EditKpi(${i})" style="background:#eff6ff;border:1px solid #93c5fd;color:#1d4ed8;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">✏️</button>
+      <button type="button" onclick="f1DelKpi(${i})" style="background:#fff5f5;border:1px solid #fca5a5;color:#e53e3e;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;font-family:inherit;">🗑</button>
+    </div>`).join('');
+}
+function f1AddKpi(){
+  const g=id=>document.getElementById(id);
+  const nome=(g('f1-kpi-nome')?.value||'').trim();
+  if(!nome){ const el=g('f1-kpi-nome'); if(el){el.focus();el.style.borderColor='#dc2626';setTimeout(()=>el.style.borderColor='',1500);} return; }
+  if(!Array.isArray(F.kpis)) F.kpis=[];
+  const rec={nome:nome,alvo:g('f1-kpi-alvo')?.value||'',prazo:g('f1-kpi-prazo')?.value||'',atual:g('f1-kpi-atual')?.value||''};
+  if(_f1KpiEdit!==null && F.kpis[_f1KpiEdit]) F.kpis[_f1KpiEdit]=rec; else F.kpis.push(rec);
+  const list=g('f1-kpis-list'); if(list) list.innerHTML=f1RenderKpis();
+  f1CancelKpi(); _f5Dirty();
+}
+function f1EditKpi(i){
+  const k=F.kpis&&F.kpis[i]; if(!k) return;
+  const set=(id,v)=>{const el=document.getElementById(id); if(el) el.value=v||'';};
+  set('f1-kpi-nome',k.nome);set('f1-kpi-alvo',k.alvo);set('f1-kpi-prazo',k.prazo);set('f1-kpi-atual',k.atual);
+  _f1KpiEdit=i;
+  const modo=document.getElementById('f1-kpi-modo'); if(modo) modo.style.display='block';
+  const btn=document.getElementById('f1-kpi-btn'); if(btn) btn.textContent='💾 Salvar alterações';
+  const c=document.getElementById('f1-kpi-cancel'); if(c) c.style.display='inline-block';
+  document.getElementById('f1-kpi-nome')?.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function f1CancelKpi(){
+  _f1KpiEdit=null;
+  ['f1-kpi-nome','f1-kpi-alvo','f1-kpi-prazo','f1-kpi-atual'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+  const modo=document.getElementById('f1-kpi-modo'); if(modo) modo.style.display='none';
+  const btn=document.getElementById('f1-kpi-btn'); if(btn) btn.textContent='＋ Adicionar KPI';
+  const c=document.getElementById('f1-kpi-cancel'); if(c) c.style.display='none';
+}
+function f1DelKpi(i){
+  if(!F.kpis) return; F.kpis.splice(i,1);
+  const list=document.getElementById('f1-kpis-list'); if(list) list.innerHTML=f1RenderKpis();
+  if(_f1KpiEdit!==null) f1CancelKpi(); _f5Dirty();
+}
+// Marca rascunho como sujo para o autosave capturar (se a função existir)
+function _f5Dirty(){ try{ _f5DirtyFlag=true; }catch(_){} }
+
 function rP1(){
   const disp = getEstagioD(0);
   if(disp==='simples') return rP1Simples();
   if(!F.objetivo_fin || typeof F.objetivo_fin!=='object') F.objetivo_fin={valor:"",prazo:"",descricao:""};
   if(!Array.isArray(F.metas)) F.metas=[];
   if(!Array.isArray(F.kpis)) F.kpis=[];
+  // Blindagem: se algo falhar nas seções novas, o 2D (SMART etc.) continua aparecendo.
+  let _metasHtml='', _kpisHtml='';
+  try{ _metasHtml=f1RenderMetas(); }catch(_){ _metasHtml='<div style="font-size:12px;color:#94a3b8;">—</div>'; }
+  try{ _kpisHtml=f1RenderKpis(); }catch(_){ _kpisHtml='<div style="font-size:12px;color:#94a3b8;">—</div>'; }
   const g=F.gut;const gt=(+g.G||0)*(+g.U||0)*(+g.T||0);
   // Auto-suggest worst-scored pilar
   const pScores=PILS.map(p=>({k:p.k,n:+F.pils[p.k].n||0,c:F.pils[p.k].c})).filter(x=>x.n>0);
@@ -4841,7 +4962,7 @@ function rP1(){
 
     <div class="sep"></div>
     <div class="fg"><label class="lbl">📌 Metas (mínimo 5) vinculadas ao objetivo</label>
-      <div id="f1-metas-list">${f1RenderMetas()}</div>
+      <div id="f1-metas-list">${_metasHtml}</div>
       <div style="background:#f8fbf9;border:1px dashed #b7e4c7;border-radius:10px;padding:12px;margin-top:8px;">
         <div id="f1-meta-modo" style="display:none;font-size:11px;font-weight:800;color:#1a5e3a;margin-bottom:8px;">✏️ Editando meta — altere e salve.</div>
         <div class="g2">
@@ -4862,7 +4983,7 @@ function rP1(){
 
     <div class="sep"></div>
     <div class="fg"><label class="lbl">📊 KPIs — Indicadores de acompanhamento (cadastre vários)</label>
-      <div id="f1-kpis-list">${f1RenderKpis()}</div>
+      <div id="f1-kpis-list">${_kpisHtml}</div>
       <div style="background:#f4f7fb;border:1px dashed #bcd3ee;border-radius:10px;padding:12px;margin-top:8px;">
         <div id="f1-kpi-modo" style="display:none;font-size:11px;font-weight:800;color:#1d3557;margin-bottom:8px;">✏️ Editando KPI — altere e salve.</div>
         <div class="g2">
@@ -5749,6 +5870,9 @@ function buildRecFromF(){
     // Desenvolver
     acao1:F.acoes[0]?.a||'',acao2:F.acoes[1]?.a||'',acao3:F.acoes[2]?.a||'',
     acoes_json:JSON.stringify(F.acoes),
+    objetivo_fin:JSON.stringify(F.objetivo_fin||{}),
+    metas:JSON.stringify(F.metas||[]),
+    kpis:JSON.stringify(F.kpis||[]),
     compromissos:F.comps.join('; '),observacoes:F.obs,
     // Direcionar
     data_retorno:F.retorno,implementado:F.impl,funcionou:F.func,
@@ -5836,6 +5960,9 @@ async function salvar(){
     // Desenvolver
     acao1:F.acoes[0]?.a||'',acao2:F.acoes[1]?.a||'',acao3:F.acoes[2]?.a||'',
     acoes_json:JSON.stringify(F.acoes),
+    objetivo_fin:JSON.stringify(F.objetivo_fin||{}),
+    metas:JSON.stringify(F.metas||[]),
+    kpis:JSON.stringify(F.kpis||[]),
     compromissos:F.comps.join('; '),observacoes:F.obs,
     // Direcionar
     data_retorno:F.retorno,implementado:F.impl,funcionou:F.func,
@@ -7079,6 +7206,10 @@ async function renderFase2() {
     financas_nota: meu.pilar_financas_nota || '',
     gestao_nota: meu.pilar_gestao_nota || '',
     encaminhamento: meu.encaminhamento || '',
+    smart_s: meu.meta_s||'', smart_m: meu.meta_m||'', smart_a: meu.meta_a||'', smart_r: meu.meta_r||'', smart_t: meu.meta_t||'', meta_sintese: meu.meta_smart||'',
+    objetivo_fin: (()=>{ try{ return JSON.parse(meu.objetivo_fin||'{}'); }catch(_){ return {}; } })(),
+    metas: (()=>{ try{ const a=JSON.parse(meu.metas||'[]'); return Array.isArray(a)?a:[]; }catch(_){ return []; } })(),
+    kpis: (()=>{ try{ const a=JSON.parse(meu.kpis||'[]'); return Array.isArray(a)?a:[]; }catch(_){ return []; } })(),
   };
 
   main.innerHTML = `
@@ -7313,11 +7444,8 @@ async function renderFase2() {
       </div>
     </div>
     <div class="f2-card">
-      <div class="f2-card-title"><span>🎯</span> Objetivo Financeiro & Metas</div>
-      <div style="background:var(--soft);border-radius:10px;padding:12px 16px;font-size:13px;color:var(--muted);margin-bottom:16px;">
-        Defina o <strong>objetivo financeiro</strong> do negócio para o programa e cadastre <strong>pelo menos 5 metas</strong> que levam a esse resultado.
-      </div>
-      ${_f2MetasSection(F2)}
+      <div class="f2-card-title"><span>🎯</span> Objetivo, Metas & KPIs <span style="font-size:11px;font-weight:600;color:var(--muted);">— importado da Fase 1</span></div>
+      ${_f2ImportObjetivo(diag)}
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
       <button class="f2-btn-save" onclick="f2Salvar()">💾 Salvar Negócio</button>
@@ -8543,7 +8671,50 @@ function f2GetEmpNome(){
 function f2GetVal(id){ const el=document.getElementById(id); return el?el.value:''; }
 function f2GetNum(id){ return parseFloat(document.getElementById(id)?.value)||0; }
 
-// ===== OBJETIVO FINANCEIRO & METAS (Fase 2) =====
+// ===== IMPORTA Objetivo/Metas/KPIs da Fase 1 para exibir na Fase 2 (somente leitura) =====
+function _f2ImportObjetivo(diag){
+  const esc=s=>(s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const money=v=>'R$ '+(Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const prazo=p=>{ if(!p) return 'sem prazo'; try{ return new Date(p+'T00:00:00').toLocaleDateString('pt-BR'); }catch(_){ return p; } };
+  const obj=(diag&&diag.objetivo_fin)||{}, metas=(diag&&diag.metas)||[], kpis=(diag&&diag.kpis)||[];
+  const temObj = obj.valor||obj.descricao||obj.prazo;
+  if(!temObj && !metas.length && !kpis.length){
+    return `<div style="font-size:13px;color:var(--muted);background:var(--soft);border-radius:10px;padding:14px 16px;">
+      Nada definido ainda. Preencha o <strong>Objetivo, Metas e KPIs na Fase 1 (2D — Definir)</strong> do atendimento; aparece aqui automaticamente.
+      <div style="margin-top:8px;"><button class="f2-btn-sec" onclick="f2SalvarAgora();showView('detalhe');">← Ir para a Fase 1</button></div>
+    </div>`;
+  }
+  const stCor=s=>s==='Concluída'?'#16a34a':s==='Em andamento'?'#d97706':'#64748b';
+  const stBg =s=>s==='Concluída'?'#dcfce7':s==='Em andamento'?'#fef9c3':'#f1f5f9';
+  const somaMetas=metas.reduce((a,m)=>a+(Number(m.valor)||0),0);
+  const alvo=Number(obj.valor)||0;
+  const pct=alvo?Math.min(100,Math.round(somaMetas/alvo*100)):0;
+  let html='';
+  html+=`<div style="background:linear-gradient(135deg,#0f2644,#1a5e3a);color:#fff;border-radius:12px;padding:16px 18px;margin-bottom:14px;">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;opacity:.75;">Objetivo financeiro</div>
+    <div style="font-size:22px;font-weight:800;margin:2px 0;">${alvo?money(alvo):'—'} ${obj.prazo?`<span style="font-size:12px;font-weight:600;opacity:.8;">· até ${prazo(obj.prazo)}</span>`:''}</div>
+    ${obj.descricao?`<div style="font-size:13px;opacity:.9;">${esc(obj.descricao)}</div>`:''}
+    ${alvo?`<div style="margin-top:10px;height:8px;background:rgba(255,255,255,.2);border-radius:6px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:#74c69d;"></div></div>
+      <div style="font-size:11px;opacity:.85;margin-top:4px;">Metas somam ${money(somaMetas)} (${pct}% do objetivo)</div>`:''}
+  </div>`;
+  html+=`<div style="font-size:12px;font-weight:800;color:#1a5e3a;margin:6px 0 6px;">📌 Metas</div>`;
+  html+= metas.length ? metas.map(m=>`<div style="background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 12px;margin-bottom:6px;">
+      <div style="font-size:13px;font-weight:600;color:#1a2035;">${esc(m.t)}</div>
+      <div style="font-size:11px;color:#64748b;display:flex;gap:10px;flex-wrap:wrap;margin-top:2px;">
+        <span>${money(m.valor)}</span><span>📅 ${prazo(m.prazo)}</span>
+        <span style="background:${stBg(m.status)};color:${stCor(m.status)};padding:1px 8px;border-radius:10px;font-weight:700;">${esc(m.status||'Pendente')}</span>
+      </div></div>`).join('') : '<div style="font-size:12px;color:#94a3b8;font-style:italic;">Nenhuma meta definida na Fase 1.</div>';
+  html+=`<div style="font-size:12px;font-weight:800;color:#1d3557;margin:14px 0 6px;">📊 KPIs</div>`;
+  html+= kpis.length ? kpis.map(k=>`<div style="background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 12px;margin-bottom:6px;">
+      <div style="font-size:13px;font-weight:600;color:#1a2035;">${esc(k.nome)}</div>
+      <div style="font-size:11px;color:#64748b;display:flex;gap:10px;flex-wrap:wrap;margin-top:2px;">
+        <span>🎯 Alvo: <strong>${esc(k.alvo||'—')}</strong></span>${k.atual?`<span>📈 Atual: ${esc(k.atual)}</span>`:''}<span>📅 ${prazo(k.prazo)}</span>
+      </div></div>`).join('') : '<div style="font-size:12px;color:#94a3b8;font-style:italic;">Nenhum KPI definido na Fase 1.</div>';
+  html+=`<div style="font-size:11px;color:var(--muted);margin-top:12px;">Para alterar, edite na <strong>Fase 1 (2D — Definir)</strong>. <button class="f2-btn-sec" style="padding:6px 12px;font-size:12px;margin-left:6px;" onclick="f2SalvarAgora();showView('detalhe');">← Ir para a Fase 1</button></div>`;
+  return html;
+}
+
+// ===== OBJETIVO FINANCEIRO & METAS (Fase 2) — legado, não usado (mantido por segurança) =====
 let _f2MetaEdit = null;
 function _f2MetaEsc(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function _f2Money(v){ return 'R$ '+(Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -9065,9 +9236,6 @@ function f2Salvar(){
     valores: f2GetVal('f2-valores'),
     proposito: f2GetVal('f2-proposito'),
     meta_smart: f2GetVal('f2-meta-smart'),
-    // Objetivo financeiro & metas
-    objetivo_fin: { valor:f2GetVal('f2-obj-valor'), prazo:f2GetVal('f2-obj-prazo'), descricao:f2GetVal('f2-obj-desc') },
-    metas: (Array.isArray(existing.metas)?existing.metas:[]),
     // Financeiro
     cap_social: f2GetVal('f2-cap-social'),
     cap_integralizado: f2GetVal('f2-cap-integralizado'),
