@@ -1716,7 +1716,8 @@ async function showView(view){
   }
   // === Controle de acesso por perfil ===
   if(isEmpreend() && !['painel','fase1','fase2','ferramentas'].includes(view)){
-    view = 'painel';
+    // Links "Voltar/Ir para a Fase 1" da Fase 2 → abrem a Fase 1 do próprio empreendedor
+    view = (view==='detalhe' || view==='lista' || view==='novo') ? 'fase1' : 'painel';
   }
   if((view==='usuarios' || view==='backup') && !canManageUsers()){ sa('e','⚠️ Acesso restrito ao Coordenador Geral.'); return; }
   if(view==='novo' && !canEdit()){ sa('e','⚠️ Seu perfil não pode criar atendimentos.'); return; }
@@ -4554,6 +4555,7 @@ function fecharPopupFase(){
     _popupVisto[cp] = true;
   }
   overlay?.remove();
+  if(cp===0) _critPilAuto(); // em seguida, critérios da Sala dos Pilares
 }
 
 function renderForm(){
@@ -5040,9 +5042,122 @@ function getPilaresHeader(est){
   const i = map[est] || map["Operação"];
   return `<div style="background:${i.bg};border:1.5px solid ${i.cor}40;border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px;">
     <div style="font-size:24px;">${i.icon}</div>
-    <div><div style="font-size:12px;font-weight:800;color:${i.cor};margin-bottom:3px;">${est} — Avaliação dos 4 Pilares</div>
+    <div style="flex:1;"><div style="font-size:12px;font-weight:800;color:${i.cor};margin-bottom:3px;">${est} — Avaliação dos 4 Pilares</div>
     <div style="font-size:12px;color:#334155;line-height:1.6;">${i.txt}</div></div>
+    ${!isEmpreend()?`<button type="button" onclick="mostrarCriteriosPilares()" style="align-self:center;white-space:nowrap;background:#1d3557;color:#fff;border:none;border-radius:9px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📏 Critérios de avaliação</button>`:''}
   </div>`;
+}
+
+// ===== POP-UP ORIENTATIVO: CRITÉRIOS DE AVALIAÇÃO DOS 4 PILARES (consultores) =====
+const CRITERIOS_ESCALA = [
+  {n:1, nome:'Inexistente',     cor:'#dc2626', desc:'Não há prática nem evidência. O tema é resolvido no improviso ou simplesmente não é tratado.'},
+  {n:2, nome:'Incipiente',      cor:'#ea580c', desc:'A prática existe de forma informal e esporádica, sem registro. Depende da memória do empreendedor.'},
+  {n:3, nome:'Em estruturação', cor:'#ca8a04', desc:'A prática é recorrente, mas parcial: existe algum controle, porém sem rotina fixa nem indicadores.'},
+  {n:4, nome:'Estruturado',     cor:'#16a34a', desc:'A prática é rotineira e registrada, com ao menos um indicador acompanhado com regularidade.'},
+  {n:5, nome:'Consolidado',     cor:'#15803d', desc:'A prática é sistematizada, medida e revisada continuamente. Pode servir de referência para outros negócios.'},
+];
+const CRITERIOS_PILARES = {
+  'Produto/Serviço': {i:'📦', perg:'O empreendedor sabe o que vende, para quem e por que o cliente escolhe o seu produto/serviço?',
+    n1:'Oferta indefinida ou genérica; não sabe descrever o problema que resolve nem quem é o cliente.',
+    n3:'Oferta definida e já vendida a alguns clientes, mas o diferencial é pouco claro e o feedback não é coletado de forma regular.',
+    n5:'Proposta de valor clara e validada; diferencial reconhecido pelos clientes; feedback sistemático orienta melhorias e novos produtos.',
+    ev:'Portfólio/cardápio, fotos ou amostras, depoimentos de clientes, histórico de ajustes no produto.'},
+  'Vendas/Marketing': {i:'📣', perg:'Existe um caminho previsível para atrair, converter e manter clientes?',
+    n1:'Vendas esporádicas, basicamente por indicação; público-alvo não definido; sem presença em canais.',
+    n3:'Público definido e canais ativos (ex.: Instagram, WhatsApp, feira), mas sem rotina de divulgação, metas ou acompanhamento de resultados.',
+    n5:'Funil estruturado com metas; canais medidos (conversão, custo por cliente); relacionamento e pós-venda que geram recompra e indicação.',
+    ev:'Perfis e posts, lista de clientes/CRM, planilha de vendas, metas mensais, números de conversão.'},
+  'Finanças': {i:'💰', perg:'O empreendedor sabe quanto entra, quanto sai, quanto sobra e como forma o preço?',
+    n1:'Mistura contas pessoais e do negócio; não conhece custos, margem nem lucro; preço definido "pelo mercado" ou no chute.',
+    n3:'Separa as contas e registra entradas e saídas, mas sem fluxo de caixa projetado; precificação considera só parte dos custos.',
+    n5:'Fluxo de caixa projetado, DRE simples, margem por produto conhecida, capital de giro planejado e preço calculado com base em custo e valor percebido.',
+    ev:'Extrato de conta PJ, planilha ou app de fluxo de caixa, memória de cálculo do preço, controle de contas a pagar e a receber.'},
+  'Gestão/Processos': {i:'⚙️', perg:'O negócio funciona com rotinas claras ou depende totalmente do dono?',
+    n1:'Tudo está "na cabeça" do empreendedor; sem rotina, sem controles e sem divisão de tarefas.',
+    n3:'Existem algumas rotinas e controles (estoque, agenda, pedidos), mas informais, incompletos ou pouco atualizados.',
+    n5:'Processos principais documentados, indicadores acompanhados, tarefas delegadas e uso de ferramentas de gestão; o negócio opera sem depender do dono em tudo.',
+    ev:'Checklists, procedimentos escritos, controle de estoque, agenda de produção, ferramentas usadas (planilhas, apps, sistemas).'},
+};
+function mostrarCriteriosPilares(){
+  document.getElementById('crit-pil-overlay')?.remove();
+  const ov=document.createElement('div');
+  ov.id='crit-pil-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(15,38,68,.55);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  const escala=CRITERIOS_ESCALA.map(x=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #eef2f7;">
+      <div style="min-width:34px;height:34px;border-radius:9px;background:${x.cor};color:#fff;font-weight:800;font-size:16px;display:flex;align-items:center;justify-content:center;">${x.n}</div>
+      <div><div style="font-size:13px;font-weight:800;color:#1d3557;">${x.nome}</div><div style="font-size:12px;color:#475569;line-height:1.5;">${x.desc}</div></div>
+    </div>`).join('');
+  const pilares=Object.entries(CRITERIOS_PILARES).map(([k,c])=>`
+    <details style="border:1.5px solid #e2e8f0;border-radius:10px;margin-bottom:8px;background:#fff;">
+      <summary style="cursor:pointer;padding:11px 14px;font-size:13px;font-weight:800;color:#1d3557;list-style:none;">${c.i} ${k} <span style="font-weight:500;color:#64748b;font-size:12px;">— ${c.perg}</span></summary>
+      <div style="padding:0 14px 12px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
+          <div style="background:#fef2f2;border-radius:8px;padding:9px 10px;"><div style="font-size:11px;font-weight:800;color:#dc2626;margin-bottom:3px;">NOTA 1</div><div style="font-size:12px;color:#334155;line-height:1.5;">${c.n1}</div></div>
+          <div style="background:#fefce8;border-radius:8px;padding:9px 10px;"><div style="font-size:11px;font-weight:800;color:#a16207;margin-bottom:3px;">NOTA 3</div><div style="font-size:12px;color:#334155;line-height:1.5;">${c.n3}</div></div>
+          <div style="background:#f0fdf4;border-radius:8px;padding:9px 10px;"><div style="font-size:11px;font-weight:800;color:#15803d;margin-bottom:3px;">NOTA 5</div><div style="font-size:12px;color:#334155;line-height:1.5;">${c.n5}</div></div>
+        </div>
+        <div style="font-size:12px;color:#475569;margin-top:8px;"><strong>🔎 Evidências a pedir:</strong> ${c.ev}</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:4px;">Notas 2 e 4 são intermediárias: use quando a situação estiver entre as descrições.</div>
+      </div>
+    </details>`).join('');
+  ov.innerHTML=`
+    <div style="background:#f8fafc;border-radius:16px;max-width:760px;width:100%;max-height:92vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.3);">
+      <div style="background:linear-gradient(135deg,#0f2644,#1a5e3a);border-radius:16px 16px 0 0;padding:18px 22px;color:#fff;position:sticky;top:0;z-index:1;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+          <div><div style="font-size:17px;font-weight:800;">📏 Critérios de Avaliação dos 4 Pilares</div>
+          <div style="font-size:12px;opacity:.75;margin-top:2px;">Guia do consultor para atribuir notas e classificar prioridades de forma padronizada</div></div>
+          <button onclick="document.getElementById('crit-pil-overlay').remove()" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;width:32px;height:32px;font-size:16px;cursor:pointer;">✕</button>
+        </div>
+      </div>
+      <div style="padding:18px 22px;">
+        <div style="font-size:14px;font-weight:800;color:#1d3557;margin-bottom:4px;">1. Escala de notas (1 a 5)</div>
+        <div style="font-size:12px;color:#64748b;margin-bottom:6px;">A nota mede a <strong>maturidade da prática</strong>, não o esforço nem o potencial do empreendedor.</div>
+        <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:4px 14px;margin-bottom:18px;">${escala}</div>
+
+        <div style="font-size:14px;font-weight:800;color:#1d3557;margin-bottom:8px;">2. O que observar em cada pilar</div>
+        ${pilares}
+
+        <div style="font-size:14px;font-weight:800;color:#1d3557;margin:18px 0 8px;">3. Classificação de prioridade</div>
+        <div style="display:grid;gap:8px;">
+          <div style="background:#fff;border-left:4px solid #dc2626;border-radius:8px;padding:10px 12px;font-size:12px;color:#334155;line-height:1.55;"><strong>🔴 Urgente</strong>: nota 1–2 <u>ou</u> risco à sobrevivência no curto prazo (falta de caixa, ausência de vendas, pendência legal). Ação nos próximos 30 dias.</div>
+          <div style="background:#fff;border-left:4px solid #ca8a04;border-radius:8px;padding:10px 12px;font-size:12px;color:#334155;line-height:1.55;"><strong>🟡 Importante</strong>: nota 2–3 e o tema limita o crescimento, mas não ameaça a operação agora. Plano para 60–90 dias.</div>
+          <div style="background:#fff;border-left:4px solid #16a34a;border-radius:8px;padding:10px 12px;font-size:12px;color:#334155;line-height:1.55;"><strong>🟢 Estratégico</strong>: nota 4–5 ou tema de médio/longo prazo. É um ponto a potencializar como diferencial.</div>
+        </div>
+        <div style="font-size:12px;color:#475569;margin-top:8px;background:#eef3fb;border-radius:8px;padding:9px 12px;line-height:1.55;">
+          ⚖️ <strong>Nota e prioridade são decisões separadas.</strong> Um pilar com nota 3 pode ser Urgente se afetar o caixa. Procure marcar <strong>no máximo 1 ou 2 pilares como Urgentes</strong>, para manter o foco do plano de ação.
+        </div>
+
+        <div style="font-size:14px;font-weight:800;color:#1d3557;margin:18px 0 8px;">4. Boas práticas para uma avaliação justa</div>
+        <ul style="margin:0;padding-left:18px;font-size:12px;color:#334155;line-height:1.7;">
+          <li><strong>Avalie por evidência, não por percepção.</strong> Peça para ver a planilha, o extrato, o perfil ou o controle, e não apenas ouvir que existe.</li>
+          <li><strong>Na dúvida entre duas notas, fique com a menor</strong> e explique o motivo na Síntese do Consultor.</li>
+          <li><strong>Use a mesma régua em todos os estágios.</strong> Assim é possível comparar a evolução ao longo do acompanhamento. Em Ideação e Validação, notas 1–2 são esperadas: são o ponto de partida, não um demérito.</li>
+          <li><strong>Atribua a nota só depois de ouvir as respostas</strong> às perguntas do pilar. Se quiser a autoavaliação do empreendedor, peça depois, para ela não ancorar a sua nota.</li>
+          <li><strong>Avalie cada pilar isoladamente.</strong> Cuidado com o efeito halo: um pilar muito forte (ou fraco) tende a contaminar a nota dos demais.</li>
+          <li><strong>Registre o "porquê" na Síntese:</strong> o que você viu, o que faltou e o que faria a nota subir. Isso orienta o 2D e o acompanhamento.</li>
+        </ul>
+      </div>
+      <div style="padding:0 22px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="crit-pil-nao-mostrar" ${_critPilOptOut()?'checked':''}> Não abrir automaticamente</label>
+        <button onclick="_critPilFechar()" style="background:linear-gradient(135deg,#1a5e3a,#267a4e);border:none;color:#fff;border-radius:10px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Entendi, avaliar pilares →</button>
+      </div>
+    </div>`;
+  ov.addEventListener('click',ev=>{ if(ev.target===ov) _critPilFechar(); });
+  document.body.appendChild(ov);
+}
+let _critPilVistoSessao=false;
+function _critPilOptOut(){ try{ return localStorage.getItem('enedes_crit_pilares_optout')==='1'; }catch(_){ return false; } }
+function _critPilFechar(){
+  const chk=document.getElementById('crit-pil-nao-mostrar');
+  try{ localStorage.setItem('enedes_crit_pilares_optout', chk&&chk.checked?'1':'0'); }catch(_){}
+  document.getElementById('crit-pil-overlay')?.remove();
+}
+// Abre automaticamente 1x por sessão, ao chegar na Sala dos Pilares (consultores/equipe)
+function _critPilAuto(){
+  if(isEmpreend() || _critPilVistoSessao || _critPilOptOut()) return;
+  if(!document.getElementById('pilares-box')) return;
+  _critPilVistoSessao=true;
+  setTimeout(()=>{ if(!document.getElementById('popup-fase-overlay')) mostrarCriteriosPilares(); else _critPilVistoSessao=false; }, 400);
 }
 
 function onEstagioChange(est){
@@ -5051,6 +5166,7 @@ function onEstagioChange(est){
   if(el){
     el.innerHTML = rP0();
     bindP();
+    _critPilAuto();
     // Bloco extra Ideação — aguarda DOM estabilizar
     if(est === 'Ideação'){
       setTimeout(()=>{
