@@ -1538,6 +1538,11 @@ async function doLogin(){
     const users=getUsers();
     const ph=hashSenha(p);
     const found=users.find(x=>x.usuario===u && (x.senha===ph || x.senha===p));
+    if(found && found.ativo===false){
+      btn.textContent='Entrar →'; btn.disabled=false;
+      le.style.display='block'; le.textContent='Usuário inativo. Procure a coordenação da ENEDES.';
+      return;
+    }
     if(found){
       if(found.senha===p){ found.senha=ph; saveUsers(users).catch(()=>{}); }
       PERFIL=found.perfil; USER_NAME=found.usuario;
@@ -1566,11 +1571,46 @@ function showApp(){
 // ===== FUNÇÕES DE NAVEGAÇÃO =====
 let _ALL_DATA_LOADED = false;
 
+// ===== EMPREENDEDOR: resolve APENAS o próprio atendimento (nunca de terceiros) =====
+// 1º vínculo explícito (empreendedor_usuario); fallback só com identificador único
+// (CPF/CNPJ ou e-mail) ou nome quando houver um único registro compatível.
+function _resolverRecEmpreendedor(data){
+  data = data || [];
+  const usuarioLogado = getUsers().find(u=>u.usuario===USER_NAME) || null;
+  const _norm = s => (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+  const emailUser = (usuarioLogado?.email||'').toLowerCase().trim();
+  const nomeUser = _norm(usuarioLogado?.nome);
+  let meu = data.find(r=>r.empreendedor_usuario===USER_NAME) || null;
+  if(!meu && usuarioLogado){
+    // Registros já vinculados a OUTRO usuário nunca são candidatos
+    const livres = data.filter(r=>!r.empreendedor_usuario);
+    const forte = livres.filter(r=>
+      _docsMatch(r, usuarioLogado) ||
+      (emailUser && r.email && r.email.toLowerCase().trim()===emailUser));
+    const candidatos = forte.length ? forte : livres.filter(r=>nomeUser && r.nome && _norm(r.nome)===nomeUser);
+    meu = candidatos.length===1 ? candidatos[0] : null;
+    if(meu && meu.id){
+      meu.empreendedor_usuario = USER_NAME;
+      fetch(SU+'/rest/v1/atendimentos_5d?id=eq.'+meu.id,{
+        method:'PATCH',headers:{...SB_HEADERS,'Prefer':'return=minimal'},
+        body:JSON.stringify({empreendedor_usuario:USER_NAME})
+      }).catch(console.error);
+    }
+  }
+  return meu;
+}
+
 async function loadData(){
   try{
     const r = await fetch(SU+'/rest/v1/atendimentos_5d?select=*&order=created_at.desc', {headers:SB_HEADERS});
     if(r.ok){
-      const data = await r.json();
+      let data = await r.json();
+      // Empreendedor só mantém em memória o PRÓPRIO atendimento
+      if(isEmpreend()){
+        try{ await loadUsers(); }catch(_){}
+        const meu = _resolverRecEmpreendedor(data);
+        data = meu ? [meu] : [];
+      }
       ALL = data;
       _ALL_DATA_LOADED = true;
       return;
@@ -1610,6 +1650,7 @@ function buildNav(){
     if(canConfig()) views.push({id:'configuracoes', label:'⚙️ Config'});
   } else {
     views.push({id:'painel', label:'Meu Painel'});
+    views.push({id:'fase1', label:'📋 Fase 1 — Meu Plano'});
     views.push({id:'fase2', label:'Acompanhamento Fase 2'});
   }
   if(!isEmpreend()) views.push({id:'portal_enedes', label:'📅 Portal ENEDES'});
@@ -1638,6 +1679,12 @@ async function showView(view){
       if(atendimentoNaoEfetivado()) return;
     }
   }
+  // === Controle de acesso por perfil ===
+  if(isEmpreend() && !['painel','fase1','fase2','ferramentas'].includes(view)){
+    view = 'painel';
+  }
+  if((view==='usuarios' || view==='backup') && !canManageUsers()){ sa('e','⚠️ Acesso restrito ao Coordenador Geral.'); return; }
+  if(view==='novo' && !canEdit()){ sa('e','⚠️ Seu perfil não pode criar atendimentos.'); return; }
   currentView = view;
   // atualiza botão ativo no nav
   document.querySelectorAll('#h-nav button').forEach(b => b.classList.remove('active'));
@@ -1663,6 +1710,7 @@ async function showView(view){
     renderConfiguracoes();
   }
   else if(view === 'painel') { await renderEmpPainel(); }
+  else if(view === 'fase1')  { await abrirFase1Empreendedor(); }
   else if(view === 'fase2')  {
     await loadUsers().catch(()=>{});
     // Garante selRec populado para coord/consul
@@ -1680,6 +1728,27 @@ async function showView(view){
   else if(view === 'portal_enedes') { renderPortalEnedes(); }
 }
 
+
+// ===== EMPREENDEDOR: abre a Fase 1 (5D) do PRÓPRIO atendimento para ver/editar =====
+async function abrirFase1Empreendedor(){
+  if(!isEmpreend()) return;
+  const main=document.getElementById('app-main');
+  main.innerHTML='<div class="ld"><div class="spin"></div><br>Carregando seu plano…</div>';
+  await loadData();
+  const meu = _resolverRecEmpreendedor(ALL);
+  if(!meu || !meu.id){
+    main.innerHTML=`<div class="emp-no-prog" style="margin-top:24px;">
+      <div style="font-size:36px;margin-bottom:12px;">📋</div>
+      <div style="font-weight:800;font-size:15px;margin-bottom:6px;color:var(--navy);">Nenhum atendimento vinculado ainda</div>
+      <div style="font-size:13px;color:var(--muted);">Seu consultor ainda não vinculou seu perfil a um atendimento. Entre em contato com a ENEDES.</div>
+    </div>`;
+    return;
+  }
+  selRec = meu;
+  cp = 0; F = nf();
+  for(let k=0;k<5;k++) _popupVisto[k]=true; // pop-ups orientativos são para o consultor
+  editarAtendimento();
+}
 
 // ===== TELA DE CONFIGURAÇÕES (contextos de ação) — apenas Coord Geral =====
 function renderConfiguracoes(){
@@ -2105,6 +2174,15 @@ function _sbClean(obj){
 }
 
 async function saveData(rec, editIndex){
+  if(isEmpreend()){
+    const alvo = (editIndex!==undefined && editIndex>=0) ? ALL[editIndex] : null;
+    if(!alvo || !alvo.id || alvo.empreendedor_usuario!==USER_NAME){
+      throw new Error('Permissão negada: o empreendedor só pode alterar o próprio plano.');
+    }
+    // Campos de controle da equipe não são alterados pelo empreendedor
+    rec = {...rec};
+    ['mentor','vinculado_programa','empreendedor_usuario'].forEach(k=>delete rec[k]);
+  }
   // Salvamento 100% Supabase, com até 4 tentativas em caso de rede instável.
   rec = _sbClean(rec); // '' -> null (evita erro de tipo em data/número/booleano)
   let ultimoErro='', ultimoDetalhe='', ultimoStatus='';
@@ -2331,13 +2409,17 @@ function filtrarUsuarios(){
 }
 
 // PATCH de um único usuário no Supabase (mais leve que salvar todos)
-async function _patchUserUnico(u){
+async function _patchUserUnico(u, incluirSenha){
   const CAMPOS_U=['perfil','nome','programa','email','cnpj','telefone','cpf','ativo','supervisor'];
   const _pp={};
   CAMPOS_U.forEach(k=>{ if(u[k]!==undefined) _pp[k]=u[k]; });
+  if(incluirSenha) _pp.senha_hash = u.senha;
   try{
-    await fetch(SU+'/rest/v1/usuarios_5d?usuario=eq.'+encodeURIComponent(u.usuario),{method:'PATCH',headers:{...SB_HEADERS,'Prefer':'return=minimal'},body:JSON.stringify(_pp)});
-  }catch(e){ console.error('[_patchUserUnico]',e); }
+    const res = await sbEscreve('PATCH', SU+'/rest/v1/usuarios_5d?usuario=eq.'+encodeURIComponent(u.usuario), _pp);
+    if(!res.ok){ console.error('[_patchUserUnico]', res.status, res.erro); return false; }
+    if(res.removidas && res.removidas.length) console.warn('[_patchUserUnico] colunas ignoradas:', res.removidas.join(', '));
+    return true;
+  }catch(e){ console.error('[_patchUserUnico]',e); return false; }
 }
 
 // Abre modal para editar o cadastro de um usuário
@@ -2368,7 +2450,22 @@ function editarUsuario(i){
           <div class="fg" style="margin:0;"><label class="lbl">E-mail</label><input class="inp" id="eu-email" value="${e(u.email||'')}" placeholder="email@exemplo.com"></div>
           <div class="fg" style="margin:0;"><label class="lbl">CNPJ / Identificador</label><input class="inp" id="eu-cnpj" value="${e(u.cnpj||'')}" placeholder="00.000.000/0001-00"></div>
           <div class="fg" style="margin:0;"><label class="lbl">Telefone</label><input class="inp" id="eu-tel" value="${e(u.telefone||'')}" placeholder="(61) 9 0000-0000"></div>
+          <div class="fg" style="margin:0;"><label class="lbl">CPF</label><input class="inp" id="eu-cpf" value="${e(u.cpf||'')}" placeholder="000.000.000-00"
+            oninput="this.value=this.value.replace(/\D/g,'').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4').substring(0,14)"></div>
+          <div class="fg" style="margin:0;"><label class="lbl">Situação</label>
+            <select class="inp" id="eu-ativo"><option value="1" ${u.ativo===false?'':'selected'}>Ativo</option><option value="0" ${u.ativo===false?'selected':''}>Inativo</option></select></div>
           <div class="fg" style="margin:0;grid-column:1/-1;display:${u.perfil==='apoio_tec'?'block':'none'};" id="eu-sup-wrap"><label class="lbl">Supervisor (Apoio Técnico)</label><input class="inp" id="eu-sup" value="${e(u.supervisor||'')}" placeholder="Nome do consultor supervisor"></div>
+        </div>
+        <div style="margin-top:16px;border:1.5px solid #fde68a;background:#fffbeb;border-radius:10px;padding:14px;">
+          <div style="font-size:13px;font-weight:800;color:#92400e;margin-bottom:8px;">🔑 Trocar senha</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="fg" style="margin:0;"><label class="lbl" style="display:flex;justify-content:space-between;align-items:center;">Nova senha
+              <button type="button" onclick="(()=>{const adj=['verde','forte','rapido','novo','bom','vivo','real','ativo'],sub=['negocio','ideia','plano','meta','acao','foco','rota','chave'];const v=adj[Math.floor(Math.random()*adj.length)]+sub[Math.floor(Math.random()*sub.length)]+Math.floor(10+Math.random()*90);document.getElementById('eu-senha').value=v;document.getElementById('eu-senha2').value=v;})()" style="font-size:10px;font-weight:700;color:var(--green);background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:2px 8px;cursor:pointer;font-family:inherit;">Gerar</button></label>
+              <input class="inp" type="text" id="eu-senha" placeholder="deixe em branco para manter" autocomplete="new-password" style="font-family:monospace;"></div>
+            <div class="fg" style="margin:0;"><label class="lbl">Confirmar nova senha</label>
+              <input class="inp" type="text" id="eu-senha2" placeholder="repita a nova senha" autocomplete="new-password" style="font-family:monospace;"></div>
+          </div>
+          <div style="font-size:11px;color:#92400e;margin-top:6px;">Mínimo de 4 caracteres. Anote e repasse ao usuário — a senha não pode ser consultada depois.</div>
         </div>
         <div style="font-size:11px;color:var(--muted);margin-top:12px;background:var(--soft);padding:8px 12px;border-radius:8px;">O nome de usuário (login) não pode ser alterado, pois é o identificador do cadastro no sistema.</div>
         <div id="eu-err" style="display:none;background:#fff5f5;color:#e53e3e;border-radius:8px;padding:8px 12px;margin-top:10px;font-size:12px;"></div>
@@ -2383,11 +2480,23 @@ function editarUsuario(i){
 }
 
 async function salvarEdicaoUsuario(i){
+  if(!canManageUsers()){ alert('Apenas o Coordenador Geral pode editar usuários.'); return; }
   const users=getUsers();
   const u=users[i];
   if(!u) return;
+  const _err=msg=>{ const err=document.getElementById('eu-err'); if(err){err.textContent=msg;err.style.display='block';} };
   const nome=(document.getElementById('eu-nome')?.value||'').trim();
-  if(!nome){ const err=document.getElementById('eu-err'); if(err){err.textContent='⚠️ O nome não pode ficar vazio.';err.style.display='block';} return; }
+  if(!nome){ _err('⚠️ O nome não pode ficar vazio.'); return; }
+  const novaSenha=(document.getElementById('eu-senha')?.value||'');
+  const novaSenha2=(document.getElementById('eu-senha2')?.value||'');
+  let trocouSenha=false;
+  if(novaSenha || novaSenha2){
+    if(novaSenha.length<4){ _err('⚠️ A nova senha precisa ter no mínimo 4 caracteres.'); return; }
+    if(novaSenha!==novaSenha2){ _err('⚠️ As senhas não conferem.'); return; }
+    u.senha=hashSenha(novaSenha); u.senha_hash=u.senha; trocouSenha=true;
+  }
+  u.cpf=(document.getElementById('eu-cpf')?.value||'').trim();
+  u.ativo=(document.getElementById('eu-ativo')?.value||'1')==='1';
   u.nome=nome;
   u.perfil=document.getElementById('eu-perfil')?.value||u.perfil;
   u.programa=(document.getElementById('eu-prog')?.value||'').trim();
@@ -2397,13 +2506,14 @@ async function salvarEdicaoUsuario(i){
   u.supervisor=(document.getElementById('eu-sup')?.value||'').trim();
   // Atualiza cache + localStorage
   USERS_CACHE=users; try{ _lsSave(users); }catch(_){}
-  await _patchUserUnico(u);
+  const okPatch = await _patchUserUnico(u, trocouSenha);
+  if(!okPatch){ _err('❌ Não foi possível gravar no banco. Verifique a conexão e tente novamente.'); return; }
   document.getElementById('edituser-overlay')?.remove();
   renderUsuarios();
   // Toast de confirmação
   const toast=document.createElement('div');
   toast.style.cssText='position:fixed;bottom:28px;right:28px;z-index:99999;background:linear-gradient(135deg,#0d2a1a,#1a5e3a);color:#fff;padding:14px 22px;border-radius:12px;font-size:14px;font-weight:700;box-shadow:0 16px 40px rgba(0,0,0,.25);';
-  toast.innerHTML='✅ Cadastro atualizado!';
+  toast.innerHTML= trocouSenha ? '✅ Cadastro e senha atualizados!' : '✅ Cadastro atualizado!';
   document.body.appendChild(toast);
   setTimeout(()=>{toast.style.transition='opacity .4s';toast.style.opacity='0';setTimeout(()=>toast.remove(),400);},2500);
 }
@@ -4268,12 +4378,20 @@ function renderForm(){
     <div class="prog" id="prg"></div>
     <button id="fab-salvar" onclick="salvarProgresso(this)" title="Salvar o progresso atual no Supabase"><span class="fab-ico">💾</span> Salvar</button>`;
   rPB(); rPH(); rPC(); rNav(); rPrg(); atualizarBotaoVincProg();
+  if(isEmpreend()){
+    const tb=document.getElementById('bnt-voltar-lista-topo');
+    if(tb){ tb.textContent='← Meu Painel'; tb.title='Voltar ao seu painel'; }
+    const vb=document.getElementById('vinc-prog-bar'); if(vb) vb.remove();
+    const ph=document.getElementById('ph-hdr');
+    if(ph) ph.insertAdjacentHTML('beforebegin','<div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#92400e;">📋 <strong>Seu plano de negócios — Fase 1.</strong> Você pode revisar e atualizar as informações. Clique em <strong>💾 Salvar</strong> para gravar as alterações.</div>');
+  }
 }
 
 // Mostra/oculta o botão "Vincular ao Programa 12 Meses" conforme o atendimento já foi salvo
 function atualizarBotaoVincProg(){
   const bar=document.getElementById('vinc-prog-bar');
   if(!bar) return;
+  if(isEmpreend()){ bar.style.display='none'; return; }
   const rec = (F._editIndex>=0 && ALL[F._editIndex]) ? ALL[F._editIndex] : null;
   const salvo = !!(rec && rec.id);
   const jaVinc = !!(rec && rec.vinculado_programa);
@@ -4309,7 +4427,7 @@ function vincularProgramaAtual(){
 // Volta direto à lista de atendimentos de qualquer fase do 5D.
 // A guarda em showView cuida de avisar/salvar caso ainda seja rascunho.
 function voltarParaLista(){
-  showView('lista');
+  showView(isEmpreend() ? 'painel' : 'lista');
 }
 
 function rPB(){
@@ -4370,7 +4488,7 @@ function rNav(){
   const bk=document.getElementById('bbk'),nt=document.getElementById('bnt');
   const cs=["#2d6a4f","#1d3557","#7b2d8b","#e07a5f","#1a6b6b"];
   bk.textContent=cp===0?'Cancelar':'← Etapa anterior';
-  bk.onclick=()=>{if(cp===0)showView('lista');else{cp--;renderForm();}};
+  bk.onclick=()=>{if(cp===0)showView(isEmpreend()?'painel':'lista');else{cp--;renderForm();}};
   const ultima = ultimaFaseDisponivel();
   // Se ainda há fase disponível à frente → "Próxima etapa"; senão → "Salvar Atendimento"
   if(cp < ultima){
@@ -6600,6 +6718,7 @@ function radarChart(id,obj){const k=Object.keys(obj),v=Object.values(obj);new Ch
 
 // ===== MODAL VINCULAÇÃO PROGRAMA 12 MESES =====
 function mostrarModalVinculacao(rec){
+  if(isEmpreend()) return; // vinculação é decisão da equipe ENEDES
   document.getElementById('mv-nome').textContent=rec.nome||'Empreendedor';
   document.getElementById('mv-neg').textContent=(rec.negocio||'')+(rec.segmento?' · '+rec.segmento:'');
   const mvC=document.getElementById('mv-consultor');
@@ -6757,35 +6876,8 @@ async function renderEmpPainel(){
   await loadData();
   const data=ALL;
   const usuarioLogado = getUsers().find(u=>u.usuario===USER_NAME) || null;
-  // Normaliza texto para comparação (remove acentos, espaços extras e caixa)
-  const _norm = s => (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
-  const cpfUser = (usuarioLogado?.cpf||'').replace(/\D/g,'');
-  const cnpjUser = (usuarioLogado?.cnpj||'').replace(/\D/g,'');
-  const emailUser = (usuarioLogado?.email||'').toLowerCase().trim();
-  const nomeUser = _norm(usuarioLogado?.nome);
-  // Segurança: primeiro usa o vínculo explícito. Fallback só é permitido quando
-  // há um identificador único; nunca lista registros de outros empreendedores.
-  let meu = data.find(r=>r.empreendedor_usuario===USER_NAME) || null;
-  if(!meu){
-    const candidatos = data.filter(r=>
-      _docsMatch(r, usuarioLogado) ||
-      (emailUser && r.email && r.email.toLowerCase().trim()===emailUser) ||
-      (nomeUser && r.nome && _norm(r.nome)===nomeUser)
-    );
-    // Nome isolado não é suficiente quando há mais de um registro compatível.
-    const identificadorForte = data.filter(r=>
-      _docsMatch(r, usuarioLogado) ||
-      (emailUser && r.email && r.email.toLowerCase().trim()===emailUser)
-    );
-    meu = identificadorForte.length===1 ? identificadorForte[0] : (candidatos.length===1 ? candidatos[0] : null);
-    if(meu && meu.id){
-      meu.empreendedor_usuario = USER_NAME;
-      fetch(SU+'/rest/v1/atendimentos_5d?id=eq.'+meu.id,{
-        method:'PATCH',headers:{...SB_HEADERS,'Prefer':'return=minimal'},
-        body:JSON.stringify({empreendedor_usuario:USER_NAME})
-      }).catch(console.error);
-    }
-  }
+  // Segurança: somente o próprio atendimento (ver _resolverRecEmpreendedor)
+  const meu = _resolverRecEmpreendedor(data);
   const todos = meu ? data.filter(r=>r.empreendedor_usuario===USER_NAME) : [];
   _empMeuRec = meu; // disponibiliza somente o próprio registro
 
@@ -7076,23 +7168,7 @@ async function renderFase2() {
   let meu = null;
   if (isEmpreend()) {
     if (!ALL.length) { try { await loadData(); } catch(e){} }
-    const usuarioLogado = getUsers().find(u => u.usuario === USER_NAME);
-    const cpfUser = (usuarioLogado?.cpf||'').replace(/\D/g,'');
-    const cnpjUser = (usuarioLogado?.cnpj||'').replace(/\D/g,'');
-    meu = ALL.find(r =>
-      r.empreendedor_usuario === USER_NAME ||
-      _docsMatch(r, usuarioLogado) ||
-      (usuarioLogado?.email && r.email && r.email.toLowerCase() === usuarioLogado.email.toLowerCase()) ||
-      (usuarioLogado?.nome && r.nome && r.nome.toLowerCase() === usuarioLogado.nome.toLowerCase())
-    ) || null;
-    // Auto-vincula se encontrou mas ainda não tem empreendedor_usuario
-    if(meu && !meu.empreendedor_usuario && meu.id){
-      meu.empreendedor_usuario = USER_NAME;
-      fetch(SU+'/rest/v1/atendimentos_5d?id=eq.'+meu.id,{
-        method:'PATCH',headers:{...SB_HEADERS,'Prefer':'return=minimal'},
-        body:JSON.stringify({empreendedor_usuario:USER_NAME})
-      }).catch(console.error);
-    }
+    meu = _resolverRecEmpreendedor(ALL);
   } else {
     // Coord/consul: usa o registro selecionado ou o mais recente vinculado
     meu = selRec || null;
