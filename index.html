@@ -2761,6 +2761,17 @@ async function loadAndRenderDash(){
   renderDashFiltrado(ALL);
 }
 
+function dashSetInterno(v){
+  let el=document.getElementById('df-interno');
+  if(!el){ // perfis sem painel de filtros: campo oculto (recriado a cada render)
+    el=document.createElement('input'); el.type='hidden'; el.id='df-interno'; document.getElementById('app-main').appendChild(el);
+  }
+  el.value=v;
+  const tipoSel=document.getElementById('dash-rel-tipo')?.value;
+  renderDashFiltrado(ALL);
+  if(tipoSel){ const t=document.getElementById('dash-rel-tipo'); if(t) t.value=tipoSel; }
+}
+
 function limparDashFiltros(){
   document.querySelectorAll('[id^="df-"]').forEach(el=>{
     if(el.tagName==='SELECT') el.value='';
@@ -2807,28 +2818,9 @@ function renderDashFiltrado(dataFull){
   const fInterno=document.getElementById('df-interno')?.value||'';
 
   let data=base;
-  if(fC) data=data.filter(r=>r.mentor===fC);
-  if(fK) data=data.filter(r=>r.campus===fK);
-  if(fE) data=data.filter(r=>r.estagio===fE);
-  if(fD) data=data.filter(r=>r.data_mentoria&&r.data_mentoria>=fD);
-  if(fA) data=data.filter(r=>r.data_mentoria&&r.data_mentoria<=fA);
-  if(fCtx) data=data.filter(r=>r.acao_contexto===fCtx);
-  if(fSeg) data=data.filter(r=>r.segmento===fSeg);
-  if(fGen) data=data.filter(r=>r.genero===fGen);
-  if(fFx) data=data.filter(r=>r.faixa_etaria===fFx);
-  if(fEsc) data=data.filter(r=>r.escolaridade===fEsc);
-  if(fFmt) data=data.filter(r=>r.formato===fFmt);
-  if(fRenda) data=data.filter(r=>r.fonte_renda===fRenda);
-  if(fCap) data=data.filter(r=>r.interesse_capacitacao===fCap);
-  if(fModalidade) data=data.filter(r=>r.modalidade_pref===fModalidade);
-  if(fCanal) data=data.filter(r=>{
-    if(!r.canais_venda) return false;
-    try{const arr=typeof r.canais_venda==='string'?JSON.parse(r.canais_venda):r.canais_venda;return Array.isArray(arr)&&arr.includes(fCanal);}catch(e){return false;}
-  });
-  if(fTipoResp) data=data.filter(r=>respTipo(r)===fTipoResp);
-  if(fInterno) data=data.filter(r=>fInterno==='sim'?!!r.empreendedor_interno:!r.empreendedor_interno);
-
-  const hasFilter=fC||fK||fE||fD||fA||fCtx||fSeg||fGen||fFx||fEsc||fFmt||fRenda||fCap||fModalidade||fCanal||fTipoResp||fInterno;
+  _REL_FILTROS.forEach(([suf,,fn])=>{ const v=document.getElementById('df-'+suf)?.value||''; if(v) data=data.filter(r=>fn(r,v)); });
+  const fProg=document.getElementById('df-programa')?.value||'';
+  const hasFilter=fC||fK||fE||fD||fA||fCtx||fSeg||fGen||fFx||fEsc||fFmt||fRenda||fCap||fModalidade||fCanal||fTipoResp||fInterno||fProg;
   const total=data.length;
   const mentors=cnt(data,'mentor');
   const _mkeys=Object.keys(mentors);
@@ -2992,24 +2984,59 @@ function renderDashFiltrado(dataFull){
       </div>
     </div>`:``}
 
+    ${!showFiltros?`<input type="hidden" id="df-interno" value="${e(fInterno)}">`:''}
     ${canExport()?`
-    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:16px;">📥</span>
+    <div style="background:#fff;border:1.5px solid #cdd9ee;border-radius:14px;padding:18px 20px;margin-bottom:18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:22px;">📑</span>
+          <div>
+            <div style="font-size:15px;font-weight:800;color:#1d3557;">Central de Relatórios</div>
+            <div style="font-size:11px;color:#64748b;">Escolha o público e o tipo de relatório. Os filtros do dashboard acima também são aplicados.</div>
+          </div>
+        </div>
+        <div style="font-size:12px;font-weight:700;color:#1d3557;background:#eef3fb;padding:6px 12px;border-radius:20px;">${total} registro${total!==1?'s':''} no recorte</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;align-items:end;">
         <div>
-          <div style="font-size:13px;font-weight:700;color:#1d3557;">Exportar dados filtrados</div>
-          <div style="font-size:11px;color:#64748b;">${total} registro${total!==1?'s':''} com os filtros aplicados</div>
+          <label style="${lblStyle}">Público (vínculo IFB)</label>
+          <div style="display:flex;border:1px solid #dde3ec;border-radius:9px;overflow:hidden;">
+            ${[['','Todos'],['sim','🎓 Interno IFB'],['nao','Externo']].map(([v,l])=>`<button type="button" onclick="dashSetInterno('${v}')" style="flex:1;padding:8px 6px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${fInterno===v?'#1d3557':'#fff'};color:${fInterno===v?'#fff':'#1d3557'};">${l}</button>`).join('')}
+          </div>
+        </div>
+        <div>
+          <label style="${lblStyle}">Programa 12 Meses</label>
+          <select id="df-programa" onchange="renderDashFiltrado(ALL)" style="${selStyle}">
+            <option value="">Todos</option>
+            <option value="sim" ${fProg==='sim'?'selected':''}>Vinculados ao programa</option>
+            <option value="nao" ${fProg==='nao'?'selected':''}>Não vinculados</option>
+          </select>
+        </div>
+        <div style="grid-column:span 2;min-width:0;">
+          <label style="${lblStyle}">Tipo de relatório</label>
+          <select id="dash-rel-tipo" style="${selStyle}">
+            <optgroup label="Novos">
+              <option value="comparativo">📊 Comparativo Interno IFB × Externo</option>
+              <option value="interno_lista">🎓 Empreendedores por vínculo IFB (listas separadas)</option>
+              <option value="perfil">👥 Perfil do público (socioeconômico)</option>
+              <option value="segmentos">🏷️ Segmentos, estágios e formatos</option>
+            </optgroup>
+            <optgroup label="Padrão">
+              <option value="lista">📄 Lista de atendimentos</option>
+              <option value="consultores">👤 Desempenho por consultor</option>
+              <option value="pilares">🎯 Diagnóstico dos 4 pilares</option>
+              <option value="programa">🌱 Programa 12 Meses</option>
+              <option value="encaminhamentos">🚀 Encaminhamentos</option>
+              <option value="retornos">📅 Agenda de retornos</option>
+            </optgroup>
+          </select>
         </div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button onclick="gerarRelPDF('lista')" style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:#1d3557;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📄 PDF</button>
-        <button onclick="gerarRelCSV('lista')" style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📊 CSV</button>
-        <button onclick="gerarRelExcel('lista')" style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:#1e6b2e;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📗 Excel</button>
-        <div style="width:1px;background:#e2e8f0;margin:0 2px;"></div>
-        <button onclick="gerarRelPDF('consultores')" style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:#4a5568;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">👥 Consultores PDF</button>
-        <button onclick="gerarRelExcel('consultores')" style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:#4a5568;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">👥 Excel</button>
-        <div style="width:1px;background:#e2e8f0;margin:0 2px;"></div>
-        <button onclick="showView('relatorios')" style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:#f1f5f9;color:#1d3557;border:1.5px solid #dde3ec;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Mais relatórios →</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center;">
+        <button onclick="gerarRelPDF(document.getElementById('dash-rel-tipo').value)" style="padding:9px 18px;background:#1d3557;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📄 Gerar PDF</button>
+        <button onclick="gerarRelExcel(document.getElementById('dash-rel-tipo').value)" style="padding:9px 18px;background:#1e6b2e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📗 Excel</button>
+        <button onclick="gerarRelCSV(document.getElementById('dash-rel-tipo').value)" style="padding:9px 18px;background:#2d6a4f;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📊 CSV</button>
+        <span style="font-size:11px;color:#64748b;margin-left:4px;">Filtros ativos: <strong>${e(_relDescFiltros())}</strong></span>
       </div>
     </div>`:``}
 
@@ -3266,38 +3293,153 @@ async function loadAndRenderRelatorios(){
     </div>`;
 }
 
+// ===== Filtros de relatório (Relatórios rf-* ou Dashboard df-*) =====
+const _REL_FILTROS = [
+  // [sufixo, rótulo, campo/regra]
+  ['consultor','Consultor', (r,v)=>r.mentor===v],
+  ['campus','Campus', (r,v)=>r.campus===v],
+  ['estagio','Estágio', (r,v)=>r.estagio===v],
+  ['de','De', (r,v)=>r.data_mentoria&&r.data_mentoria>=v],
+  ['ate','Até', (r,v)=>r.data_mentoria&&r.data_mentoria<=v],
+  ['contexto','Contexto', (r,v)=>r.acao_contexto===v],
+  ['segmento','Segmento', (r,v)=>r.segmento===v],
+  ['genero','Gênero', (r,v)=>r.genero===v],
+  ['faixa','Faixa etária', (r,v)=>r.faixa_etaria===v],
+  ['escolaridade','Escolaridade', (r,v)=>r.escolaridade===v],
+  ['formato','Formato', (r,v)=>r.formato===v],
+  ['renda','Fonte de renda', (r,v)=>r.fonte_renda===v],
+  ['cap','Interesse em capacitação', (r,v)=>r.interesse_capacitacao===v],
+  ['modalidade','Modalidade', (r,v)=>r.modalidade_pref===v],
+  ['canal','Canal de venda', (r,v)=>{ try{const arr=typeof r.canais_venda==='string'?JSON.parse(r.canais_venda):r.canais_venda;return Array.isArray(arr)&&arr.includes(v);}catch(e){return false;} }],
+  ['tiporesp','Tipo de responsável', (r,v)=>respTipo(r)===v],
+  ['interno','Vínculo IFB', (r,v)=>v==='sim'?!!r.empreendedor_interno:!r.empreendedor_interno],
+  ['programa','Programa 12M', (r,v)=>v==='sim'?!!r.vinculado_programa:!r.vinculado_programa],
+];
+function _relValorFiltro(suf){
+  return document.getElementById('rf-'+suf)?.value || document.getElementById('df-'+suf)?.value || '';
+}
 function getRelData(){
-  const base=atendimentosVisiveis(ALL);
-  // Lê filtros da tela Relatórios (rf-) ou do Dashboard (df-) — o que estiver ativo
-  const fC=document.getElementById('rf-consultor')?.value||document.getElementById('df-consultor')?.value||'';
-  const fK=document.getElementById('rf-campus')?.value||document.getElementById('df-campus')?.value||'';
-  const fE=document.getElementById('rf-estagio')?.value||document.getElementById('df-estagio')?.value||'';
-  const fD=document.getElementById('rf-de')?.value||document.getElementById('df-de')?.value||'';
-  const fA=document.getElementById('rf-ate')?.value||document.getElementById('df-ate')?.value||'';
-  const fCtx=document.getElementById('df-contexto')?.value||'';
-  const fSeg=document.getElementById('df-segmento')?.value||'';
-  const fGen=document.getElementById('df-genero')?.value||'';
-  const fFx=document.getElementById('df-faixa')?.value||'';
-  const fFmt=document.getElementById('df-formato')?.value||'';
-  const fTipoResp=document.getElementById('rf-tiporesp')?.value||document.getElementById('df-tiporesp')?.value||'';
-  const fInterno=document.getElementById('rf-interno')?.value||document.getElementById('df-interno')?.value||'';
-  let d=base;
-  if(fC) d=d.filter(r=>r.mentor===fC);
-  if(fK) d=d.filter(r=>r.campus===fK);
-  if(fE) d=d.filter(r=>r.estagio===fE);
-  if(fD) d=d.filter(r=>r.data_mentoria&&r.data_mentoria>=fD);
-  if(fA) d=d.filter(r=>r.data_mentoria&&r.data_mentoria<=fA);
-  if(fCtx) d=d.filter(r=>r.acao_contexto===fCtx);
-  if(fSeg) d=d.filter(r=>r.segmento===fSeg);
-  if(fGen) d=d.filter(r=>r.genero===fGen);
-  if(fFx) d=d.filter(r=>r.faixa_etaria===fFx);
-  if(fFmt) d=d.filter(r=>r.formato===fFmt);
-  if(fTipoResp) d=d.filter(r=>respTipo(r)===fTipoResp);
-  if(fInterno) d=d.filter(r=>fInterno==='sim'?!!r.empreendedor_interno:!r.empreendedor_interno);
+  let d=atendimentosVisiveis(ALL);
+  _REL_FILTROS.forEach(([suf,,fn])=>{ const v=_relValorFiltro(suf); if(v) d=d.filter(r=>fn(r,v)); });
   return d;
+}
+// Texto com os filtros aplicados (vai no cabeçalho dos relatórios)
+function _relDescFiltros(){
+  const partes=[];
+  _REL_FILTROS.forEach(([suf,lbl])=>{
+    const el=document.getElementById('rf-'+suf)||document.getElementById('df-'+suf);
+    const v=_relValorFiltro(suf); if(!v) return;
+    let txt=v;
+    if(el && el.tagName==='SELECT'){ const o=[...el.options].find(x=>x.value===v); if(o) txt=o.textContent.trim(); }
+    else if(suf==='de'||suf==='ate'){ txt=v.split('-').reverse().join('/'); }
+    partes.push(lbl+': '+txt);
+  });
+  return partes.length ? partes.join(' · ') : 'Sem filtros (todos os atendimentos)';
+}
+
+// ===== NOVOS RELATÓRIOS (multi-seção) =====
+const _REL_NOVOS = ['perfil','comparativo','segmentos','interno_lista'];
+function _pct(n,t){ return t? (n*100/t).toFixed(1).replace('.',',')+'%' : '0%'; }
+function _distrib(data, campo, rotuloVazio){
+  const m={}; data.forEach(r=>{ const v=(r[campo]||'').toString().trim()||rotuloVazio||'Não informado'; m[v]=(m[v]||0)+1; });
+  return Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([k,n])=>[k,n,_pct(n,data.length)]);
+}
+function _mediaNum(arr){ const v=arr.map(Number).filter(x=>x>0); return v.length?(v.reduce((a,b)=>a+b,0)/v.length).toFixed(1).replace('.',','):'—'; }
+function _relNovo(tipo, data){
+  const H=['Categoria','Qtd.','%'];
+  if(tipo==='perfil'){
+    return {titulo:'Perfil do Público Atendido', secoes:[
+      {titulo:'Vínculo institucional', header:H, rows:[['🎓 Interno IFB',data.filter(r=>r.empreendedor_interno).length,_pct(data.filter(r=>r.empreendedor_interno).length,data.length)],['Externo',data.filter(r=>!r.empreendedor_interno).length,_pct(data.filter(r=>!r.empreendedor_interno).length,data.length)]]},
+      {titulo:'Gênero', header:H, rows:_distrib(data,'genero')},
+      {titulo:'Faixa etária', header:H, rows:_distrib(data,'faixa_etaria')},
+      {titulo:'Escolaridade', header:H, rows:_distrib(data,'escolaridade')},
+      {titulo:'Fonte de renda', header:H, rows:_distrib(data,'fonte_renda')},
+      {titulo:'Tempo de atuação', header:H, rows:_distrib(data,'tempo_atuacao')},
+      {titulo:'Faturamento (faixa)', header:H, rows:_distrib(data,'faturamento_faixa')},
+      {titulo:'Campus', header:H, rows:_distrib(data,'campus')},
+    ]};
+  }
+  if(tipo==='segmentos'){
+    return {titulo:'Atendimentos por Segmento e Estágio', secoes:[
+      {titulo:'Segmento', header:H, rows:_distrib(data,'segmento')},
+      {titulo:'Estágio do negócio', header:H, rows:_distrib(data,'estagio')},
+      {titulo:'Formato do atendimento', header:H, rows:_distrib(data,'formato')},
+    ]};
+  }
+  if(tipo==='comparativo'){
+    const gI=data.filter(r=>r.empreendedor_interno), gE=data.filter(r=>!r.empreendedor_interno);
+    const ind=(g)=>{
+      const nps=g.filter(r=>r.nps).map(r=>r.nps);
+      return [g.length, _pct(g.length,data.length), _mediaNum(nps),
+        _mediaNum(g.map(r=>r.pilar_produto_nota)), _mediaNum(g.map(r=>r.pilar_vendas_nota)),
+        _mediaNum(g.map(r=>r.pilar_financas_nota)), _mediaNum(g.map(r=>r.pilar_gestao_nota)),
+        g.filter(r=>r.vinculado_programa).length, g.filter(r=>r.retorno_data).length];
+    };
+    const lbl=['Atendimentos','% do total','NPS médio','Pilar Produto (média)','Pilar Vendas (média)','Pilar Finanças (média)','Pilar Gestão (média)','No Programa 12M','Com retorno agendado'];
+    const vi=ind(gI), ve=ind(gE);
+    const cruz=(campo)=>{
+      const cats=[...new Set(data.map(r=>(r[campo]||'').toString().trim()||'Não informado'))];
+      return cats.map(c=>{ const f=r=>((r[campo]||'').toString().trim()||'Não informado')===c;
+        return [c, gI.filter(f).length, gE.filter(f).length, gI.filter(f).length+gE.filter(f).length]; })
+        .sort((a,b)=>b[3]-a[3]);
+    };
+    return {titulo:'Comparativo: Interno IFB × Externo', secoes:[
+      {titulo:'Indicadores gerais', header:['Indicador','🎓 Interno IFB','Externo'], rows:lbl.map((l,i)=>[l,vi[i],ve[i]])},
+      {titulo:'Estágio do negócio', header:['Estágio','Interno IFB','Externo','Total'], rows:cruz('estagio')},
+      {titulo:'Segmento', header:['Segmento','Interno IFB','Externo','Total'], rows:cruz('segmento')},
+      {titulo:'Gênero', header:['Gênero','Interno IFB','Externo','Total'], rows:cruz('genero')},
+      {titulo:'Faixa etária', header:['Faixa etária','Interno IFB','Externo','Total'], rows:cruz('faixa_etaria')},
+    ]};
+  }
+  if(tipo==='interno_lista'){
+    const hdr=['Nome','Negócio','CPF/CNPJ','E-mail','Telefone','Segmento','Estágio','Consultor','Campus','Data','Prog. 12M'];
+    const lin=r=>[r.nome,r.negocio,r.cnpj,r.email,r.telefone,r.segmento,r.estagio,r.mentor,r.campus,r.data_mentoria,r.vinculado_programa?'Sim':'Não'];
+    return {titulo:'Empreendedores por Vínculo IFB', paisagem:true, secoes:[
+      {titulo:'🎓 Internos IFB ('+data.filter(r=>r.empreendedor_interno).length+')', header:hdr, rows:data.filter(r=>r.empreendedor_interno).map(lin)},
+      {titulo:'Externos ('+data.filter(r=>!r.empreendedor_interno).length+')', header:hdr, rows:data.filter(r=>!r.empreendedor_interno).map(lin)},
+    ]};
+  }
+  return null;
+}
+function _relNovoCSV(tipo){
+  const rel=_relNovo(tipo,getRelData());
+  const linhas=[[rel.titulo],['Filtros: '+_relDescFiltros()],['Total de atendimentos: '+getRelData().length],[]];
+  rel.secoes.forEach(sc=>{ linhas.push([sc.titulo]); linhas.push(sc.header); sc.rows.forEach(r=>linhas.push(r)); linhas.push([]); });
+  const csv=linhas.map(r=>r.map(v=>`"${(v??'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download=`relatorio_${tipo}_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.csv`; a.click(); URL.revokeObjectURL(url);
+}
+function _relNovoExcel(tipo){
+  const data=getRelData(); const rel=_relNovo(tipo,data);
+  try{
+    const wb=XLSX.utils.book_new();
+    const resumo=[[rel.titulo],['Filtros: '+_relDescFiltros()],['Total de atendimentos: '+data.length],['Gerado em: '+new Date().toLocaleDateString('pt-BR')]];
+    const wsR=XLSX.utils.aoa_to_sheet(resumo); wsR['!cols']=[{wch:90}]; XLSX.utils.book_append_sheet(wb,wsR,'Resumo');
+    const usados={};
+    rel.secoes.forEach(sc=>{
+      let nome=sc.titulo.replace(/[\\\/\?\*\[\]:]/g,'').replace(/[^\w\sÀ-ú().-]/g,'').trim().slice(0,28)||'Seção';
+      if(usados[nome]){ usados[nome]++; nome=nome.slice(0,25)+' '+usados[nome]; } else usados[nome]=1;
+      const ws=XLSX.utils.aoa_to_sheet([sc.header,...sc.rows.map(r=>r.map(v=>v??''))]);
+      ws['!cols']=sc.header.map((_,i)=>({wch:i===0?34:16}));
+      XLSX.utils.book_append_sheet(wb,ws,nome);
+    });
+    XLSX.writeFile(wb,`relatorio_${tipo}_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.xlsx`);
+  }catch(err){ alert('Erro ao gerar Excel: '+err.message); }
+}
+function _relNovoHTML(rel){
+  return rel.secoes.map(sc=>`
+    <div style="margin-bottom:18px;page-break-inside:avoid;">
+      <div style="font-size:13px;font-weight:800;color:#1d3557;margin-bottom:6px;border-left:4px solid #2d6a4f;padding-left:8px;">${e(sc.titulo)}</div>
+      ${sc.rows.length?`<table style="width:100%;border-collapse:collapse;font-size:${rel.paisagem?10:11}px;">
+        <thead><tr style="background:#1d3557;color:#fff;">${sc.header.map((h,i)=>`<th style="padding:7px 8px;text-align:${i===0?'left':'center'};">${e(h)}</th>`).join('')}</tr></thead>
+        <tbody>${sc.rows.map((r,i)=>`<tr style="background:${i%2?'#f8fafb':'#fff'};border-bottom:1px solid #eee;">${r.map((v,j)=>`<td style="padding:6px 8px;text-align:${j===0?'left':'center'};${j===0?'font-weight:600;':''}">${e((v??'—').toString()||'—')}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>`:'<div style="font-size:11px;color:#94a3b8;font-style:italic;">Sem registros.</div>'}
+    </div>`).join('');
 }
 
 function gerarRelCSV(tipo){
+  if(_REL_NOVOS.includes(tipo)) return _relNovoCSV(tipo);
   const data=getRelData();
   let rows=[],header=[];
   if(tipo==='lista'){
@@ -3334,6 +3476,7 @@ function gerarRelCSV(tipo){
 }
 
 function gerarRelExcel(tipo){
+  if(_REL_NOVOS.includes(tipo)) return _relNovoExcel(tipo);
   const data=getRelData();
   let rows=[],header=[];
   const hoje=new Date().toLocaleDateString('pt-BR');
@@ -3377,6 +3520,7 @@ function gerarRelExcel(tipo){
 
 function gerarRelPDF(tipo){
   const data=getRelData();
+  const _novo = _REL_NOVOS.includes(tipo) ? _relNovo(tipo,data) : null;
   const logoSrc=(()=>{try{return document.querySelector('.hlo img').src;}catch(e){return '';}})();
   let titulo='',subtitulo='',html='',orient='portrait';
   const hoje=new Date().toLocaleDateString('pt-BR');
@@ -3500,6 +3644,12 @@ function gerarRelPDF(tipo){
   }
 
   const logoHTML=logoSrc?`<img src="${logoSrc}" style="height:48px;width:auto;" alt="ENEDES">`:'<div style="font-size:18px;font-weight:900;color:#fff;letter-spacing:2px;">ENEDES</div>';
+  if(_novo){
+    titulo=_novo.titulo; subtitulo=`${data.length} atendimentos · Gerado em ${hoje}`;
+    orient=_novo.paisagem?'landscape':'portrait'; html=_relNovoHTML(_novo);
+  }
+  // Faixa com os filtros aplicados (em todos os relatórios)
+  html = `<div style="background:#f1f5f9;border:1px solid #dde3ec;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:11px;color:#334155;"><strong>Filtros aplicados:</strong> ${e(_relDescFiltros())}</div>` + html;
   const docHTML=`<div style="font-family:Arial,sans-serif;width:100%;color:#1a2035;background:#fff;">
     <div style="background:linear-gradient(135deg,#1d3557,#2d4a8a);padding:22px 28px;display:flex;align-items:center;justify-content:space-between;">
       <div style="display:flex;align-items:center;gap:14px;">
