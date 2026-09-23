@@ -1415,26 +1415,23 @@ async function doCadastro(){
       const cnpjEmp=(document.getElementById('c-cnpj-emp')?.value||'').trim().replace(/\D/g,'');
       const supervisor=(document.getElementById('c-supervisor')?.value||'').trim();
       if(perfil==='apoio_tec' && !supervisor){ce.style.display='block';ce.textContent='Selecione o consultor supervisor.';return;}
+      const consultorEmp=(document.getElementById('c-consultor-emp')?.value||'').trim();
+      if(perfil==='empreend' && !consultorEmp){ce.style.display='block';ce.textContent='Selecione o consultor que vai te acompanhar.';return;}
       const novoUser={usuario:user,senha:hashSenha(senha),perfil,nome,programa:'',email};
       if(cpf) novoUser.cpf=cpf;
       if(cnpjEmp) novoUser.cnpj=cnpjEmp;
       if(supervisor) novoUser.supervisor=supervisor;
+      if(perfil==='empreend') novoUser.supervisor=consultorEmp; // consultor escolhido
       const addResult = await addUser(novoUser);
-      // Se empreendedor, tenta vincular ao atendimento pelo CPF/CNPJ/email
+      // Se empreendedor: vincula com segurança a um atendimento existente (se houver)
       if(perfil==='empreend'){
+        PERFIL=perfil; USER_NAME=user;
         await loadData();
-        let rec = null;
-        if(cpf) rec = ALL.find(r=>(r.cpf||'').replace(/\D/g,'')=== cpf);
-        if(!rec && cnpjEmp) rec = ALL.find(r=>(r.cnpj||'').replace(/\D/g,'')=== cnpjEmp);
-        if(!rec && email) rec = ALL.find(r=>r.email && r.email.toLowerCase()===email.toLowerCase());
-        if(!rec) rec = ALL.find(r=>r.nome && r.nome.toLowerCase()===nome.toLowerCase());
-        if(rec && rec.id){
-          rec.empreendedor_usuario = user;
-          await fetch(SU+'/rest/v1/atendimentos_5d?id=eq.'+rec.id,{
-            method:'PATCH',headers:{...SB_HEADERS,'Prefer':'return=minimal'},
-            body:JSON.stringify({empreendedor_usuario:user})
-          });
-          ALL[ALL.indexOf(rec)] = {...rec, empreendedor_usuario:user};
+        const rec = ALL[0];
+        const nomeCons = _consultorEscolhidoEmp();
+        if(rec && rec.id && !rec.mentor && nomeCons){
+          rec.mentor = nomeCons;
+          fetch(SU+'/rest/v1/atendimentos_5d?id=eq.'+rec.id,{method:'PATCH',headers:{...SB_HEADERS,'Prefer':'return=minimal'},body:JSON.stringify({mentor:nomeCons})}).catch(console.error);
         }
       }
       PERFIL=perfil; USER_NAME=user;
@@ -1457,6 +1454,17 @@ async function _carregarConsultoresCadastro(){
     const cons = r.ok ? await r.json() : [];
     sel.innerHTML = '<option value="">— selecione o consultor —</option>'
       + cons.map(c=>`<option value="${e(c.usuario)}">${e(c.nome)} (${e(c.usuario)})</option>`).join('');
+  }catch(_){ sel.innerHTML='<option value="">— não foi possível carregar —</option>'; }
+}
+
+async function _carregarConsultoresEmpCadastro(){
+  const sel=document.getElementById('c-consultor-emp');
+  if(!sel || sel.options.length>1) return;
+  try{
+    const r=await fetch(SU+'/rest/v1/usuarios_5d?perfil=eq.consul&select=usuario,nome,ativo&order=nome.asc',{headers:SB_HEADERS});
+    const cons = (r.ok ? await r.json() : []).filter(c=>c.ativo!==false && c.nome);
+    sel.innerHTML = '<option value="">— selecione o consultor —</option>'
+      + cons.map(c=>`<option value="${e(c.usuario)}">${e(c.nome)}</option>`).join('');
   }catch(_){ sel.innerHTML='<option value="">— não foi possível carregar —</option>'; }
 }
 
@@ -1492,8 +1500,14 @@ function toggleCamposEmpCadastro(val){
           <label class="llb">CNPJ <span style="color:rgba(255,255,255,.5);font-size:11px;">— se preferir vincular pelo CNPJ do negócio</span></label>
           <input class="lin" type="text" id="c-cnpj-emp" placeholder="00.000.000/0001-00">
         </div>
+        <div class="lfl" style="margin-top:4px;">
+          <label class="llb">Consultor(a) que vai te acompanhar <span style="color:#e53e3e;font-size:11px;">*obrigatório</span></label>
+          <select class="lin" id="c-consultor-emp" style="color:#0d1b2e;"><option value="">Carregando consultores…</option></select>
+          <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:5px;">Seu atendimento da Fase 1 ficará vinculado a este consultor. Você pode trocar depois, na Fase 1.</div>
+        </div>
       `;
     }
+    if(val==='empreend') _carregarConsultoresEmpCadastro();
   }
   // resetar todos os radio não-empreend para resetar o campo ao trocar
   document.querySelectorAll('input[name="c-perfil"]').forEach(r=>{
@@ -1598,6 +1612,27 @@ function _resolverRecEmpreendedor(data){
     }
   }
   return meu;
+}
+
+// ===== Consultores disponíveis para o empreendedor escolher =====
+function _listaConsultores(){
+  return getUsers().filter(u=>u.perfil==='consul' && u.ativo!==false && u.nome)
+    .sort((a,b)=>(a.nome||'').localeCompare(b.nome||'','pt-BR'));
+}
+// Nome do consultor escolhido pelo empreendedor logado (guardado em usuarios_5d.supervisor)
+function _consultorEscolhidoEmp(){
+  const me=getUsers().find(u=>u.usuario===USER_NAME)||{};
+  if(!me.supervisor) return '';
+  const c=getUsers().find(u=>u.usuario===me.supervisor);
+  return c ? (c.nome||c.usuario) : me.supervisor;
+}
+// Grava a escolha do consultor no cadastro do empreendedor
+async function _salvarConsultorEscolhidoEmp(nomeConsultor){
+  const c=_listaConsultores().find(x=>x.nome===nomeConsultor);
+  const me=getUsers().find(u=>u.usuario===USER_NAME);
+  if(!c||!me||me.supervisor===c.usuario) return;
+  me.supervisor=c.usuario; try{ _lsSave(getUsers()); }catch(_){}
+  try{ await sbEscreve('PATCH', SU+'/rest/v1/usuarios_5d?usuario=eq.'+encodeURIComponent(USER_NAME), {supervisor:c.usuario}); }catch(e){ console.error(e); }
 }
 
 async function loadData(){
@@ -1736,18 +1771,25 @@ async function abrirFase1Empreendedor(){
   main.innerHTML='<div class="ld"><div class="spin"></div><br>Carregando seu plano…</div>';
   await loadData();
   const meu = _resolverRecEmpreendedor(ALL);
+  for(let k=0;k<5;k++) _popupVisto[k]=true; // pop-ups orientativos são para o consultor
   if(!meu || !meu.id){
-    main.innerHTML=`<div class="emp-no-prog" style="margin-top:24px;">
-      <div style="font-size:36px;margin-bottom:12px;">📋</div>
-      <div style="font-weight:800;font-size:15px;margin-bottom:6px;color:var(--navy);">Nenhum atendimento vinculado ainda</div>
-      <div style="font-size:13px;color:var(--muted);">Seu consultor ainda não vinculou seu perfil a um atendimento. Entre em contato com a ENEDES.</div>
-    </div>`;
+    // Ainda não há atendimento: o próprio empreendedor inicia a Fase 1
+    const me = getUsers().find(u=>u.usuario===USER_NAME)||{};
+    selRec = null; cp = 0; F = nf(); _vincOffered = true; _f5RestoredInfo = null;
+    F._editIndex = -1;
+    F.empreendedor_usuario = USER_NAME;
+    F.nome = me.nome||''; F.email = me.email||''; F.telefone = me.telefone||'';
+    F.cnpj = me.cnpj||me.cpf||'';
+    F.mentor = _consultorEscolhidoEmp();
+    F.data = new Date().toISOString().slice(0,10);
+    await carregarContextos();
+    renderForm();
     return;
   }
   selRec = meu;
   cp = 0; F = nf();
-  for(let k=0;k<5;k++) _popupVisto[k]=true; // pop-ups orientativos são para o consultor
   editarAtendimento();
+  if(!F.mentor) F.mentor = _consultorEscolhidoEmp();
 }
 
 // ===== TELA DE CONFIGURAÇÕES (contextos de ação) — apenas Coord Geral =====
@@ -2176,12 +2218,17 @@ function _sbClean(obj){
 async function saveData(rec, editIndex){
   if(isEmpreend()){
     const alvo = (editIndex!==undefined && editIndex>=0) ? ALL[editIndex] : null;
-    if(!alvo || !alvo.id || alvo.empreendedor_usuario!==USER_NAME){
-      throw new Error('Permissão negada: o empreendedor só pode alterar o próprio plano.');
+    rec = {...rec};
+    if(alvo){
+      if(!alvo.id || alvo.empreendedor_usuario!==USER_NAME)
+        throw new Error('Permissão negada: o empreendedor só pode alterar o próprio plano.');
+    } else if(ALL.some(r=>r.empreendedor_usuario===USER_NAME)){
+      throw new Error('Você já possui um plano na Fase 1. Recarregue a página.');
     }
     // Campos de controle da equipe não são alterados pelo empreendedor
-    rec = {...rec};
-    ['mentor','vinculado_programa','empreendedor_usuario'].forEach(k=>delete rec[k]);
+    delete rec.vinculado_programa;
+    rec.empreendedor_usuario = USER_NAME;
+    if(!rec.mentor || rec.mentor===USER_NAME) throw new Error('Selecione o consultor que vai te acompanhar.');
   }
   // Salvamento 100% Supabase, com até 4 tentativas em caso de rede instável.
   rec = _sbClean(rec); // '' -> null (evita erro de tipo em data/número/booleano)
@@ -4743,7 +4790,16 @@ function rPrecificacaoExtra(){
 function rP0(){
   // Coord geral e apoio_tec podem editar o consultor; coord_prog vê readonly; consultor vê seu próprio nome readonly
   let mentorField;
-  if(isConsul()){
+  if(isEmpreend()){
+    const cons=_listaConsultores();
+    const naLista=cons.some(c=>c.nome===F.mentor);
+    mentorField=`<div class="fg"><label class="lbl">Consultor(a) que vai te acompanhar <span style="color:#e53e3e;">*</span></label>
+      <select class="inp" id="f5" onchange="F.mentor=this.value">
+        <option value="">— selecione o consultor —</option>
+        ${cons.map(c=>`<option value="${e(c.nome)}" ${F.mentor===c.nome?'selected':''}>${e(c.nome)}</option>`).join('')}
+        ${F.mentor&&!naLista?`<option value="${e(F.mentor)}" selected>${e(F.mentor)}</option>`:''}
+      </select></div>`;
+  } else if(isConsul()){
     mentorField=`<div class="fg"><label class="lbl">Consultor(a) Responsável</label><input type="text" id="f5" value="${e(F.mentor)}" readonly style="background:#f0f9f4;color:var(--green);font-weight:700"></div>`;
   } else if(isCoordGeral() || isApoioTec()){
     mentorField=`<div class="fg"><label class="lbl">Consultor(a) Responsável</label><input type="text" id="f5" value="${e(F.mentor)}" placeholder="Nome do consultor"></div>`;
@@ -5878,6 +5934,8 @@ async function descartarRascunho(){
 // qualquer momento, sem abrir o modal de vinculação e sem criar duplicatas.
 async function salvarProgresso(btnEl){
   if(!F.nome.trim()){ sa('e','⚠️ Informe ao menos o nome do empreendedor antes de salvar.'); return; }
+  if(isEmpreend() && !F.mentor){ sa('e','⚠️ Selecione o consultor que vai te acompanhar (etapa 1D).'); return; }
+  if(isEmpreend()) _salvarConsultorEscolhidoEmp(F.mentor);
   const btn = btnEl || document.getElementById('bnt-salvar-topo');
   const orig = btn ? btn.innerHTML : '';
   if(btn){ btn.disabled=true; btn.innerHTML='⏳ Salvando…'; }
@@ -6031,6 +6089,8 @@ function buildRecFromF(){
 
 async function salvar(){
   if(!F.nome.trim()){sa('e','⚠️ Informe o nome do empreendedor.');return;}
+  if(isEmpreend() && !F.mentor){ sa('e','⚠️ Selecione o consultor que vai te acompanhar (etapa 1D).'); return; }
+  if(isEmpreend()) _salvarConsultorEscolhidoEmp(F.mentor);
   const btn=document.getElementById('bnt');
   btn.textContent='Salvando...';btn.disabled=true;
   // Build SMART meta if not manual
@@ -6900,8 +6960,9 @@ async function renderEmpPainel(){
       </div>
       <div class="emp-no-prog">
         <div style="font-size:36px;margin-bottom:12px;">📋</div>
-        <div style="font-weight:800;font-size:15px;margin-bottom:6px;color:var(--navy);">Nenhum atendimento vinculado ainda</div>
-        <div style="font-size:13px;color:var(--muted);">Seu consultor ainda não vinculou seu perfil a um atendimento. Entre em contato com a ENEDES.</div>
+        <div style="font-weight:800;font-size:15px;margin-bottom:6px;color:var(--navy);">Seu plano ainda não foi iniciado</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">${_consultorEscolhidoEmp()?'Consultor(a) escolhido(a): <strong>'+e(_consultorEscolhidoEmp())+'</strong>. ':''}Comece preenchendo a Fase 1 — seu consultor acompanhará o que você registrar.</div>
+        <button onclick="showView('fase1')" style="background:linear-gradient(135deg,#0d2a1a,#1a5e3a);color:#fff;border:none;border-radius:10px;padding:11px 22px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Iniciar minha Fase 1 →</button>
       </div>`;
     return;
   }
