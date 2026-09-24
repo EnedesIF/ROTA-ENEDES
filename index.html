@@ -1766,6 +1766,20 @@ async function showView(view){
 
 
 // ===== EMPREENDEDOR: abre a Fase 1 (5D) do PRÓPRIO atendimento para ver/editar =====
+// Procura no BANCO (não só na memória) algum atendimento com o mesmo CPF/CNPJ/e-mail
+// do empreendedor logado. Evita que ele crie um atendimento duplicado.
+async function _empAtendimentoExistenteNoServidor(){
+  const me=getUsers().find(u=>u.usuario===USER_NAME)||{};
+  const email=(me.email||'').toLowerCase().trim();
+  try{
+    const r=await fetch(SU+'/rest/v1/atendimentos_5d?select=*',{headers:SB_HEADERS});
+    if(!r.ok) return {erro:true};
+    const lista=await r.json();
+    return lista.find(x=> x.empreendedor_usuario===USER_NAME || _docsMatch(x,me) ||
+      (email && x.email && x.email.toLowerCase().trim()===email)) || null;
+  }catch(_){ return {erro:true}; }
+}
+
 async function abrirFase1Empreendedor(){
   if(!isEmpreend()) return;
   const main=document.getElementById('app-main');
@@ -1774,6 +1788,16 @@ async function abrirFase1Empreendedor(){
   const meu = _resolverRecEmpreendedor(ALL);
   for(let k=0;k<5;k++) _popupVisto[k]=true; // pop-ups orientativos são para o consultor
   if(!meu || !meu.id){
+    // Antes de permitir criar, confirma no banco que não existe atendimento com os mesmos dados
+    const existente = await _empAtendimentoExistenteNoServidor();
+    if(existente){
+      main.innerHTML=`<div class="emp-no-prog" style="margin-top:24px;">
+        <div style="font-size:36px;margin-bottom:12px;">🔗</div>
+        <div style="font-weight:800;font-size:15px;margin-bottom:6px;color:var(--navy);">${existente.erro?'Não foi possível verificar seus dados agora':'Já existe um atendimento com seus dados'}</div>
+        <div style="font-size:13px;color:var(--muted);">${existente.erro?'Tente novamente em alguns instantes.':'Para não duplicar seu plano, peça ao seu consultor ou à coordenação da ENEDES para vincular esse atendimento à sua conta.'}</div>
+      </div>`;
+      return;
+    }
     // Ainda não há atendimento: o próprio empreendedor inicia a Fase 1
     const me = getUsers().find(u=>u.usuario===USER_NAME)||{};
     selRec = null; cp = 0; F = nf(); _vincOffered = true; _f5RestoredInfo = null;
@@ -2225,6 +2249,9 @@ async function saveData(rec, editIndex){
         throw new Error('Permissão negada: o empreendedor só pode alterar o próprio plano.');
     } else if(ALL.some(r=>r.empreendedor_usuario===USER_NAME)){
       throw new Error('Você já possui um plano na Fase 1. Recarregue a página.');
+    } else {
+      const ex = await _empAtendimentoExistenteNoServidor();
+      if(ex) throw new Error(ex.erro ? 'Não foi possível verificar duplicidade. Tente novamente.' : 'Já existe um atendimento com seus dados. Peça ao consultor para vinculá-lo à sua conta.');
     }
     // Campos de controle da equipe não são alterados pelo empreendedor
     delete rec.vinculado_programa;
