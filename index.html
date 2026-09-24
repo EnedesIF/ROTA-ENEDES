@@ -2900,7 +2900,7 @@ function renderDashFiltrado(dataFull){
         <div><label style="${lblStyle}">Tipo de responsável</label>
           <select id="df-tiporesp" onchange="renderDashFiltrado(ALL)" style="${selStyle}"><option value="">Todos</option><option value="Consultor" ${fTipoResp==='Consultor'?'selected':''}>Consultor</option><option value="Apoio Técnico" ${fTipoResp==='Apoio Técnico'?'selected':''}>Apoio Técnico</option></select></div>
         <div><label style="${lblStyle}">Vínculo IFB</label>
-          <select id="df-interno" onchange="renderDashFiltrado(ALL)" style="${selStyle}"><option value="">Todos</option><option value="sim" ${fInterno==='sim'?'selected':''}>🎓 Interno IFB (aluno)</option><option value="nao" ${fInterno==='nao'?'selected':''}>Externo</option></select></div>
+          <select id="df-interno" onchange="renderDashFiltrado(ALL)" style="${selStyle}"><option value="">Todos</option>${VINCULOS.map(o=>`<option value="${o.v}" ${fInterno===o.v?'selected':''}>${o.curto}</option>`).join('')}</select></div>
         <div><label style="${lblStyle}">Campus</label>
           <select id="df-campus" onchange="renderDashFiltrado(ALL)" style="${selStyle}"><option value="">Todos</option>${optK}</select></div>
         <div><label style="${lblStyle}">Contexto de Captação</label>
@@ -2999,10 +2999,10 @@ function renderDashFiltrado(dataFull){
         <div style="font-size:12px;font-weight:700;color:#1d3557;background:#eef3fb;padding:6px 12px;border-radius:20px;">${total} registro${total!==1?'s':''} no recorte</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;align-items:end;">
-        <div>
-          <label style="${lblStyle}">Público (vínculo IFB)</label>
+        <div style="grid-column:span 2;min-width:0;">
+          <label style="${lblStyle}">Público (vínculo do atendimento)</label>
           <div style="display:flex;border:1px solid #dde3ec;border-radius:9px;overflow:hidden;">
-            ${[['','Todos'],['sim','🎓 Interno IFB'],['nao','Externo']].map(([v,l])=>`<button type="button" onclick="dashSetInterno('${v}')" style="flex:1;padding:8px 6px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${fInterno===v?'#1d3557':'#fff'};color:${fInterno===v?'#fff':'#1d3557'};">${l}</button>`).join('')}
+            ${[['','Todos'],...VINCULOS.map(o=>[o.v,o.curto])].map(([v,l])=>`<button type="button" onclick="dashSetInterno('${v}')" style="flex:1;padding:8px 6px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${fInterno===v?'#1d3557':'#fff'};color:${fInterno===v?'#fff':'#1d3557'};">${l}</button>`).join('')}
           </div>
         </div>
         <div>
@@ -3017,8 +3017,8 @@ function renderDashFiltrado(dataFull){
           <label style="${lblStyle}">Tipo de relatório</label>
           <select id="dash-rel-tipo" style="${selStyle}">
             <optgroup label="Novos">
-              <option value="comparativo">📊 Comparativo Interno IFB × Externo</option>
-              <option value="interno_lista">🎓 Empreendedores por vínculo IFB (listas separadas)</option>
+              <option value="comparativo">📊 Comparativo por vínculo (Interno × Pedagógico × Externo)</option>
+              <option value="interno_lista">🎓 Empreendedores por vínculo (listas separadas)</option>
               <option value="perfil">👥 Perfil do público (socioeconômico)</option>
               <option value="segmentos">🏷️ Segmentos, estágios e formatos</option>
             </optgroup>
@@ -3216,7 +3216,7 @@ async function loadAndRenderRelatorios(){
           </select></div>
         <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">Vínculo IFB</label>
           <select id="rf-interno" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;">
-            <option value="">Todos</option><option value="sim">🎓 Interno IFB (aluno)</option><option value="nao">Externo</option>
+            <option value="">Todos</option>${VINCULOS.map(o=>`<option value="${o.v}">${o.curto}</option>`).join('')}
           </select></div>`:''}
         <div><label style="font-size:11px;color:#888;display:block;margin-bottom:4px;">Estágio</label>
           <select id="rf-estagio" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;">
@@ -3294,6 +3294,19 @@ async function loadAndRenderRelatorios(){
     </div>`;
 }
 
+// ===== VÍNCULO DO ATENDIMENTO: interno IFB / uso pedagógico / externo =====
+const VINCULOS = [
+  {v:'interno',    lbl:'Empreendedor interno IFB', curto:'🎓 Interno IFB',     ico:'🎓', desc:'aluno(a) ou servidor(a) do IFB com negócio próprio', cor:'#0a4a7a', bg:'#e8f2fc', bd:'#7fb2e0'},
+  {v:'pedagogico', lbl:'Uso pedagógico',           curto:'📚 Uso pedagógico',  ico:'📚', desc:'atendimento realizado como atividade de ensino/aula', cor:'#7b2d8b', bg:'#f5edf8', bd:'#c9a3d6'},
+  {v:'externo',    lbl:'Empreendedor externo',     curto:'🏪 Externo',          ico:'🏪', desc:'empreendedor da comunidade, sem vínculo com o IFB', cor:'#2d6a4f', bg:'#eef8f2', bd:'#9fd1b4'},
+];
+function vinculoDe(r){
+  const t=(r&&r.tipo_vinculo)||'';
+  if(t==='interno'||t==='pedagogico'||t==='externo') return t;
+  return (r&&r.empreendedor_interno) ? 'interno' : 'externo'; // registros antigos
+}
+function vinculoInfo(v){ return VINCULOS.find(x=>x.v===v)||VINCULOS[2]; }
+
 // ===== Filtros de relatório (Relatórios rf-* ou Dashboard df-*) =====
 const _REL_FILTROS = [
   // [sufixo, rótulo, campo/regra]
@@ -3313,7 +3326,7 @@ const _REL_FILTROS = [
   ['modalidade','Modalidade', (r,v)=>r.modalidade_pref===v],
   ['canal','Canal de venda', (r,v)=>{ try{const arr=typeof r.canais_venda==='string'?JSON.parse(r.canais_venda):r.canais_venda;return Array.isArray(arr)&&arr.includes(v);}catch(e){return false;} }],
   ['tiporesp','Tipo de responsável', (r,v)=>respTipo(r)===v],
-  ['interno','Vínculo IFB', (r,v)=>v==='sim'?!!r.empreendedor_interno:!r.empreendedor_interno],
+  ['interno','Vínculo', (r,v)=>{ if(v==='sim') v='interno'; if(v==='nao') v='externo'; return vinculoDe(r)===v; }],
   ['programa','Programa 12M', (r,v)=>v==='sim'?!!r.vinculado_programa:!r.vinculado_programa],
 ];
 function _relValorFiltro(suf){
@@ -3350,7 +3363,7 @@ function _relNovo(tipo, data){
   const H=['Categoria','Qtd.','%'];
   if(tipo==='perfil'){
     return {titulo:'Perfil do Público Atendido', secoes:[
-      {titulo:'Vínculo institucional', header:H, rows:[['🎓 Interno IFB',data.filter(r=>r.empreendedor_interno).length,_pct(data.filter(r=>r.empreendedor_interno).length,data.length)],['Externo',data.filter(r=>!r.empreendedor_interno).length,_pct(data.filter(r=>!r.empreendedor_interno).length,data.length)]]},
+      {titulo:'Vínculo do atendimento', header:H, rows:VINCULOS.map(o=>{const n=data.filter(r=>vinculoDe(r)===o.v).length;return [o.curto,n,_pct(n,data.length)];})},
       {titulo:'Gênero', header:H, rows:_distrib(data,'genero')},
       {titulo:'Faixa etária', header:H, rows:_distrib(data,'faixa_etaria')},
       {titulo:'Escolaridade', header:H, rows:_distrib(data,'escolaridade')},
@@ -3368,7 +3381,7 @@ function _relNovo(tipo, data){
     ]};
   }
   if(tipo==='comparativo'){
-    const gI=data.filter(r=>r.empreendedor_interno), gE=data.filter(r=>!r.empreendedor_interno);
+    const grupos=VINCULOS.map(o=>({o, g:data.filter(r=>vinculoDe(r)===o.v)}));
     const ind=(g)=>{
       const nps=g.filter(r=>r.nps).map(r=>r.nps);
       return [g.length, _pct(g.length,data.length), _mediaNum(nps),
@@ -3377,28 +3390,29 @@ function _relNovo(tipo, data){
         g.filter(r=>r.vinculado_programa).length, g.filter(r=>r.retorno_data).length];
     };
     const lbl=['Atendimentos','% do total','NPS médio','Pilar Produto (média)','Pilar Vendas (média)','Pilar Finanças (média)','Pilar Gestão (média)','No Programa 12M','Com retorno agendado'];
-    const vi=ind(gI), ve=ind(gE);
+    const vals=grupos.map(x=>ind(x.g));
+    const cabG=grupos.map(x=>x.o.curto);
     const cruz=(campo)=>{
-      const cats=[...new Set(data.map(r=>(r[campo]||'').toString().trim()||'Não informado'))];
-      return cats.map(c=>{ const f=r=>((r[campo]||'').toString().trim()||'Não informado')===c;
-        return [c, gI.filter(f).length, gE.filter(f).length, gI.filter(f).length+gE.filter(f).length]; })
-        .sort((a,b)=>b[3]-a[3]);
+      const norm=r=>(r[campo]||'').toString().trim()||'Não informado';
+      const cats=[...new Set(data.map(norm))];
+      return cats.map(c=>{ const cs=grupos.map(x=>x.g.filter(r=>norm(r)===c).length); return [c,...cs,cs.reduce((a,b)=>a+b,0)]; })
+        .sort((a,b)=>b[b.length-1]-a[a.length-1]);
     };
-    return {titulo:'Comparativo: Interno IFB × Externo', secoes:[
-      {titulo:'Indicadores gerais', header:['Indicador','🎓 Interno IFB','Externo'], rows:lbl.map((l,i)=>[l,vi[i],ve[i]])},
-      {titulo:'Estágio do negócio', header:['Estágio','Interno IFB','Externo','Total'], rows:cruz('estagio')},
-      {titulo:'Segmento', header:['Segmento','Interno IFB','Externo','Total'], rows:cruz('segmento')},
-      {titulo:'Gênero', header:['Gênero','Interno IFB','Externo','Total'], rows:cruz('genero')},
-      {titulo:'Faixa etária', header:['Faixa etária','Interno IFB','Externo','Total'], rows:cruz('faixa_etaria')},
+    return {titulo:'Comparativo por Vínculo: Interno IFB × Uso Pedagógico × Externo', secoes:[
+      {titulo:'Indicadores gerais', header:['Indicador',...cabG], rows:lbl.map((l,i)=>[l,...vals.map(v=>v[i])])},
+      {titulo:'Estágio do negócio', header:['Estágio',...cabG,'Total'], rows:cruz('estagio')},
+      {titulo:'Segmento', header:['Segmento',...cabG,'Total'], rows:cruz('segmento')},
+      {titulo:'Gênero', header:['Gênero',...cabG,'Total'], rows:cruz('genero')},
+      {titulo:'Faixa etária', header:['Faixa etária',...cabG,'Total'], rows:cruz('faixa_etaria')},
     ]};
   }
   if(tipo==='interno_lista'){
     const hdr=['Nome','Negócio','CPF/CNPJ','E-mail','Telefone','Segmento','Estágio','Consultor','Campus','Data','Prog. 12M'];
     const lin=r=>[r.nome,r.negocio,r.cnpj,r.email,r.telefone,r.segmento,r.estagio,r.mentor,r.campus,r.data_mentoria,r.vinculado_programa?'Sim':'Não'];
-    return {titulo:'Empreendedores por Vínculo IFB', paisagem:true, secoes:[
-      {titulo:'🎓 Internos IFB ('+data.filter(r=>r.empreendedor_interno).length+')', header:hdr, rows:data.filter(r=>r.empreendedor_interno).map(lin)},
-      {titulo:'Externos ('+data.filter(r=>!r.empreendedor_interno).length+')', header:hdr, rows:data.filter(r=>!r.empreendedor_interno).map(lin)},
-    ]};
+    return {titulo:'Empreendedores por Vínculo', paisagem:true, secoes:VINCULOS.map(o=>{
+      const g=data.filter(r=>vinculoDe(r)===o.v);
+      return {titulo:o.curto+' ('+g.length+')', header:hdr, rows:g.map(lin)};
+    })};
   }
   return null;
 }
@@ -3444,8 +3458,8 @@ function gerarRelCSV(tipo){
   const data=getRelData();
   let rows=[],header=[];
   if(tipo==='lista'){
-    header=['Nome','Negócio','Telefone','Email','CPF/CNPJ','Segmento','Estágio','Consultor','Tipo Responsável','Interno IFB','Faturamento Base','Campus','Data','NPS','Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão'];
-    rows=data.map(r=>[r.nome,r.negocio,r.telefone,r.email,r.cnpj,r.segmento,r.estagio,r.mentor,respTipo(r),r.empreendedor_interno?'Sim':'Não',r.faturamento_faixa||'',r.campus,r.data_mentoria,r.nps,r.pilar_produto_nota,r.pilar_vendas_nota,r.pilar_financas_nota,r.pilar_gestao_nota]);
+    header=['Nome','Negócio','Telefone','Email','CPF/CNPJ','Segmento','Estágio','Consultor','Tipo Responsável','Vínculo','Faturamento Base','Campus','Data','NPS','Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão'];
+    rows=data.map(r=>[r.nome,r.negocio,r.telefone,r.email,r.cnpj,r.segmento,r.estagio,r.mentor,respTipo(r),vinculoInfo(vinculoDe(r)).lbl,r.faturamento_faixa||'',r.campus,r.data_mentoria,r.nps,r.pilar_produto_nota,r.pilar_vendas_nota,r.pilar_financas_nota,r.pilar_gestao_nota]);
   } else if(tipo==='consultores'){
     header=['Consultor','Tipo','Atendimentos','NPS Médio','Média Pilares','Retornos','Vinculados 12M'];
     const cons=[...new Set(data.map(r=>r.mentor).filter(Boolean))];
@@ -3466,8 +3480,8 @@ function gerarRelCSV(tipo){
     header=['Nome','Negócio','Consultor','Data Vinculação','Segmento','Estágio'];
     rows=data.filter(r=>r.vinculado_programa).map(r=>[r.nome,r.negocio,r.mentor,r.data_vinculacao,r.segmento,r.estagio]);
   } else if(tipo==='pilares'){
-    header=['Nome','Negócio','Consultor','Tipo Responsável','Interno IFB','Produto Nota','Produto Class.','Vendas Nota','Vendas Class.','Finanças Nota','Finanças Class.','Gestão Nota','Gestão Class.'];
-    rows=data.map(r=>[r.nome,r.negocio,r.mentor,respTipo(r),r.empreendedor_interno?'Sim':'Não',r.pilar_produto_nota,r.pilar_produto_classe,r.pilar_vendas_nota,r.pilar_vendas_classe,r.pilar_financas_nota,r.pilar_financas_classe,r.pilar_gestao_nota,r.pilar_gestao_classe]);
+    header=['Nome','Negócio','Consultor','Tipo Responsável','Vínculo','Produto Nota','Produto Class.','Vendas Nota','Vendas Class.','Finanças Nota','Finanças Class.','Gestão Nota','Gestão Class.'];
+    rows=data.map(r=>[r.nome,r.negocio,r.mentor,respTipo(r),vinculoInfo(vinculoDe(r)).lbl,r.pilar_produto_nota,r.pilar_produto_classe,r.pilar_vendas_nota,r.pilar_vendas_classe,r.pilar_financas_nota,r.pilar_financas_classe,r.pilar_gestao_nota,r.pilar_gestao_classe]);
   }
   const csv=[header,...rows].map(r=>r.map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
@@ -3482,8 +3496,8 @@ function gerarRelExcel(tipo){
   let rows=[],header=[];
   const hoje=new Date().toLocaleDateString('pt-BR');
   if(tipo==='lista'){
-    header=['Nome','Negócio','Telefone','Email','CPF/CNPJ','Segmento','Estágio','Consultor','Tipo Responsável','Interno IFB','Faturamento Base','Campus','Data','NPS','Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão'];
-    rows=data.map(r=>[r.nome,r.negocio,r.telefone,r.email,r.cnpj,r.segmento,r.estagio,r.mentor,respTipo(r),r.empreendedor_interno?'Sim':'Não',r.faturamento_faixa||'',r.campus,r.data_mentoria,r.nps,r.pilar_produto_nota,r.pilar_vendas_nota,r.pilar_financas_nota,r.pilar_gestao_nota]);
+    header=['Nome','Negócio','Telefone','Email','CPF/CNPJ','Segmento','Estágio','Consultor','Tipo Responsável','Vínculo','Faturamento Base','Campus','Data','NPS','Pilar Produto','Pilar Vendas','Pilar Finanças','Pilar Gestão'];
+    rows=data.map(r=>[r.nome,r.negocio,r.telefone,r.email,r.cnpj,r.segmento,r.estagio,r.mentor,respTipo(r),vinculoInfo(vinculoDe(r)).lbl,r.faturamento_faixa||'',r.campus,r.data_mentoria,r.nps,r.pilar_produto_nota,r.pilar_vendas_nota,r.pilar_financas_nota,r.pilar_gestao_nota]);
   } else if(tipo==='consultores'){
     header=['Consultor','Tipo','Atendimentos','NPS Médio','Média Pilares','Retornos','Vinculados 12M'];
     const cons=[...new Set(data.map(r=>r.mentor).filter(Boolean))];
@@ -4018,7 +4032,7 @@ function renderDetalhe(){
           ${row("Estágio",r.estagio)}${row("Consultor",r.mentor)}${row("Campus",r.campus)}
           ${row("Desafios",r.desafios)}${row("Formato",r.formato)}
           ${row("Responsável",r.mentor?e(r.mentor)+' · '+respTipo(r):'')}
-          ${r.empreendedor_interno?`<div class="dr" style="grid-column:1/-1;"><div class="dl">Vínculo institucional</div><div class="dv"><span style="background:var(--emp-bg);color:var(--emp-blue);font-weight:700;font-size:12px;padding:3px 12px;border-radius:20px;">🎓 Empreendedor interno IFB</span></div></div>`:''}
+          ${(r.tipo_vinculo||r.empreendedor_interno)?(()=>{const vi=vinculoInfo(vinculoDe(r));return `<div class="dr" style="grid-column:1/-1;"><div class="dl">Vínculo do atendimento</div><div class="dv"><span style="background:${vi.bg};color:${vi.cor};font-weight:700;font-size:12px;padding:3px 12px;border-radius:20px;">${vi.ico} ${vi.lbl}</span></div></div>`;})():''}
           ${r.faturamento_faixa?`<div class="dr" style="grid-column:1/-1;"><div class="dl">💰 Faturamento (linha de base)</div><div class="dv" style="font-weight:800;color:var(--green);">${e(r.faturamento_faixa)}</div></div>`:''}
           ${r.acao_contexto?row("Contexto de Captação",(()=>{const _cx=[...CONTEXTOS_PADRAO,...CONTEXTOS_EXTRAS.map(c=>({id:'extra_'+c.id,nome:c.nome}))];const _f=_cx.find(c=>c.id===r.acao_contexto);return _f?_f.nome:r.acao_contexto;})()):''}         
         </div>
@@ -4128,7 +4142,7 @@ function nf(){return{
   nome:"",negocio:"",cnpj:"",seg:"",data:"",fmt:"",mentor:USER_NAME||'',area:"",campus:"",telefone:"",email:"",est:"",desa:[],desaOutro:"",
   faturamento_faixa:"",
   cnae_codigo:"",cnae_descricao:"",cnae_classe:"",cnae_classe_desc:"",
-  empreendedor_interno:false,
+  empreendedor_interno:false, tipo_vinculo:'',
   pils:{
     "Produto/Serviço":{n:"",c:"",o:"",resps:["","","",""]},
     "Vendas/Marketing":{n:"",c:"",o:"",resps:["","","",""]},
@@ -4328,6 +4342,7 @@ function editarAtendimento(){
   F.desaOutro = r.desafio_outro||'';
   F.faturamento_faixa = r.faturamento_faixa||'';
   F.empreendedor_interno = !!r.empreendedor_interno;
+  F.tipo_vinculo = (r.tipo_vinculo || r.empreendedor_interno!=null && r.empreendedor_interno!==undefined) ? vinculoDe(r) : '';
   F.cnae_codigo=r.cnae_codigo||'';F.cnae_descricao=r.cnae_descricao||'';F.cnae_classe=r.cnae_classe||'';F.cnae_classe_desc=r.cnae_classe_desc||'';
   // Pilares
   const loadPilar = (key, campo) => {
@@ -4495,7 +4510,8 @@ const POPUP_FASES = [
   }
 ];
 
-let _popupVisto = {}; // controla quais popups já foram vistos nesta sessão
+let _popupVisto = {}; // popups já vistos nesta sessão (não reabre ao navegar/clicar)
+function _popupOptOut(i){ try{ return localStorage.getItem('enedes_popup_fase_optout_'+i)==='1'; }catch(_){ return false; } }
 
 function mostrarPopupFase(cp){
   const fase = POPUP_FASES[cp];
@@ -4535,13 +4551,14 @@ function mostrarPopupFase(cp){
       <div style="padding:16px 28px 24px;display:flex;justify-content:flex-end;gap:10px;">
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;cursor:pointer;margin-right:auto;">
           <input type="checkbox" id="popup-nao-mostrar" style="cursor:pointer;">
-          Não mostrar nesta sessão
+          Não mostrar novamente
         </label>
         <button onclick="fecharPopupFase()" style="background:${fase.cor};color:#fff;border:none;border-radius:10px;padding:10px 28px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">
           Entendido, vamos começar →
         </button>
       </div>
     </div>`;
+  overlay.addEventListener('click',ev=>{ if(ev.target===overlay) fecharPopupFase(); });
   document.body.appendChild(overlay);
   // Fechar ao clicar fora
   overlay.addEventListener('click', e => { if(e.target===overlay) fecharPopupFase(); });
@@ -4550,10 +4567,10 @@ function mostrarPopupFase(cp){
 function fecharPopupFase(){
   const naoMostrar = document.getElementById('popup-nao-mostrar')?.checked;
   const overlay = document.getElementById('popup-fase-overlay');
-  if(naoMostrar && overlay){
-    // Descobre qual fase está ativa
-    _popupVisto[cp] = true;
-  }
+  // Fechou = já visto nesta sessão (não reaparece a cada clique/navegação)
+  _popupVisto[cp] = true;
+  // Marcou "Não mostrar novamente" = não aparece mais neste navegador
+  if(naoMostrar){ try{ localStorage.setItem('enedes_popup_fase_optout_'+cp,'1'); }catch(_){} }
   overlay?.remove();
   if(cp===0) _critPilAuto(); // em seguida, critérios da Sala dos Pilares
 }
@@ -4677,7 +4694,8 @@ function rPH(){
     <div><div class="ph-lbl" style="color:${c}">${p.num} · ${p.name}</div>
     <div class="ph-ttl" style="color:${c}">${p.title}</div>
     <div class="ph-obj">${p.obj}</div>
-    <span class="ph-dur2" style="background:${bg};color:${c}">⏱ ${p.dur}</span></div>`;
+    <span class="ph-dur2" style="background:${bg};color:${c}">⏱ ${p.dur}</span>
+    ${!isEmpreend()?`<button type="button" onclick="mostrarPopupFase(cp)" style="margin-left:8px;background:#fff;border:1.5px solid ${c}55;color:${c};border-radius:20px;padding:3px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">💡 Guia do consultor</button>`:''}</div>`;
 }
 
 function rPrg(){
@@ -4723,7 +4741,10 @@ function rPC(){
   if(cp===4)el.innerHTML=rP4();
   bindP();
   // Mostrar popup orientativo ao entrar na fase (respeitando opt-out da sessão)
-  if(!_popupVisto[cp]) setTimeout(()=>mostrarPopupFase(cp), 200);
+  if(!_popupVisto[cp] && !_popupOptOut(cp) && !isEmpreend()){
+    _popupVisto[cp] = true; // garante uma única abertura por sessão
+    setTimeout(()=>mostrarPopupFase(cp), 200);
+  }
 }
 
 // ===== 1D: DIAGNOSTICAR =====
@@ -4998,11 +5019,14 @@ function rP0(){
         </select>
       </div>
       <div class="fg full" style="margin-top:4px;">
-        <label class="ri" style="display:flex;align-items:center;gap:10px;background:${F.empreendedor_interno?'#e8f2fc':'#f8fafb'};border:1.5px solid ${F.empreendedor_interno?'#7fb2e0':'var(--border)'};border-radius:12px;padding:13px 16px;cursor:pointer;transition:all .2s;">
-          <input type="checkbox" id="f-interno" ${F.empreendedor_interno?'checked':''} style="width:18px;height:18px;accent-color:var(--emp-blue);cursor:pointer;">
-          <span style="font-size:14px;font-weight:700;color:var(--emp-blue);">🎓 Empreendedor interno IFB</span>
-          <span style="font-size:12px;color:var(--muted);font-weight:400;">— marque se for aluno(a) da instituição, para separar dos atendimentos externos</span>
-        </label>
+        <label class="lbl">Vínculo do atendimento <span style="color:#e53e3e;">*</span></label>
+        <div id="f-vinculo-box" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">
+          ${VINCULOS.map(o=>{ const on=F.tipo_vinculo===o.v; return `<label class="f-vinc-opt" data-v="${o.v}" style="display:flex;align-items:flex-start;gap:10px;background:${on?o.bg:'#f8fafb'};border:1.5px solid ${on?o.bd:'var(--border)'};border-radius:12px;padding:12px 14px;cursor:pointer;transition:all .2s;">
+            <input type="radio" name="f-vinculo" value="${o.v}" ${on?'checked':''} onchange="setVinculo('${o.v}')" style="width:17px;height:17px;margin-top:2px;accent-color:${o.cor};cursor:pointer;">
+            <span><span style="display:block;font-size:13px;font-weight:700;color:${o.cor};">${o.ico} ${o.lbl}</span>
+            <span style="display:block;font-size:11px;color:var(--muted);margin-top:2px;">${o.desc}</span></span>
+          </label>`; }).join('')}
+        </div>
       </div>
     </div>
     ${rBlocoContexto()}
@@ -5955,7 +5979,7 @@ function bindP(){
     b('f6',v=>F.desaOutro=v);b('f7',v=>F.area=v);b('f8',v=>F.campus=v);
     b('f-tempo',v=>F.tempo_atuacao=v);b('f-pontos',v=>F.pontos_atuacao=v.split(',').map(s=>s.trim()).filter(Boolean));
     const _fat=document.getElementById('f-fat'); if(_fat)_fat.addEventListener('change',ev=>F.faturamento_faixa=ev.target.value);
-    const _int=document.getElementById('f-interno'); if(_int)_int.addEventListener('change',ev=>{F.empreendedor_interno=ev.target.checked; const lbl=ev.target.closest('label'); if(lbl){lbl.style.background=ev.target.checked?'#e8f2fc':'#f8fafb'; lbl.style.borderColor=ev.target.checked?'#7fb2e0':'var(--border)';}});
+    // vínculo: tratado por setVinculo() (radio com onchange)
     // Fecha a lista de CNAE ao clicar fora do bloco
     if(!window._cnaeOutsideBound){ window._cnaeOutsideBound=true; document.addEventListener('click',ev=>{ const box=document.getElementById('f-cnae-results'); const inp=document.getElementById('f-cnae-busca'); if(box&&box.style.display!=='none'&&!box.contains(ev.target)&&ev.target!==inp){ box.style.display='none'; } }); }
     if(F.acao_contexto) bindContextoExtras();
@@ -6041,11 +6065,20 @@ function cAc(){F.acoes.forEach((_,i)=>{const g=id=>{const el=document.getElement
 function addAc(){cAc();F.acoes.push({a:'',c:'',q:'',r:'',ind:''});rPC();}
 function rmAc(i){cAc();F.acoes.splice(i,1);rPC();}
 function sp(k,key,v){F.pils[k][key]=v;rPC();}
+// Seleciona o vínculo sem redesenhar a etapa inteira
+function setVinculo(v){
+  F.tipo_vinculo=v; F.empreendedor_interno=(v==='interno');
+  document.querySelectorAll('.f-vinc-opt').forEach(l=>{
+    const o=vinculoInfo(l.dataset.v), on=l.dataset.v===v;
+    l.style.background=on?o.bg:'#f8fafb'; l.style.borderColor=on?o.bd:'var(--border)';
+  });
+}
 function sg(k,v){F.gut[k]=v;rPC();}
 function sn(n){F.nps=String(n);rPC();}
 
 function nxt(){
   if(cp===0&&!F.nome.trim()){sa('e','⚠️ Informe o nome do empreendedor.');return;}
+  if(cp===0&&!F.tipo_vinculo&&!isEmpreend()){sa('e','⚠️ Selecione o vínculo do atendimento: Interno IFB, Uso pedagógico ou Externo.');document.getElementById('f-vinculo-box')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
   if(cp===0){ try{ _harvestSocio(); }catch(_){} } // captura Perfil Socioeconômico antes de sair da 1D
   ha();cp++;renderForm();
 }
@@ -6276,7 +6309,8 @@ function buildRecFromF(){
     data_mentoria:F.data,formato:F.fmt,mentor:(F.mentor||USER_NAME),area:F.area,campus:F.campus,
     estagio:F.est,desafios:F.desa.join(', '),desafio_outro:F.desaOutro,
     faturamento_faixa:F.faturamento_faixa,
-    empreendedor_interno:!!F.empreendedor_interno,
+    empreendedor_interno:(F.tipo_vinculo ? F.tipo_vinculo==='interno' : !!F.empreendedor_interno),
+    tipo_vinculo:(F.tipo_vinculo||null),
     cnae_codigo:F.cnae_codigo,cnae_descricao:F.cnae_descricao,cnae_classe:F.cnae_classe,cnae_classe_desc:F.cnae_classe_desc,
     // Pilares
     pilar_produto_nota:F.pils['Produto/Serviço'].n,pilar_produto_classe:F.pils['Produto/Serviço'].c,pilar_produto_obs:F.pils['Produto/Serviço'].o,
@@ -6368,7 +6402,8 @@ async function salvar(){
     data_mentoria:F.data,formato:F.fmt,mentor:(F.mentor||USER_NAME),area:F.area,campus:F.campus,
     estagio:F.est,desafios:F.desa.join(', '),desafio_outro:F.desaOutro,
     faturamento_faixa:F.faturamento_faixa,
-    empreendedor_interno:!!F.empreendedor_interno,
+    empreendedor_interno:(F.tipo_vinculo ? F.tipo_vinculo==='interno' : !!F.empreendedor_interno),
+    tipo_vinculo:(F.tipo_vinculo||null),
     cnae_codigo:F.cnae_codigo,cnae_descricao:F.cnae_descricao,cnae_classe:F.cnae_classe,cnae_classe_desc:F.cnae_classe_desc,
     // Pilares
     pilar_produto_nota:F.pils['Produto/Serviço'].n,pilar_produto_classe:F.pils['Produto/Serviço'].c,pilar_produto_obs:F.pils['Produto/Serviço'].o,
