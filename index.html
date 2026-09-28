@@ -5129,7 +5129,7 @@ const CRITERIOS_PILARES = {
     n5:'Processos principais documentados, indicadores acompanhados, tarefas delegadas e uso de ferramentas de gestão; o negócio opera sem depender do dono em tudo.',
     ev:'Checklists, procedimentos escritos, controle de estoque, agenda de produção, ferramentas usadas (planilhas, apps, sistemas).'},
 };
-function mostrarCriteriosPilares(){
+function mostrarCriteriosPilares(pilarFoco){
   document.getElementById('crit-pil-overlay')?.remove();
   const ov=document.createElement('div');
   ov.id='crit-pil-overlay';
@@ -5139,7 +5139,7 @@ function mostrarCriteriosPilares(){
       <div><div style="font-size:13px;font-weight:800;color:#1d3557;">${x.nome}</div><div style="font-size:12px;color:#475569;line-height:1.5;">${x.desc}</div></div>
     </div>`).join('');
   const pilares=Object.entries(CRITERIOS_PILARES).map(([k,c])=>`
-    <details style="border:1.5px solid #e2e8f0;border-radius:10px;margin-bottom:8px;background:#fff;">
+    <details ${pilarFoco===k?'open':''} data-pilar="${e(k)}" style="border:1.5px solid ${pilarFoco===k?'#1d3557':'#e2e8f0'};border-radius:10px;margin-bottom:8px;background:#fff;">
       <summary style="cursor:pointer;padding:11px 14px;font-size:13px;font-weight:800;color:#1d3557;list-style:none;">${c.i} ${k} <span style="font-weight:500;color:#64748b;font-size:12px;">— ${c.perg}</span></summary>
       <div style="padding:0 14px 12px;">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
@@ -5189,12 +5189,14 @@ function mostrarCriteriosPilares(){
         </ul>
       </div>
       <div style="padding:0 22px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-        <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="crit-pil-nao-mostrar" ${_critPilOptOut()?'checked':''}> Não abrir automaticamente</label>
+        <span style="font-size:11px;color:#94a3b8;">Abra a qualquer momento pelo ❔ ao lado da nota de cada pilar.</span>
         <button onclick="_critPilFechar()" style="background:linear-gradient(135deg,#1a5e3a,#267a4e);border:none;color:#fff;border-radius:10px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Entendi, avaliar pilares →</button>
       </div>
     </div>`;
   ov.addEventListener('click',ev=>{ if(ev.target===ov) _critPilFechar(); });
   document.body.appendChild(ov);
+  // Abrindo pelo "?" de um pilar: rola até ele
+  if(pilarFoco){ setTimeout(()=>{ const d=[...ov.querySelectorAll('details')].find(x=>x.dataset.pilar===pilarFoco); if(d) d.scrollIntoView({block:'center'}); },50); }
 }
 let _critPilVistoSessao=false;
 function _critPilOptOut(){ try{ return localStorage.getItem('enedes_crit_pilares_optout')==='1'; }catch(_){ return false; } }
@@ -5205,6 +5207,7 @@ function _critPilFechar(){
 }
 // Abre automaticamente 1x por sessão, ao chegar na Sala dos Pilares (consultores/equipe)
 function _critPilAuto(){
+  return; // desativado: critérios abrem só pelo "?" de cada pilar ou pelo botão do cabeçalho
   if(isEmpreend() || _critPilVistoSessao || _critPilOptOut()) return;
   if(!document.getElementById('pilares-box')) return;
   _critPilVistoSessao=true;
@@ -5253,6 +5256,7 @@ function rPilarCard(p){
     </div>
     <div class="pilar-score-row">
       <span class="score-lbl">Nota (1–5):</span>
+      ${!isEmpreend()?`<button type="button" onclick="mostrarCriteriosPilares('${p.k}')" title="Critérios de avaliação deste pilar" style="width:24px;height:24px;border-radius:50%;border:1.5px solid #1d3557;background:#fff;color:#1d3557;font-weight:800;font-size:13px;cursor:pointer;line-height:1;padding:0;flex-shrink:0;font-family:inherit;">?</button>`:''}
       <div class="stars">${[1,2,3,4,5].map(n=>`<button class="star ${d.n===String(n)?'on':''}" onclick="sp('${p.k}','n','${n}')" type="button">${n}</button>`).join('')}</div>
     </div>
     <div class="cls">
@@ -7544,7 +7548,7 @@ async function saveFase2Data(empNome, data){
     // Prefere o registro mais antigo (id menor) que é o original com dados completos
     const realEmpNome = rows[0]?.emp_nome || empNome;
     // Colunas válidas na tabela fase2v2 — filtrar para não causar erro 400
-    const COLS_VALIDAS = ['emp_nome','saved_at','negocio_nome','cnpj','fundacao','segmento','modelo','local','colaboradores','mercado','missao','visao','valores','proposito','meta_smart','cap_social','cap_integralizado','cap_giro','investimento','reserva','ticket','clientes','receita_calc','fonte_receita','cfixos','cvariaveis','total_custos','margem','p_nome','p_idade','p_genero','p_escolaridade','p_ocupacao','p_renda','p_compra','p_pagamento','p_online','p_objetivos','p_desafios','p_motivacoes','p_objecoes','p_redes','p_ia_resultado','p4_produto','p4_preco','p4_praca','p4_promocao','c4_cliente','c4_custo','c4_conv','c4_comunic','sw_forcas','sw_fraquezas','sw_oportunidades','sw_ameacas','sw_est_of','sw_est_mel','sw_est_def','sw_est_sob','sw_est_ia','mkt_m1','mkt_m2','mkt_m3','mkt_m4','mkt_m5','mkt_m6','mkt_m7','mkt_m8','mkt_m9','mkt_m10','mkt_m11','mkt_m12','mkt_perc','mkt_cat_midia','mkt_cat_producao','mkt_cat_servicos','mkt_cat_trade','mkt_cat_outros','custos_fixos','custos_variaveis','acoes','sessoes','org_tipo','org_total','org_obs','org_funcoes','metas','objetivo_fin'];
+    const COLS_VALIDAS = ['emp_nome','publico_alvo','saved_at','negocio_nome','cnpj','fundacao','segmento','modelo','local','colaboradores','mercado','missao','visao','valores','proposito','meta_smart','cap_social','cap_integralizado','cap_giro','investimento','reserva','ticket','clientes','receita_calc','fonte_receita','cfixos','cvariaveis','total_custos','margem','p_nome','p_idade','p_genero','p_escolaridade','p_ocupacao','p_renda','p_compra','p_pagamento','p_online','p_objetivos','p_desafios','p_motivacoes','p_objecoes','p_redes','p_ia_resultado','p4_produto','p4_preco','p4_praca','p4_promocao','c4_cliente','c4_custo','c4_conv','c4_comunic','sw_forcas','sw_fraquezas','sw_oportunidades','sw_ameacas','sw_est_of','sw_est_mel','sw_est_def','sw_est_sob','sw_est_ia','mkt_m1','mkt_m2','mkt_m3','mkt_m4','mkt_m5','mkt_m6','mkt_m7','mkt_m8','mkt_m9','mkt_m10','mkt_m11','mkt_m12','mkt_perc','mkt_cat_midia','mkt_cat_producao','mkt_cat_servicos','mkt_cat_trade','mkt_cat_outros','custos_fixos','custos_variaveis','acoes','sessoes','org_tipo','org_total','org_obs','org_funcoes','metas','objetivo_fin'];
     const raw = {...data, emp_nome:realEmpNome, saved_at:new Date().toLocaleString('pt-BR')};
     const payload = Object.fromEntries(Object.entries(raw).filter(([k])=>COLS_VALIDAS.includes(k)));
     if(rows.length){
@@ -7813,6 +7817,7 @@ async function renderFase2() {
       <button class="f2-tab active" onclick="f2ShowTab('negocio',this)">🏢 Negócio</button>
       <button class="f2-tab" onclick="f2ShowTab('organograma',this)">🏗️ Estrutura</button>
       <button class="f2-tab" onclick="f2ShowTab('financeiro',this)">💰 Financeiro</button>
+      <button class="f2-tab" onclick="f2ShowTab('publico',this)">🎯 Público-Alvo</button>
       <button class="f2-tab" onclick="f2ShowTab('persona',this)">👥 Persona</button>
       <button class="f2-tab" onclick="f2ShowTab('mix',this)">🎯 4Ps + 4Cs</button>
       <button class="f2-tab" onclick="f2ShowTab('swot',this)">⚖️ SWOT</button>
@@ -7848,10 +7853,7 @@ async function renderFase2() {
           <select class="f2-sel" id="f2-segmento">
             ${['Alimentação','Saúde','Educação','Tecnologia','Varejo','Serviços','Moda/Beleza','Construção','Agronegócio','Outro'].map(s=>`<option value="${s}" ${(F2.segmento||diag.segmento)===s?'selected':''}>${s}</option>`).join('')}
           </select>
-          <label class="f2-lbl">Modelo de Negócio</label>
-          <select class="f2-sel" id="f2-modelo">
-            ${['B2C (Pessoa Física)','B2B (Empresa)','B2B2C','Marketplace','Serviços','Outro'].map(s=>`<option value="${s}" ${F2.modelo===s?'selected':''}>${s}</option>`).join('')}
-          </select>
+          ${_f2HtmlModelos(F2)}
           <label class="f2-lbl">Localização</label>
           <input class="f2-inp" id="f2-local" value="${e(F2.local||diag.campus||'')}" placeholder="Cidade, DF">
           <label class="f2-lbl">Nº de Colaboradores</label>
@@ -8115,12 +8117,14 @@ async function renderFase2() {
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
       <button class="f2-btn-save" onclick="f2Salvar()">💾 Salvar Financeiro</button>
       <button onclick="f2AtualizarFinanceiro()" style="padding:10px 22px;background:#0f2644;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">🔄 Atualizar</button>
-      <button class="f2-btn-sec" onclick="f2ShowTab('persona',document.querySelectorAll('.f2-tab')[3])">Próximo: Persona →</button>
+      <button class="f2-btn-sec" onclick="f2ShowTab('publico')">Próximo: Público-Alvo →</button>
     </div>
   </div>
 
-  
+  ${_f2HtmlPublico(F2)}
+
   <div class="f2-sec" id="f2-persona">
+    ${_f2HtmlPersonaTopo(F2)}
     <div class="f2-card">
       <div class="f2-card-title"><span>👥</span> Buyer Persona — Dados Demográficos</div>
       <div class="f2-grid2">
@@ -9006,6 +9010,12 @@ function f2SalvarSilencioso() {
     if (el) patch[col] = el.value;
   });
   patch.p_redes = redes;
+  // Modelo(s) de negócio + Público-Alvo
+  if(document.getElementById('f2-modelos-box')){
+    const pv=document.getElementById('f2-modelo-principal')?.value||'';
+    patch.modelo = pv ? ((MODELOS_NEG.find(m=>m.v===pv)||{}).t||pv) : (existing.modelo||'');
+  }
+  patch.publico_alvo = f2ColetarPA(_f2PA(existing));
   patch.saved_at = new Date().toLocaleString('pt-BR');
   saveFase2Data(empNome, Object.assign({}, existing, patch)).catch(console.error);
   _f2DirtyFlag = false;
@@ -9050,6 +9060,302 @@ function f2AttachAutoSave() {
   });
 }
 
+// ===================================================================
+// ===== FASE 2 — MODELO DE NEGÓCIO + PÚBLICO-ALVO (antes da Persona) =====
+// ===================================================================
+const MODELOS_NEG = [
+  {v:'B2B',   t:'B2B',   d:'Business to Business — vende para empresas'},
+  {v:'B2C',   t:'B2C',   d:'Business to Consumer — vende para pessoa física (consumidor final)'},
+  {v:'B2B2C', t:'B2B2C', d:'Business to Business to Consumer — vende por meio de empresas parceiras que chegam ao consumidor final'},
+  {v:'C2C',   t:'C2C',   d:'Consumer to Consumer — conecta pessoas que vendem para outras pessoas (marketplace, brechó, plataforma)'},
+  {v:'C2B',   t:'C2B',   d:'Consumer to Business — pessoa física/autônomo vende para empresas (freelancer, criador de conteúdo, influenciador)'},
+  {v:'D2C',   t:'D2C',   d:'Direct to Consumer — marca/fabricante vende direto ao consumidor, sem intermediários (loja própria, e-commerce, redes)'},
+  {v:'B2G',   t:'B2G',   d:'Business to Government — vende para governo / órgãos públicos'},
+];
+const PA_OPC = {
+  faixas:  ['Até 17','18–24','25–34','35–44','45–59','60+'],
+  generos: ['Todos','Predominantemente feminino','Predominantemente masculino'],
+  rendas:  ['Até 2 SM (R$ 2.640)','2 a 5 SM','5 a 10 SM','Acima de 10 SM'],
+  freq:    ['','Única / esporádica','Mensal','Semanal','Diária','Sazonal (datas específicas)'],
+  portes:  ['MEI','Microempresa (ME)','Pequena (EPP)','Média','Grande'],
+  ciclo:   ['','Imediato (mesmo dia)','Até 1 mês','1 a 3 meses','Mais de 3 meses'],
+  esferas: ['Municipal','Estadual / Distrital','Federal'],
+  contrat: ['Dispensa de licitação','Pregão eletrônico','Credenciamento','Adesão a ata (carona)','Compras da agricultura familiar (PNAE/PAA)'],
+  sicaf:   ['','Sim','Em andamento','Não'],
+  canais:  ['Instagram','WhatsApp','Facebook','TikTok','LinkedIn','Google / busca','Marketplaces','Feiras e eventos','Loja física / ponto de venda','Indicação (boca a boca)','Associações e entidades de classe','Portais de compras públicas'],
+  papel:   ['','Decide a compra','Influencia a decisão','Usa o produto/serviço','Faz a compra (operacional)'],
+};
+// Lê o objeto público-alvo do registro da Fase 2 (jsonb ou texto) e migra o "modelo" antigo
+function _f2PA(F2){
+  let pa = F2 && F2.publico_alvo;
+  if(typeof pa === 'string'){ try{ pa = JSON.parse(pa); }catch(_){ pa = {}; } }
+  pa = (pa && typeof pa === 'object') ? {...pa} : {};
+  if(!Array.isArray(pa.modelos)) pa.modelos = [];
+  if(!pa.modelos.length && F2 && F2.modelo){
+    const m = String(F2.modelo);
+    if(/^B2B2C/.test(m)) pa.modelos=['B2B2C'];
+    else if(/^B2C/.test(m)) pa.modelos=['B2C'];
+    else if(/^B2B/.test(m)) pa.modelos=['B2B'];
+    else if(/Marketplace|C2C/i.test(m)) pa.modelos=['C2C'];
+    else if(/D2C/i.test(m)) pa.modelos=['D2C'];
+    else if(/C2B/i.test(m)) pa.modelos=['C2B'];
+    if(!pa.oferta && /Servi/i.test(m)) pa.oferta='Serviço';
+  }
+  if(!pa.principal && pa.modelos.length) pa.principal = pa.modelos[0];
+  return pa;
+}
+function _paTemB2C(pa){ return (pa.modelos||[]).some(m=>['B2C','B2B2C','C2C','D2C'].includes(m)); }
+function _paTemB2B(pa){ return (pa.modelos||[]).some(m=>['B2B','B2B2C','C2B'].includes(m)); }
+function _paTemB2G(pa){ return (pa.modelos||[]).includes('B2G'); }
+function _paChips(chave, opcoes, selecionados){
+  const sel = Array.isArray(selecionados)?selecionados:[];
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;">${opcoes.map(o=>`
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;background:#f8fafb;border:1.5px solid var(--border);border-radius:20px;padding:5px 11px;">
+      <input type="checkbox" class="f2-pa-chk" data-k="${chave}" value="${e(o)}" ${sel.includes(o)?'checked':''} style="width:14px;height:14px;cursor:pointer;">${e(o)}
+    </label>`).join('')}</div>`;
+}
+function _paSel(id, opcoes, valor){
+  return `<select class="f2-sel" id="${id}">${opcoes.map(o=>`<option value="${e(o)}" ${valor===o?'selected':''}>${o||'Selecione...'}</option>`).join('')}</select>`;
+}
+
+// --- Aba Negócio: modelo(s) de negócio, principal e tipo de oferta ---
+function _f2HtmlModelos(F2){
+  const pa=_f2PA(F2);
+  return `
+    <label class="f2-lbl">Modelo(s) de negócio <span style="font-weight:400;color:var(--muted);font-size:11px;">— marque todos em que o negócio atua</span></label>
+    <div id="f2-modelos-box" style="display:grid;gap:6px;margin:4px 0 10px;">
+      ${MODELOS_NEG.map(m=>`<label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;cursor:pointer;background:#f8fafb;border:1.5px solid var(--border);border-radius:10px;padding:7px 10px;">
+        <input type="checkbox" class="f2-mod-chk" value="${m.v}" ${pa.modelos.includes(m.v)?'checked':''} onchange="f2AtualizarModelos()" style="width:15px;height:15px;margin-top:1px;cursor:pointer;">
+        <span><strong>${m.t}</strong> <span style="color:var(--muted);">— ${m.d}</span></span></label>`).join('')}
+    </div>
+    <label class="f2-lbl">Modelo principal <span style="font-weight:400;color:var(--muted);font-size:11px;">— de onde vem a maior parte da receita</span></label>
+    <select class="f2-sel" id="f2-modelo-principal" onchange="f2AtualizarModelos()">
+      ${pa.modelos.length?pa.modelos.map(v=>`<option value="${v}" ${pa.principal===v?'selected':''}>${(MODELOS_NEG.find(m=>m.v===v)||{}).t||v}</option>`).join(''):'<option value="">Marque ao menos um modelo acima</option>'}
+    </select>
+    <label class="f2-lbl">Tipo de oferta</label>
+    ${_paSel('f2-oferta',['','Produto','Serviço','Produto + Serviço'],pa.oferta||'')}`;
+}
+// Atualiza o "principal" e mostra/oculta os blocos de segmentação do Público-Alvo
+function f2AtualizarModelos(){
+  const mods=[...document.querySelectorAll('.f2-mod-chk:checked')].map(c=>c.value);
+  const sel=document.getElementById('f2-modelo-principal');
+  if(sel){
+    const atual=sel.value;
+    sel.innerHTML = mods.length ? mods.map(v=>`<option value="${v}">${(MODELOS_NEG.find(m=>m.v===v)||{}).t||v}</option>`).join('') : '<option value="">Marque ao menos um modelo acima</option>';
+    if(mods.includes(atual)) sel.value=atual;
+  }
+  const pa={modelos:mods, principal:sel?.value||''};
+  const vis=(id,on)=>{ const el=document.getElementById(id); if(el) el.style.display=on?'block':'none'; };
+  vis('f2-pa-b2c', _paTemB2C(pa)); vis('f2-pa-b2b', _paTemB2B(pa)); vis('f2-pa-b2g', _paTemB2G(pa));
+  vis('f2-pa-semmodelo', !mods.length);
+  vis('f2-persona-b2b', ['B2B','B2G','C2B'].includes(pa.principal));
+  const tag=document.getElementById('f2-pa-modelos-tag');
+  if(tag) tag.textContent = mods.length ? mods.map(v=>(MODELOS_NEG.find(m=>m.v===v)||{}).t||v).join(' · ') : 'nenhum modelo definido';
+  f2RenderResumoPA();
+}
+
+// --- Aba Público-Alvo ---
+function _f2HtmlPublico(F2){
+  const pa=_f2PA(F2);
+  const tagMods = pa.modelos.length ? pa.modelos.map(v=>(MODELOS_NEG.find(m=>m.v===v)||{}).t||v).join(' · ') : 'nenhum modelo definido';
+  return `
+  <div class="f2-sec" id="f2-publico">
+    <div class="f2-card" style="background:#f5f9ff;border-color:#cdd9ee;">
+      <div style="font-size:13px;color:#1d3557;line-height:1.6;">
+        <strong>🎯 Por que delimitar o público-alvo antes da persona?</strong> O público-alvo é o <em>recorte de mercado</em> (quem pode comprar e onde está). A persona é <em>uma pessoa representativa</em> desse recorte. Sem o recorte, a persona vira um retrato genérico.
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:#475569;">Modelo(s) de negócio: <strong id="f2-pa-modelos-tag">${e(tagMods)}</strong>
+        <button class="f2-btn-sec" style="padding:4px 10px;font-size:11px;margin-left:6px;" onclick="f2ShowTab('negocio')">alterar na aba Negócio</button></div>
+    </div>
+
+    <div id="f2-pa-semmodelo" class="f2-card" style="display:${pa.modelos.length?'none':'block'};border-color:#fde68a;background:#fffbeb;">
+      <div style="font-size:13px;color:#92400e;">⚠️ Marque o <strong>modelo de negócio</strong> (B2C, B2B, B2G…) na aba <strong>Negócio</strong> para liberar os campos de segmentação adequados.</div>
+    </div>
+
+    <div class="f2-card">
+      <div class="f2-card-title"><span>🧭</span> Definição do Público-Alvo</div>
+      <label class="f2-lbl">Qual necessidade ou problema esse público quer resolver? *</label>
+      <textarea class="f2-ta" id="f2-pa-necessidade" rows="2" placeholder="Ex: ter refeições saudáveis prontas durante a semana, sem tempo para cozinhar">${e(pa.necessidade||'')}</textarea>
+      <div class="f2-grid2">
+        <div>
+          <label class="f2-lbl">Área geográfica de atuação</label>
+          <input class="f2-inp" id="f2-pa-regiao" value="${e(pa.regiao||'')}" placeholder="Ex: Asa Norte, Sudoeste e Noroeste (Brasília/DF)">
+        </div>
+        <div>
+          <label class="f2-lbl">Quem NÃO é cliente (critério de exclusão)</label>
+          <input class="f2-inp" id="f2-pa-exclusao" value="${e(pa.exclusao||'')}" placeholder="Ex: quem busca preço mínimo acima de tudo">
+        </div>
+      </div>
+    </div>
+
+    <div class="f2-card" id="f2-pa-b2c" style="display:${_paTemB2C(pa)?'block':'none'};">
+      <div class="f2-card-title"><span>🧑‍🤝‍🧑</span> Segmentação — Consumidor final (B2C)</div>
+      <label class="f2-lbl">Faixa etária predominante</label>${_paChips('faixas',PA_OPC.faixas,pa.faixas)}
+      <div class="f2-grid2">
+        <div><label class="f2-lbl">Gênero predominante</label>${_paSel('f2-pa-genero',['',...PA_OPC.generos],pa.genero||'')}</div>
+        <div><label class="f2-lbl">Frequência de compra</label>${_paSel('f2-pa-freq',PA_OPC.freq,pa.freq||'')}</div>
+      </div>
+      <label class="f2-lbl">Renda familiar mensal</label>${_paChips('rendas',PA_OPC.rendas,pa.rendas)}
+      <div class="f2-grid2">
+        <div><label class="f2-lbl">Estilo de vida, valores e interesses</label>
+          <textarea class="f2-ta" id="f2-pa-estilo" rows="2" placeholder="Ex: rotina corrida, valoriza saúde e praticidade">${e(pa.estilo||'')}</textarea></div>
+        <div><label class="f2-lbl">Ocasião / motivo da compra</label>
+          <textarea class="f2-ta" id="f2-pa-ocasiao" rows="2" placeholder="Ex: almoço no trabalho, datas comemorativas, presente">${e(pa.ocasiao||'')}</textarea></div>
+      </div>
+    </div>
+
+    <div class="f2-card" id="f2-pa-b2b" style="display:${_paTemB2B(pa)?'block':'none'};">
+      <div class="f2-card-title"><span>🏢</span> Segmentação — Empresas (B2B)</div>
+      <label class="f2-lbl">Setores / tipos de empresa atendidos</label>
+      <input class="f2-inp" id="f2-pa-setores" value="${e(pa.setores||'')}" placeholder="Ex: restaurantes, clínicas, escritórios de contabilidade">
+      <label class="f2-lbl">Porte das empresas-cliente</label>${_paChips('portes',PA_OPC.portes,pa.portes)}
+      <div class="f2-grid2">
+        <div><label class="f2-lbl">Quem decide a compra (cargo)</label>
+          <input class="f2-inp" id="f2-pa-decisor" value="${e(pa.decisor||'')}" placeholder="Ex: sócio-proprietário, gerente de compras"></div>
+        <div><label class="f2-lbl">Ciclo de compra</label>${_paSel('f2-pa-ciclo',PA_OPC.ciclo,pa.ciclo||'')}</div>
+      </div>
+      <label class="f2-lbl">Como o cliente escolhe o fornecedor</label>
+      <input class="f2-inp" id="f2-pa-criterio" value="${e(pa.criterio||'')}" placeholder="Ex: prazo de entrega, preço por volume, nota fiscal, recorrência">
+    </div>
+
+    <div class="f2-card" id="f2-pa-b2g" style="display:${_paTemB2G(pa)?'block':'none'};">
+      <div class="f2-card-title"><span>🏛️</span> Segmentação — Governo (B2G)</div>
+      <label class="f2-lbl">Esfera</label>${_paChips('esferas',PA_OPC.esferas,pa.esferas)}
+      <label class="f2-lbl">Órgãos / instituições-alvo</label>
+      <input class="f2-inp" id="f2-pa-orgaos" value="${e(pa.orgaos||'')}" placeholder="Ex: escolas da rede pública do DF, institutos federais">
+      <label class="f2-lbl">Forma de contratação</label>${_paChips('contrat',PA_OPC.contrat,pa.contrat)}
+      <div class="f2-grid2"><div><label class="f2-lbl">Cadastro no SICAF</label>${_paSel('f2-pa-sicaf',PA_OPC.sicaf,pa.sicaf||'')}</div></div>
+    </div>
+
+    <div class="f2-card">
+      <div class="f2-card-title"><span>📏</span> Tamanho e acesso ao público</div>
+      <div class="f2-grid2">
+        <div><label class="f2-lbl">Tamanho estimado do público</label>
+          <input class="f2-inp" id="f2-pa-tamanho" value="${e(pa.tamanho||'')}" placeholder="Ex: ~18 mil domicílios na região"></div>
+        <div><label class="f2-lbl">Fonte da estimativa</label>
+          <input class="f2-inp" id="f2-pa-fonte" value="${e(pa.fonte||'')}" placeholder="Ex: IBGE, Codeplan/PDAD, DataSebrae"></div>
+      </div>
+      <label class="f2-lbl">Onde esse público pode ser encontrado</label>${_paChips('canais',PA_OPC.canais,pa.canais)}
+    </div>
+
+    <div class="f2-card" style="border-color:#9fd1b4;">
+      <div class="f2-card-title"><span>✍️</span> Público-alvo em uma frase *</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Estrutura: <strong>quem</strong> + <strong>onde</strong> + <strong>qual necessidade</strong>. Use o botão para montar um rascunho a partir dos campos acima e depois ajuste.</div>
+      <textarea class="f2-ta" id="f2-pa-frase" rows="3" placeholder="Ex: Mulheres de 25 a 44 anos, renda familiar de 2 a 5 SM, que trabalham fora e moram na Asa Norte, e buscam refeições saudáveis prontas para a semana.">${e(pa.frase||'')}</textarea>
+      <button class="f2-btn-sec" style="margin-top:6px;" onclick="f2MontarFrasePA()">🪄 Montar rascunho da frase</button>
+    </div>
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <button class="f2-btn-save" onclick="f2Salvar()">💾 Salvar Público-Alvo</button>
+      <button class="f2-btn-sec" onclick="f2ShowTab('persona')">Próximo: Persona →</button>
+    </div>
+  </div>`;
+}
+// Coleta os campos (Negócio + Público-Alvo + extras da Persona)
+function f2ColetarPA(existente){
+  const pa = {...(existente||{})};
+  const v=id=>{ const el=document.getElementById(id); return el?el.value.trim():undefined; };
+  const setIf=(k,id)=>{ const x=v(id); if(x!==undefined) pa[k]=x; };
+  if(document.getElementById('f2-modelos-box')){
+    pa.modelos=[...document.querySelectorAll('.f2-mod-chk:checked')].map(c=>c.value);
+    pa.principal=v('f2-modelo-principal')||pa.modelos[0]||'';
+  }
+  setIf('oferta','f2-oferta');
+  [['necessidade','f2-pa-necessidade'],['regiao','f2-pa-regiao'],['exclusao','f2-pa-exclusao'],['genero','f2-pa-genero'],['freq','f2-pa-freq'],
+   ['estilo','f2-pa-estilo'],['ocasiao','f2-pa-ocasiao'],['setores','f2-pa-setores'],['decisor','f2-pa-decisor'],['ciclo','f2-pa-ciclo'],
+   ['criterio','f2-pa-criterio'],['orgaos','f2-pa-orgaos'],['sicaf','f2-pa-sicaf'],['tamanho','f2-pa-tamanho'],['fonte','f2-pa-fonte'],
+   ['frase','f2-pa-frase'],['persona_porte','f2-p-porte'],['persona_papel','f2-p-papel']].forEach(([k,id])=>setIf(k,id));
+  if(document.getElementById('f2-publico')){
+    ['faixas','rendas','portes','esferas','contrat','canais'].forEach(k=>{
+      pa[k]=[...document.querySelectorAll('.f2-pa-chk[data-k="'+k+'"]:checked')].map(c=>c.value);
+    });
+  }
+  return pa;
+}
+function f2MontarFrasePA(){
+  const pa=f2ColetarPA({});
+  const partes=[];
+  if(_paTemB2C(pa)){
+    let quem = pa.genero==='Predominantemente feminino'?'Mulheres':pa.genero==='Predominantemente masculino'?'Homens':'Pessoas';
+    if(pa.faixas?.length) quem += ' de '+pa.faixas.join(', ').replace('60+','60 anos ou mais')+' anos';
+    if(pa.rendas?.length) quem += ', renda familiar de '+pa.rendas.join(' ou ');
+    if(pa.estilo) quem += ', '+pa.estilo.replace(/\.$/,'');
+    partes.push(quem);
+  }
+  if(_paTemB2B(pa)){
+    let q = (pa.setores||'empresas');
+    if(pa.portes?.length) q += ' de porte '+pa.portes.join(', ');
+    if(pa.decisor) q += ', com decisão de compra feita por '+pa.decisor;
+    partes.push(q);
+  }
+  if(_paTemB2G(pa)) partes.push((pa.orgaos||'órgãos públicos')+(pa.esferas?.length?' da esfera '+pa.esferas.join('/').toLowerCase():''));
+  let frase = partes.join('; e ');
+  if(pa.regiao) frase += ', localizados em '+pa.regiao;
+  if(pa.necessidade) frase += ', que buscam '+pa.necessidade.replace(/\.$/,'').replace(/^./,c=>c.toLowerCase());
+  frase = frase ? frase.replace(/^./,c=>c.toUpperCase())+'.' : '';
+  if(!frase){ alert('Preencha os campos de segmentação e a necessidade para montar o rascunho.'); return; }
+  const el=document.getElementById('f2-pa-frase');
+  if(el && (!el.value.trim() || confirm('Substituir o texto atual pelo rascunho?'))) el.value=frase;
+}
+function _paResumoTexto(pa){
+  if(pa.frase) return pa.frase;
+  const p=[];
+  if(pa.faixas?.length) p.push('Idade: '+pa.faixas.join(', '));
+  if(pa.rendas?.length) p.push('Renda: '+pa.rendas.join(', '));
+  if(pa.setores) p.push('Setores: '+pa.setores);
+  if(pa.portes?.length) p.push('Porte: '+pa.portes.join(', '));
+  if(pa.orgaos) p.push('Órgãos: '+pa.orgaos);
+  if(pa.regiao) p.push('Região: '+pa.regiao);
+  if(pa.necessidade) p.push('Necessidade: '+pa.necessidade);
+  return p.join(' · ');
+}
+// Checa se a persona está dentro do recorte do público-alvo
+function _paIncoerencias(pa){
+  const avisos=[];
+  const idade=+(document.getElementById('f2-p-idade')?.value||0);
+  if(idade && pa.faixas?.length){
+    const dentro=pa.faixas.some(f=>{
+      if(f==='Até 17') return idade<=17; if(f==='60+') return idade>=60;
+      const [a,b]=f.split('–').map(Number); return idade>=a && idade<=b;
+    });
+    if(!dentro) avisos.push('A idade da persona ('+idade+' anos) está fora das faixas etárias do público-alvo ('+pa.faixas.join(', ')+').');
+  }
+  const renda=document.getElementById('f2-p-renda')?.value||'';
+  if(renda && pa.rendas?.length && !pa.rendas.includes(renda)) avisos.push('A renda da persona ('+renda+') não está entre as faixas de renda do público-alvo.');
+  const gen=document.getElementById('f2-p-genero')?.value||'';
+  if(gen==='Masculino' && pa.genero==='Predominantemente feminino') avisos.push('Persona masculina para um público predominantemente feminino.');
+  if(gen==='Feminino' && pa.genero==='Predominantemente masculino') avisos.push('Persona feminina para um público predominantemente masculino.');
+  return avisos;
+}
+function _f2HtmlPersonaTopo(F2){
+  const pa=_f2PA(F2);
+  return `
+    <div class="f2-card" id="f2-pa-resumo-card" style="background:#f5f9ff;border-color:#cdd9ee;"><div id="f2-pa-resumo"></div></div>
+    <div class="f2-card" id="f2-persona-b2b" style="display:${['B2B','B2G','C2B'].includes(pa.principal)?'block':'none'};">
+      <div class="f2-card-title"><span>🏢</span> Persona corporativa — quem compra na empresa/órgão</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">No modelo ${e(pa.principal||'B2B')}, a persona é a <strong>pessoa que participa da compra</strong> dentro da organização-cliente. Use o campo "Ocupação" para o cargo.</div>
+      <div class="f2-grid2">
+        <div><label class="f2-lbl">Porte da organização</label>${_paSel('f2-p-porte',['',...PA_OPC.portes,'Órgão público'],pa.persona_porte||'')}</div>
+        <div><label class="f2-lbl">Papel na decisão de compra</label>${_paSel('f2-p-papel',PA_OPC.papel,pa.persona_papel||'')}</div>
+      </div>
+    </div>`;
+}
+function f2RenderResumoPA(){
+  const box=document.getElementById('f2-pa-resumo'); if(!box) return;
+  const pa=f2ColetarPA({});
+  const resumo=_paResumoTexto(pa);
+  const avisos=_paIncoerencias(pa);
+  box.innerHTML = resumo
+    ? `<div style="font-size:12px;font-weight:800;color:#1d3557;margin-bottom:4px;">🎯 Esta persona deve representar o público-alvo:</div>
+       <div style="font-size:13px;color:#334155;line-height:1.6;">${e(resumo)}</div>
+       ${avisos.length?`<div style="margin-top:8px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;font-size:12px;color:#92400e;">⚠️ ${avisos.map(e).join('<br>⚠️ ')}</div>`
+         :`<div style="margin-top:6px;font-size:11px;color:#16a34a;">✓ Persona coerente com o recorte definido.</div>`}`
+    : `<div style="font-size:13px;color:#92400e;">⚠️ O <strong>público-alvo ainda não foi delimitado</strong>. Preencha a aba <strong>🎯 Público-Alvo</strong> antes de criar a persona. <button class="f2-btn-sec" style="padding:4px 10px;font-size:11px;margin-left:6px;" onclick="f2ShowTab('publico')">Ir para Público-Alvo</button></div>`;
+}
+// Atualiza os avisos de coerência enquanto a persona é editada
+document.addEventListener('input',ev=>{ if(ev.target && /^f2-p-(idade|renda|genero)$/.test(ev.target.id||'')) f2RenderResumoPA(); });
+document.addEventListener('change',ev=>{ if(ev.target && (/^f2-p-(idade|renda|genero)$/.test(ev.target.id||'') || ev.target.classList?.contains('f2-pa-chk'))) f2RenderResumoPA(); });
+
 function f2ShowTab(tab, btn) {
   document.querySelectorAll('.f2-sec').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.f2-tab').forEach(b=>b.classList.remove('active'));
@@ -9057,7 +9363,9 @@ function f2ShowTab(tab, btn) {
   if(sec) sec.classList.add('active');
   if(tab==='financeiro') setTimeout(f2CalcFin, 100);
   if(tab==='marketing') setTimeout(f2InitMarketing, 100);
-  if(btn){ btn.classList.add('active'); btn.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'}); }
+  const _b = [...document.querySelectorAll('.f2-tab')].find(b=>(b.getAttribute('onclick')||'').includes("'"+tab+"'")) || btn;
+  if(_b){ _b.classList.add('active'); _b.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'}); }
+  if(tab==='persona') setTimeout(f2RenderResumoPA, 50);
   f2UpdateTabsFade();
 }
 
@@ -9665,7 +9973,8 @@ function f2Salvar(){
     cnpj: f2GetVal('f2-cnpj'),
     fundacao: f2GetVal('f2-fundacao'),
     segmento: f2GetVal('f2-segmento'),
-    modelo: f2GetVal('f2-modelo'),
+    modelo: (()=>{ const v=f2GetVal('f2-modelo-principal'); return v ? ((MODELOS_NEG.find(m=>m.v===v)||{}).t||v) : (existing.modelo||''); })(),
+    publico_alvo: f2ColetarPA(_f2PA(existing)),
     local: f2GetVal('f2-local'),
     colaboradores: f2GetVal('f2-colaboradores'),
     mercado: f2GetVal('f2-mercado'),
@@ -9772,7 +10081,7 @@ async function f2GerarPersonaIA(){
   document.getElementById('f2-persona-result').style.display='none';
   document.getElementById('f2-persona-loading').style.display='block';
 
-  const prompt = `Você é um especialista em marketing e comportamento do consumidor. Analise a seguinte buyer persona para um negócio e gere uma análise completa em português.\n\nNEGÓCIO: ${negocio} (${segmento})\nPERSONA: ${nome}, ${idade} anos, ${genero}, ${ocupacao}\nRenda: ${renda}\nObjetivos: ${objetivos}\nDesafios: ${desafios}\nMotivações: ${motivacoes}\nObjeções comuns: ${objecoes}\n\nGere uma análise estruturada em HTML com as seguintes seções usando divs com estilo inline:\n1. Perfil Psicológico (valores, crenças, personalidade)\n2. Jornada de Compra (como descobre, pesquisa e decide)\n3. Mensagens-Chave que Ressoam (o que falar para convencer)\n4. Canais de Comunicação Ideais (onde e como alcançar)\n5. Score de Compatibilidade com o negócio (0-100, com justificativa)\n6. 3 Estratégias de Abordagem personalizadas\n\nUse cores e ícones para tornar visualmente rico. Responda APENAS com o HTML, sem markdown.`;
+  const prompt = `Você é um especialista em marketing e comportamento do consumidor. Analise a seguinte buyer persona para um negócio e gere uma análise completa em português.\n\nNEGÓCIO: ${negocio} (${segmento})\nMODELO DE NEGÓCIO: ${(()=>{const pa=f2ColetarPA({});return (pa.modelos||[]).join(', ')+(pa.principal?' (principal: '+pa.principal+')':'');})()}\nPÚBLICO-ALVO DELIMITADO: ${_paResumoTexto(f2ColetarPA({}))||'não informado'}\nPERSONA: ${nome}, ${idade} anos, ${genero}, ${ocupacao}\nRenda: ${renda}\nObjetivos: ${objetivos}\nDesafios: ${desafios}\nMotivações: ${motivacoes}\nObjeções comuns: ${objecoes}\n\nGere uma análise estruturada em HTML com as seguintes seções usando divs com estilo inline:\n1. Perfil Psicológico (valores, crenças, personalidade)\n2. Jornada de Compra (como descobre, pesquisa e decide)\n3. Mensagens-Chave que Ressoam (o que falar para convencer)\n4. Canais de Comunicação Ideais (onde e como alcançar)\n5. Score de Compatibilidade com o negócio e com o público-alvo delimitado (0-100, com justificativa; aponte qualquer incoerência entre a persona e o público-alvo)\n6. 3 Estratégias de Abordagem personalizadas\n\nUse cores e ícones para tornar visualmente rico. Responda APENAS com o HTML, sem markdown.`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -10308,7 +10617,6 @@ function f2SalvarAcao(){
   document.getElementById('f2-acao-form').style.display='none';
   renderFase2();
   f2ShowTab('acoes', null);
-  setTimeout(()=>document.querySelectorAll('.f2-tab')[5]?.classList.add('active'),50);
 }
 
 // ===== ORGANOGRAMA =====
@@ -10349,7 +10657,6 @@ function f2OrgRemFuncao(i){
   saveFase2Data(empNome, data).catch(console.error);
   renderFase2();
   f2ShowTab('organograma', null);
-  setTimeout(()=>document.querySelectorAll('.f2-tab')[1]?.classList.add('active'),50);
 }
 
 function f2OrgSalvar(){
@@ -10730,7 +11037,6 @@ function f2SalvarEdicaoAcao(idx){
   document.getElementById('f2-acao-edit-modal')?.remove();
   renderFase2();
   f2ShowTab('acoes', null);
-  setTimeout(()=>document.querySelectorAll('.f2-tab')[5]?.classList.add('active'),50);
 }
 
 function f2RemAcao(i){
@@ -10741,7 +11047,6 @@ function f2RemAcao(i){
   saveFase2Data(empNome, data).catch(console.error);
   renderFase2();
   f2ShowTab('acoes', null);
-  setTimeout(()=>document.querySelectorAll('.f2-tab')[5]?.classList.add('active'),50);
 }
 
 function f2ToggleAcao(i){
@@ -10830,7 +11135,6 @@ function f2ImportarAcoes(){
   saveFase2Data(empNome, data).catch(console.error);
   renderFase2();
   f2ShowTab('acoes', null);
-  setTimeout(()=>document.querySelectorAll('.f2-tab')[5]?.classList.add('active'),50);
   alert(novas.length+' ação(ões) importada(s) do diagnóstico 5D!');
 }
 
@@ -10893,7 +11197,6 @@ function f2ImportarEstrategiasSWOT(){
   saveFase2Data(empNome, F2).catch(console.error);
   renderFase2();
   f2ShowTab('acoes', null);
-  setTimeout(()=>document.querySelectorAll('.f2-tab')[5]?.classList.add('active'), 50);
   alert(novas.length + ' estratégia(s) SWOT importada(s) como ações!');
 }
 
@@ -10995,6 +11298,13 @@ function f2GerarResumo(){
         </div>`)}
 
       
+      ${(()=>{ const pa=_f2PA(F2); const r=_paResumoTexto(pa); if(!r && !pa.modelos.length) return '';
+        return bloco('🎯 Modelo de Negócio e Público-Alvo','#0369a1',
+        `${pa.modelos.length?`<div><strong>Modelo(s):</strong> ${pa.modelos.map(v=>(MODELOS_NEG.find(m=>m.v===v)||{}).t||v).join(', ')}${pa.principal?' · <strong>Principal:</strong> '+e(pa.principal):''}${pa.oferta?' · <strong>Oferta:</strong> '+e(pa.oferta):''}</div>`:''}
+         ${r?`<div style="margin-top:6px;"><strong>Público-alvo:</strong> ${e(r)}</div>`:''}
+         ${pa.tamanho?`<div style="margin-top:4px;"><strong>Tamanho estimado:</strong> ${e(pa.tamanho)}${pa.fonte?' ('+e(pa.fonte)+')':''}</div>`:''}
+         ${pa.canais?.length?`<div style="margin-top:4px;"><strong>Onde encontrar:</strong> ${pa.canais.map(e).join(', ')}</div>`:''}
+         ${pa.exclusao?`<div style="margin-top:4px;"><strong>Não é cliente:</strong> ${e(pa.exclusao)}</div>`:''}`); })()}
       ${(F2.p_nome||F2.p_objetivos) ? bloco('👥 Buyer Persona','#7c3aed',
         `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           ${F2.p_nome?`<div><strong>Nome:</strong> ${e(F2.p_nome)}</div>`:''}
@@ -11062,7 +11372,6 @@ function f2GerarResumo(){
   const el = document.getElementById('f2-resumo-exec');
   if(el) el.innerHTML = html;
   f2ShowTab('relatorio', null);
-  setTimeout(()=>document.querySelectorAll('.f2-tab')[7]?.classList.add('active'),50);
 }
 
 function f2ExportarPDF(){
