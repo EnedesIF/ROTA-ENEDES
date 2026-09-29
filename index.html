@@ -7551,16 +7551,16 @@ async function saveFase2Data(empNome, data){
     const COLS_VALIDAS = ['emp_nome','publico_alvo','saved_at','negocio_nome','cnpj','fundacao','segmento','modelo','local','colaboradores','mercado','missao','visao','valores','proposito','meta_smart','cap_social','cap_integralizado','cap_giro','investimento','reserva','ticket','clientes','receita_calc','fonte_receita','cfixos','cvariaveis','total_custos','margem','p_nome','p_idade','p_genero','p_escolaridade','p_ocupacao','p_renda','p_compra','p_pagamento','p_online','p_objetivos','p_desafios','p_motivacoes','p_objecoes','p_redes','p_ia_resultado','p4_produto','p4_preco','p4_praca','p4_promocao','c4_cliente','c4_custo','c4_conv','c4_comunic','sw_forcas','sw_fraquezas','sw_oportunidades','sw_ameacas','sw_est_of','sw_est_mel','sw_est_def','sw_est_sob','sw_est_ia','mkt_m1','mkt_m2','mkt_m3','mkt_m4','mkt_m5','mkt_m6','mkt_m7','mkt_m8','mkt_m9','mkt_m10','mkt_m11','mkt_m12','mkt_perc','mkt_cat_midia','mkt_cat_producao','mkt_cat_servicos','mkt_cat_trade','mkt_cat_outros','custos_fixos','custos_variaveis','acoes','sessoes','org_tipo','org_total','org_obs','org_funcoes','metas','objetivo_fin'];
     const raw = {...data, emp_nome:realEmpNome, saved_at:new Date().toLocaleString('pt-BR')};
     const payload = Object.fromEntries(Object.entries(raw).filter(([k])=>COLS_VALIDAS.includes(k)));
-    if(rows.length){
-      const r = await fetch(SU+'/rest/v1/fase2v2?emp_nome=eq.'+encodeURIComponent(realEmpNome), {
-        method:'PATCH', headers:{...SB_HEADERS,'Prefer':'return=minimal'}, body:JSON.stringify(payload)
-      });
-      if(!r.ok) console.error('[saveFase2Data] PATCH falhou:', r.status, await r.text());
-    } else {
-      const r = await fetch(SU+'/rest/v1/fase2v2', {
-        method:'POST', headers:{...SB_HEADERS,'Prefer':'return=minimal'}, body:JSON.stringify(payload)
-      });
-      if(!r.ok) console.error('[saveFase2Data] POST falhou:', r.status, await r.text());
+    // sbEscreve: se alguma coluna ainda não existir no banco (ex.: publico_alvo sem ALTER TABLE),
+    // remove só aquela coluna e grava o restante — a Persona e os demais dados nunca se perdem.
+    const res = rows.length
+      ? await sbEscreve('PATCH', SU+'/rest/v1/fase2v2?emp_nome=eq.'+encodeURIComponent(realEmpNome), payload)
+      : await sbEscreve('POST', SU+'/rest/v1/fase2v2', payload);
+    if(!res.ok){
+      console.error('[saveFase2Data] falhou:', res.status, res.erro);
+      try{ sa('e','❌ Não foi possível salvar a Fase 2 agora. Tente novamente.'); }catch(_){}
+    } else if(res.removidas && res.removidas.length){
+      console.warn('[saveFase2Data] Colunas inexistentes ignoradas (rode o ALTER TABLE):', res.removidas.join(', '));
     }
   }catch(e){ console.error('Erro ao salvar Fase 2:',e); }
 }
@@ -8141,6 +8141,10 @@ async function renderFase2() {
           <select class="f2-sel" id="f2-p-escolaridade">
             ${['','Fundamental','Médio','Superior','Pós-graduação'].map(g=>`<option value="${g}" ${F2.p_escolaridade===g?'selected':''}>${g||'Selecione...'}</option>`).join('')}
           </select>
+          <label class="f2-lbl">Estado civil</label>
+          ${_paSel('f2-p-civil',['',...PA_OPC.civil],_f2PA(F2).persona_civil||'')}
+          <label class="f2-lbl">Filhos</label>
+          ${_paSel('f2-p-filhos',['',...PA_OPC.filhos],_f2PA(F2).persona_filhos||'')}
         </div>
         <div>
           <label class="f2-lbl">Ocupação *</label>
@@ -9084,6 +9088,17 @@ const PA_OPC = {
   sicaf:   ['','Sim','Em andamento','Não'],
   canais:  ['Instagram','WhatsApp','Facebook','TikTok','LinkedIn','Google / busca','Marketplaces','Feiras e eventos','Loja física / ponto de venda','Indicação (boca a boca)','Associações e entidades de classe','Portais de compras públicas'],
   papel:   ['','Decide a compra','Influencia a decisão','Usa o produto/serviço','Faz a compra (operacional)'],
+  escolaridade: ['Fundamental','Médio','Superior','Pós-graduação'],
+  classe:  ['A','B1','B2','C1','C2','D-E'],
+  ocupacao:['CLT (empregado)','Servidor público','Autônomo / MEI','Empresário','Estudante','Aposentado','Do lar'],
+  civil:   ['Solteiro(a)','Casado(a) / união estável','Divorciado(a)','Viúvo(a)'],
+  filhos:  ['Sem filhos','Filhos até 5 anos','Filhos de 6 a 12 anos','Filhos adolescentes (13–17)','Filhos adultos'],
+  domicilio:['Mora sozinho(a)','2 pessoas','3 a 4 pessoas','5 ou mais pessoas'],
+  preco:   ['','Baixa — paga mais por qualidade/conveniência','Média — compara antes de comprar','Alta — decide principalmente pelo preço'],
+  pagto:   ['PIX','Cartão de crédito','Parcelado','Cartão de débito','Dinheiro','Boleto'],
+  compraonde:['Loja física','Site / e-commerce próprio','Marketplace','WhatsApp / Instagram','Delivery / apps','Feiras e eventos','Porta a porta / revendedor'],
+  fatB2B:  ['Até R$ 81 mil/ano (MEI)','Até R$ 360 mil/ano','R$ 360 mil a 4,8 mi/ano','Acima de R$ 4,8 mi/ano'],
+  funcB2B: ['Sem funcionários','1 a 9','10 a 49','50 a 99','100 ou mais'],
 };
 // Lê o objeto público-alvo do registro da Fase 2 (jsonb ou texto) e migra o "modelo" antigo
 function _f2PA(F2){
@@ -9189,19 +9204,53 @@ function _f2HtmlPublico(F2){
     </div>
 
     <div class="f2-card" id="f2-pa-b2c" style="display:${_paTemB2C(pa)?'block':'none'};">
-      <div class="f2-card-title"><span>🧑‍🤝‍🧑</span> Segmentação — Consumidor final (B2C)</div>
-      <label class="f2-lbl">Faixa etária predominante</label>${_paChips('faixas',PA_OPC.faixas,pa.faixas)}
+      <div class="f2-card-title"><span>🧑‍🤝‍🧑</span> Segmentação — Consumidor final (B2C / D2C / B2B2C / C2C)</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Marque <strong>todas</strong> as opções que descrevem a maior parte dos clientes. Deixe em branco o que não souber — isso também é um achado a investigar.</div>
+
+      <div style="font-size:12px;font-weight:800;color:#1d3557;margin:6px 0 4px;border-bottom:1px solid #eef2f7;padding-bottom:3px;">👤 Demográfico</div>
+      <label class="f2-lbl">Faixa etária</label>${_paChips('faixas',PA_OPC.faixas,pa.faixas)}
       <div class="f2-grid2">
         <div><label class="f2-lbl">Gênero predominante</label>${_paSel('f2-pa-genero',['',...PA_OPC.generos],pa.genero||'')}</div>
-        <div><label class="f2-lbl">Frequência de compra</label>${_paSel('f2-pa-freq',PA_OPC.freq,pa.freq||'')}</div>
+        <div><label class="f2-lbl">Tamanho do domicílio</label>${_paSel('f2-pa-domicilio',['',...PA_OPC.domicilio],pa.domicilio||'')}</div>
       </div>
+      <label class="f2-lbl">Estado civil</label>${_paChips('civil',PA_OPC.civil,pa.civil)}
+      <label class="f2-lbl">Filhos</label>${_paChips('filhos',PA_OPC.filhos,pa.filhos)}
+
+      <div style="font-size:12px;font-weight:800;color:#1d3557;margin:10px 0 4px;border-bottom:1px solid #eef2f7;padding-bottom:3px;">💼 Socioeconômico</div>
       <label class="f2-lbl">Renda familiar mensal</label>${_paChips('rendas',PA_OPC.rendas,pa.rendas)}
+      <label class="f2-lbl">Classe social (critério ABEP, se souber)</label>${_paChips('classe',PA_OPC.classe,pa.classe)}
+      <label class="f2-lbl">Escolaridade</label>${_paChips('escolaridade',PA_OPC.escolaridade,pa.escolaridade)}
+      <label class="f2-lbl">Situação profissional</label>${_paChips('ocupacao',PA_OPC.ocupacao,pa.ocupacao)}
+      <label class="f2-lbl">Profissões / ocupações típicas</label>
+      <input class="f2-inp" id="f2-pa-profissoes" value="${e(pa.profissoes||'')}" placeholder="Ex: professoras, profissionais de saúde, servidores do GDF">
+
+      <div style="font-size:12px;font-weight:800;color:#1d3557;margin:10px 0 4px;border-bottom:1px solid #eef2f7;padding-bottom:3px;">🧠 Psicográfico</div>
       <div class="f2-grid2">
         <div><label class="f2-lbl">Estilo de vida, valores e interesses</label>
-          <textarea class="f2-ta" id="f2-pa-estilo" rows="2" placeholder="Ex: rotina corrida, valoriza saúde e praticidade">${e(pa.estilo||'')}</textarea></div>
+          <textarea class="f2-ta" id="f2-pa-estilo" rows="2" placeholder="Ex: rotina corrida, valoriza saúde e praticidade, preocupa-se com sustentabilidade">${e(pa.estilo||'')}</textarea></div>
+        <div><label class="f2-lbl">Medos, frustrações e aspirações</label>
+          <textarea class="f2-ta" id="f2-pa-aspiracoes" rows="2" placeholder="Ex: culpa por não cozinhar para a família; quer ter mais tempo livre">${e(pa.aspiracoes||'')}</textarea></div>
+      </div>
+
+      <div style="font-size:12px;font-weight:800;color:#1d3557;margin:10px 0 4px;border-bottom:1px solid #eef2f7;padding-bottom:3px;">🛒 Comportamental (hábitos de compra)</div>
+      <div class="f2-grid2">
         <div><label class="f2-lbl">Ocasião / motivo da compra</label>
           <textarea class="f2-ta" id="f2-pa-ocasiao" rows="2" placeholder="Ex: almoço no trabalho, datas comemorativas, presente">${e(pa.ocasiao||'')}</textarea></div>
+        <div><label class="f2-lbl">Benefício principal buscado</label>
+          <textarea class="f2-ta" id="f2-pa-beneficio" rows="2" placeholder="Ex: praticidade, status, economia, segurança, prazer">${e(pa.beneficio||'')}</textarea></div>
       </div>
+      <div class="f2-grid2">
+        <div><label class="f2-lbl">Frequência de compra</label>${_paSel('f2-pa-freq',PA_OPC.freq,pa.freq||'')}</div>
+        <div><label class="f2-lbl">Sensibilidade a preço</label>${_paSel('f2-pa-preco',PA_OPC.preco,pa.preco||'')}</div>
+      </div>
+      <div class="f2-grid2">
+        <div><label class="f2-lbl">Quanto costuma gastar por compra</label>
+          <input class="f2-inp" id="f2-pa-gasto" value="${e(pa.gasto||'')}" placeholder="Ex: R$ 30 a R$ 60"></div>
+        <div><label class="f2-lbl">Quem decide / influencia a compra</label>
+          <input class="f2-inp" id="f2-pa-influencia" value="${e(pa.influencia||'')}" placeholder="Ex: a própria pessoa; filhos influenciam"></div>
+      </div>
+      <label class="f2-lbl">Onde costuma comprar</label>${_paChips('compraonde',PA_OPC.compraonde,pa.compraonde)}
+      <label class="f2-lbl">Formas de pagamento preferidas</label>${_paChips('pagto',PA_OPC.pagto,pa.pagto)}
     </div>
 
     <div class="f2-card" id="f2-pa-b2b" style="display:${_paTemB2B(pa)?'block':'none'};">
@@ -9209,6 +9258,8 @@ function _f2HtmlPublico(F2){
       <label class="f2-lbl">Setores / tipos de empresa atendidos</label>
       <input class="f2-inp" id="f2-pa-setores" value="${e(pa.setores||'')}" placeholder="Ex: restaurantes, clínicas, escritórios de contabilidade">
       <label class="f2-lbl">Porte das empresas-cliente</label>${_paChips('portes',PA_OPC.portes,pa.portes)}
+      <label class="f2-lbl">Faturamento anual das empresas-cliente</label>${_paChips('fatB2B',PA_OPC.fatB2B,pa.fatB2B)}
+      <label class="f2-lbl">Nº de funcionários das empresas-cliente</label>${_paChips('funcB2B',PA_OPC.funcB2B,pa.funcB2B)}
       <div class="f2-grid2">
         <div><label class="f2-lbl">Quem decide a compra (cargo)</label>
           <input class="f2-inp" id="f2-pa-decisor" value="${e(pa.decisor||'')}" placeholder="Ex: sócio-proprietário, gerente de compras"></div>
@@ -9264,9 +9315,12 @@ function f2ColetarPA(existente){
   [['necessidade','f2-pa-necessidade'],['regiao','f2-pa-regiao'],['exclusao','f2-pa-exclusao'],['genero','f2-pa-genero'],['freq','f2-pa-freq'],
    ['estilo','f2-pa-estilo'],['ocasiao','f2-pa-ocasiao'],['setores','f2-pa-setores'],['decisor','f2-pa-decisor'],['ciclo','f2-pa-ciclo'],
    ['criterio','f2-pa-criterio'],['orgaos','f2-pa-orgaos'],['sicaf','f2-pa-sicaf'],['tamanho','f2-pa-tamanho'],['fonte','f2-pa-fonte'],
-   ['frase','f2-pa-frase'],['persona_porte','f2-p-porte'],['persona_papel','f2-p-papel']].forEach(([k,id])=>setIf(k,id));
+   ['frase','f2-pa-frase'],['persona_porte','f2-p-porte'],['persona_papel','f2-p-papel'],
+   ['domicilio','f2-pa-domicilio'],['profissoes','f2-pa-profissoes'],['aspiracoes','f2-pa-aspiracoes'],['beneficio','f2-pa-beneficio'],
+   ['preco','f2-pa-preco'],['gasto','f2-pa-gasto'],['influencia','f2-pa-influencia'],
+   ['persona_civil','f2-p-civil'],['persona_filhos','f2-p-filhos']].forEach(([k,id])=>setIf(k,id));
   if(document.getElementById('f2-publico')){
-    ['faixas','rendas','portes','esferas','contrat','canais'].forEach(k=>{
+    ['faixas','rendas','portes','esferas','contrat','canais','civil','filhos','classe','escolaridade','ocupacao','compraonde','pagto','fatB2B','funcB2B'].forEach(k=>{
       pa[k]=[...document.querySelectorAll('.f2-pa-chk[data-k="'+k+'"]:checked')].map(c=>c.value);
     });
   }
@@ -9279,6 +9333,10 @@ function f2MontarFrasePA(){
     let quem = pa.genero==='Predominantemente feminino'?'Mulheres':pa.genero==='Predominantemente masculino'?'Homens':'Pessoas';
     if(pa.faixas?.length) quem += ' de '+pa.faixas.join(', ').replace('60+','60 anos ou mais')+' anos';
     if(pa.rendas?.length) quem += ', renda familiar de '+pa.rendas.join(' ou ');
+    if(pa.escolaridade?.length) quem += ', escolaridade '+pa.escolaridade.join('/').toLowerCase();
+    const OCUP={'CLT (empregado)':'empregados com carteira assinada','Servidor público':'servidores públicos','Autônomo / MEI':'autônomos/MEI','Empresário':'empresários','Estudante':'estudantes','Aposentado':'aposentados','Do lar':'do lar'};
+    if(pa.ocupacao?.length) quem += ', '+pa.ocupacao.map(o=>OCUP[o]||o.toLowerCase()).join(' ou ');
+    if(pa.filhos?.length) quem += ', '+pa.filhos.map(f=>f==='Sem filhos'?'sem filhos':'com '+f.replace(/^Filhos/,'filhos')).join(' ou ');
     if(pa.estilo) quem += ', '+pa.estilo.replace(/\.$/,'');
     partes.push(quem);
   }
@@ -9302,6 +9360,9 @@ function _paResumoTexto(pa){
   const p=[];
   if(pa.faixas?.length) p.push('Idade: '+pa.faixas.join(', '));
   if(pa.rendas?.length) p.push('Renda: '+pa.rendas.join(', '));
+  if(pa.escolaridade?.length) p.push('Escolaridade: '+pa.escolaridade.join(', '));
+  if(pa.filhos?.length) p.push('Filhos: '+pa.filhos.join(', '));
+  if(pa.ocupacao?.length) p.push('Ocupação: '+pa.ocupacao.join(', '));
   if(pa.setores) p.push('Setores: '+pa.setores);
   if(pa.portes?.length) p.push('Porte: '+pa.portes.join(', '));
   if(pa.orgaos) p.push('Órgãos: '+pa.orgaos);
@@ -9322,6 +9383,12 @@ function _paIncoerencias(pa){
   }
   const renda=document.getElementById('f2-p-renda')?.value||'';
   if(renda && pa.rendas?.length && !pa.rendas.includes(renda)) avisos.push('A renda da persona ('+renda+') não está entre as faixas de renda do público-alvo.');
+  const esc=document.getElementById('f2-p-escolaridade')?.value||'';
+  if(esc && pa.escolaridade?.length && !pa.escolaridade.includes(esc)) avisos.push('A escolaridade da persona ('+esc+') não está entre as do público-alvo ('+pa.escolaridade.join(', ')+').');
+  const fil=document.getElementById('f2-p-filhos')?.value||'';
+  if(fil && pa.filhos?.length && !pa.filhos.includes(fil)) avisos.push('A situação de filhos da persona ('+fil+') não corresponde ao público-alvo ('+pa.filhos.join(', ')+').');
+  const civ=document.getElementById('f2-p-civil')?.value||'';
+  if(civ && pa.civil?.length && !pa.civil.includes(civ)) avisos.push('O estado civil da persona ('+civ+') não está entre os do público-alvo.');
   const gen=document.getElementById('f2-p-genero')?.value||'';
   if(gen==='Masculino' && pa.genero==='Predominantemente feminino') avisos.push('Persona masculina para um público predominantemente feminino.');
   if(gen==='Feminino' && pa.genero==='Predominantemente masculino') avisos.push('Persona feminina para um público predominantemente masculino.');
@@ -9353,8 +9420,8 @@ function f2RenderResumoPA(){
     : `<div style="font-size:13px;color:#92400e;">⚠️ O <strong>público-alvo ainda não foi delimitado</strong>. Preencha a aba <strong>🎯 Público-Alvo</strong> antes de criar a persona. <button class="f2-btn-sec" style="padding:4px 10px;font-size:11px;margin-left:6px;" onclick="f2ShowTab('publico')">Ir para Público-Alvo</button></div>`;
 }
 // Atualiza os avisos de coerência enquanto a persona é editada
-document.addEventListener('input',ev=>{ if(ev.target && /^f2-p-(idade|renda|genero)$/.test(ev.target.id||'')) f2RenderResumoPA(); });
-document.addEventListener('change',ev=>{ if(ev.target && (/^f2-p-(idade|renda|genero)$/.test(ev.target.id||'') || ev.target.classList?.contains('f2-pa-chk'))) f2RenderResumoPA(); });
+document.addEventListener('input',ev=>{ if(ev.target && /^f2-p-(idade|renda|genero|escolaridade|filhos|civil)$/.test(ev.target.id||'')) f2RenderResumoPA(); });
+document.addEventListener('change',ev=>{ if(ev.target && (/^f2-p-(idade|renda|genero|escolaridade|filhos|civil)$/.test(ev.target.id||'') || ev.target.classList?.contains('f2-pa-chk'))) f2RenderResumoPA(); });
 
 function f2ShowTab(tab, btn) {
   document.querySelectorAll('.f2-sec').forEach(s=>s.classList.remove('active'));
@@ -10081,7 +10148,7 @@ async function f2GerarPersonaIA(){
   document.getElementById('f2-persona-result').style.display='none';
   document.getElementById('f2-persona-loading').style.display='block';
 
-  const prompt = `Você é um especialista em marketing e comportamento do consumidor. Analise a seguinte buyer persona para um negócio e gere uma análise completa em português.\n\nNEGÓCIO: ${negocio} (${segmento})\nMODELO DE NEGÓCIO: ${(()=>{const pa=f2ColetarPA({});return (pa.modelos||[]).join(', ')+(pa.principal?' (principal: '+pa.principal+')':'');})()}\nPÚBLICO-ALVO DELIMITADO: ${_paResumoTexto(f2ColetarPA({}))||'não informado'}\nPERSONA: ${nome}, ${idade} anos, ${genero}, ${ocupacao}\nRenda: ${renda}\nObjetivos: ${objetivos}\nDesafios: ${desafios}\nMotivações: ${motivacoes}\nObjeções comuns: ${objecoes}\n\nGere uma análise estruturada em HTML com as seguintes seções usando divs com estilo inline:\n1. Perfil Psicológico (valores, crenças, personalidade)\n2. Jornada de Compra (como descobre, pesquisa e decide)\n3. Mensagens-Chave que Ressoam (o que falar para convencer)\n4. Canais de Comunicação Ideais (onde e como alcançar)\n5. Score de Compatibilidade com o negócio e com o público-alvo delimitado (0-100, com justificativa; aponte qualquer incoerência entre a persona e o público-alvo)\n6. 3 Estratégias de Abordagem personalizadas\n\nUse cores e ícones para tornar visualmente rico. Responda APENAS com o HTML, sem markdown.`;
+  const prompt = `Você é um especialista em marketing e comportamento do consumidor. Analise a seguinte buyer persona para um negócio e gere uma análise completa em português.\n\nNEGÓCIO: ${negocio} (${segmento})\nPERSONA — estado civil: ${f2GetVal('f2-p-civil')||'—'}; filhos: ${f2GetVal('f2-p-filhos')||'—'}; escolaridade: ${f2GetVal('f2-p-escolaridade')||'—'}\nMODELO DE NEGÓCIO: ${(()=>{const pa=f2ColetarPA({});return (pa.modelos||[]).join(', ')+(pa.principal?' (principal: '+pa.principal+')':'');})()}\nPÚBLICO-ALVO DELIMITADO: ${_paResumoTexto(f2ColetarPA({}))||'não informado'}\nPERSONA: ${nome}, ${idade} anos, ${genero}, ${ocupacao}\nRenda: ${renda}\nObjetivos: ${objetivos}\nDesafios: ${desafios}\nMotivações: ${motivacoes}\nObjeções comuns: ${objecoes}\n\nGere uma análise estruturada em HTML com as seguintes seções usando divs com estilo inline:\n1. Perfil Psicológico (valores, crenças, personalidade)\n2. Jornada de Compra (como descobre, pesquisa e decide)\n3. Mensagens-Chave que Ressoam (o que falar para convencer)\n4. Canais de Comunicação Ideais (onde e como alcançar)\n5. Score de Compatibilidade com o negócio e com o público-alvo delimitado (0-100, com justificativa; aponte qualquer incoerência entre a persona e o público-alvo)\n6. 3 Estratégias de Abordagem personalizadas\n\nUse cores e ícones para tornar visualmente rico. Responda APENAS com o HTML, sem markdown.`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -11302,6 +11369,7 @@ function f2GerarResumo(){
         return bloco('🎯 Modelo de Negócio e Público-Alvo','#0369a1',
         `${pa.modelos.length?`<div><strong>Modelo(s):</strong> ${pa.modelos.map(v=>(MODELOS_NEG.find(m=>m.v===v)||{}).t||v).join(', ')}${pa.principal?' · <strong>Principal:</strong> '+e(pa.principal):''}${pa.oferta?' · <strong>Oferta:</strong> '+e(pa.oferta):''}</div>`:''}
          ${r?`<div style="margin-top:6px;"><strong>Público-alvo:</strong> ${e(r)}</div>`:''}
+         ${[['Faixa etária','faixas'],['Renda','rendas'],['Classe','classe'],['Escolaridade','escolaridade'],['Ocupação','ocupacao'],['Estado civil','civil'],['Filhos','filhos'],['Porte (B2B)','portes']].filter(([,k])=>pa[k]?.length).map(([l,k])=>`<div style="margin-top:3px;"><strong>${l}:</strong> ${pa[k].map(e).join(', ')}</div>`).join('')}
          ${pa.tamanho?`<div style="margin-top:4px;"><strong>Tamanho estimado:</strong> ${e(pa.tamanho)}${pa.fonte?' ('+e(pa.fonte)+')':''}</div>`:''}
          ${pa.canais?.length?`<div style="margin-top:4px;"><strong>Onde encontrar:</strong> ${pa.canais.map(e).join(', ')}</div>`:''}
          ${pa.exclusao?`<div style="margin-top:4px;"><strong>Não é cliente:</strong> ${e(pa.exclusao)}</div>`:''}`); })()}
