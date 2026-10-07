@@ -2293,7 +2293,7 @@ function _sbClean(obj){
 // Tabela: historico_edicoes. Alterações seguidas do mesmo usuário são
 // agrupadas e gravadas a cada ~2 min, ao salvar explicitamente ou ao sair.
 // =====================================================================
-const AUDIT_IGNORAR = new Set(['saved_at','updated_at','created_at','id','p_ia_resultado','sw_est_ia','emp_nome']);
+const AUDIT_IGNORAR = new Set(['saved_at','updated_at','created_at','id','p_ia_resultado','p_ia_dados','sw_est_ia','emp_nome']);
 const AUDIT_ROTULOS = {nome:'Nome',negocio:'Negócio',telefone:'Telefone',email:'E-mail',cnpj:'CPF/CNPJ',segmento:'Segmento',estagio:'Estágio',
   mentor:'Consultor',tipo_vinculo:'Vínculo',problema:'Problema',causa:'Causa',meta_smart:'Meta SMART',kpi:'KPI',prazo:'Prazo',
   acoes_json:'Plano de ação (3D)',metas:'Metas',kpis:'KPIs',objetivo_fin:'Objetivo financeiro',encaminhamento:'Encaminhamento',
@@ -2980,6 +2980,7 @@ async function adicionarUsuario(){
 async function loadAndRenderDash(){
   document.getElementById('app-main').innerHTML='<div class="ld"><div class="spin"></div><br>Carregando…</div>';
   await Promise.all([loadData(), carregarContextos()]);
+  carregarPersonasIA(); // em segundo plano, para o relatório de personas
   renderDashFiltrado(ALL);
 }
 
@@ -3242,6 +3243,7 @@ function renderDashFiltrado(dataFull){
               <option value="interno_lista">🎓 Empreendedores por vínculo (listas separadas)</option>
               <option value="perfil">👥 Perfil do público (socioeconômico)</option>
               <option value="segmentos">🏷️ Segmentos, estágios e formatos</option>
+              <option value="personas">🧠 Perfil das personas (arquétipo, DISC, MBTI)</option>
             </optgroup>
             <optgroup label="Padrão">
               <option value="lista">📄 Lista de atendimentos</option>
@@ -3572,8 +3574,17 @@ function _relDescFiltros(){
   return partes.length ? partes.join(' · ') : 'Sem filtros (todos os atendimentos)';
 }
 
+// ===== Radiografias de persona (fase2v2.p_ia_dados) para relatórios =====
+let _PERSONAS_IA = null;
+async function carregarPersonasIA(){
+  try{
+    const r=await fetch(SU+'/rest/v1/fase2v2?select=emp_nome,p_ia_dados&p_ia_dados=not.is.null',{headers:SB_HEADERS});
+    _PERSONAS_IA = r.ok ? (await r.json()).filter(x=>x.p_ia_dados && typeof x.p_ia_dados==='object') : [];
+  }catch(_){ _PERSONAS_IA = []; }
+  return _PERSONAS_IA;
+}
 // ===== NOVOS RELATÓRIOS (multi-seção) =====
-const _REL_NOVOS = ['perfil','comparativo','segmentos','interno_lista'];
+const _REL_NOVOS = ['perfil','comparativo','segmentos','interno_lista','personas'];
 function _pct(n,t){ return t? (n*100/t).toFixed(1).replace('.',',')+'%' : '0%'; }
 function _distrib(data, campo, rotuloVazio){
   const m={}; data.forEach(r=>{ const v=(r[campo]||'').toString().trim()||rotuloVazio||'Não informado'; m[v]=(m[v]||0)+1; });
@@ -3627,6 +3638,27 @@ function _relNovo(tipo, data){
       {titulo:'Faixa etária', header:['Faixa etária',...cabG,'Total'], rows:cruz('faixa_etaria')},
     ]};
   }
+  if(tipo==='personas'){
+    const _n=x=>(x||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+    const nomes=new Set(data.map(r=>_n(r.nome)));
+    const lista=(_PERSONAS_IA||[]).filter(p=>nomes.has(_n(p.emp_nome)));
+    const tot=lista.length;
+    const dist=(fn)=>{ const m={}; lista.forEach(p=>{ const v=(fn(p.p_ia_dados)||'Não informado').toString().trim()||'Não informado'; m[v]=(m[v]||0)+1; });
+      return Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([k,n])=>[k,n,_pct(n,tot)]); };
+    const DISC={D:'D — Dominância',I:'I — Influência',S:'S — Estabilidade',C:'C — Conformidade'};
+    const notas=lista.map(p=>parseInt(p.p_ia_dados?.compatibilidade?.nota)).filter(n=>!isNaN(n));
+    const media=notas.length?Math.round(notas.reduce((a,b)=>a+b,0)/notas.length):'—';
+    const gat={}; lista.forEach(p=>(p.p_ia_dados.gatilhos||[]).forEach(g=>{ const k=(g.gatilho||'').trim(); if(k) gat[k]=(gat[k]||0)+1; }));
+    return {titulo:'Perfil das Personas (Radiografia por IA)', paisagem:true, secoes:[
+      {titulo:'Resumo', header:['Indicador','Valor'], rows:[['Atendimentos no recorte',data.length],['Personas com radiografia',tot+' ('+_pct(tot,data.length)+')'],['Aderência média ao público-alvo',media+(notas.length?'/100':'')]]},
+      {titulo:'Arquétipo', header:['Arquétipo','Qtd.','%'], rows:dist(d=>d.arquetipo?.nome)},
+      {titulo:'DISC — perfil dominante', header:['DISC','Qtd.','%'], rows:dist(d=>DISC[d.disc?.dominante]||d.disc?.dominante)},
+      {titulo:'MBTI', header:['Tipo','Qtd.','%'], rows:dist(d=>d.mbti?.tipo?(d.mbti.tipo+' — '+(d.mbti.nome||'')):'')},
+      {titulo:'Gatilhos de compra mais frequentes', header:['Gatilho','Personas','%'], rows:Object.entries(gat).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,n])=>[k,n,_pct(n,tot)])},
+      {titulo:'Personas por empreendedor', header:['Empreendedor','Persona','Arquétipo','DISC','MBTI','Aderência','Insight estratégico'],
+        rows:lista.map(p=>{const d=p.p_ia_dados; return [p.emp_nome,d.persona_nome||'',d.arquetipo?.nome||'',d.disc?.perfil||'',d.mbti?.tipo||'',d.compatibilidade?.nota??'',(d.insight_estrategico||'').slice(0,160)];})},
+    ]};
+  }
   if(tipo==='interno_lista'){
     const hdr=['Nome','Negócio','CPF/CNPJ','E-mail','Telefone','Segmento','Estágio','Consultor','Campus','Data','Prog. 12M'];
     const lin=r=>[r.nome,r.negocio,r.cnpj,r.email,r.telefone,r.segmento,r.estagio,r.mentor,r.campus,r.data_mentoria,r.vinculado_programa?'Sim':'Não'];
@@ -3675,6 +3707,7 @@ function _relNovoHTML(rel){
 }
 
 function gerarRelCSV(tipo){
+  if(tipo==='personas' && _PERSONAS_IA===null){ carregarPersonasIA().then(()=>gerarRelCSV(tipo)); return; }
   if(_REL_NOVOS.includes(tipo)) return _relNovoCSV(tipo);
   const data=getRelData();
   let rows=[],header=[];
@@ -3712,6 +3745,7 @@ function gerarRelCSV(tipo){
 }
 
 function gerarRelExcel(tipo){
+  if(tipo==='personas' && _PERSONAS_IA===null){ carregarPersonasIA().then(()=>gerarRelExcel(tipo)); return; }
   if(_REL_NOVOS.includes(tipo)) return _relNovoExcel(tipo);
   const data=getRelData();
   let rows=[],header=[];
@@ -3755,6 +3789,7 @@ function gerarRelExcel(tipo){
 }
 
 function gerarRelPDF(tipo){
+  if(tipo==='personas' && _PERSONAS_IA===null){ carregarPersonasIA().then(()=>gerarRelPDF(tipo)); return; }
   const data=getRelData();
   const _novo = _REL_NOVOS.includes(tipo) ? _relNovo(tipo,data) : null;
   const logoSrc=(()=>{try{return document.querySelector('.hlo img').src;}catch(e){return '';}})();
@@ -7751,7 +7786,7 @@ async function saveFase2Data(empNome, data){
     // Prefere o registro mais antigo (id menor) que é o original com dados completos
     const realEmpNome = rows[0]?.emp_nome || empNome;
     // Colunas válidas na tabela fase2v2 — filtrar para não causar erro 400
-    const COLS_VALIDAS = ['emp_nome','publico_alvo','saved_at','negocio_nome','cnpj','fundacao','segmento','modelo','local','colaboradores','mercado','missao','visao','valores','proposito','meta_smart','cap_social','cap_integralizado','cap_giro','investimento','reserva','ticket','clientes','receita_calc','fonte_receita','cfixos','cvariaveis','total_custos','margem','p_nome','p_idade','p_genero','p_escolaridade','p_ocupacao','p_renda','p_compra','p_pagamento','p_online','p_objetivos','p_desafios','p_motivacoes','p_objecoes','p_redes','p_ia_resultado','p4_produto','p4_preco','p4_praca','p4_promocao','c4_cliente','c4_custo','c4_conv','c4_comunic','sw_forcas','sw_fraquezas','sw_oportunidades','sw_ameacas','sw_est_of','sw_est_mel','sw_est_def','sw_est_sob','sw_est_ia','mkt_m1','mkt_m2','mkt_m3','mkt_m4','mkt_m5','mkt_m6','mkt_m7','mkt_m8','mkt_m9','mkt_m10','mkt_m11','mkt_m12','mkt_perc','mkt_cat_midia','mkt_cat_producao','mkt_cat_servicos','mkt_cat_trade','mkt_cat_outros','custos_fixos','custos_variaveis','acoes','sessoes','org_tipo','org_total','org_obs','org_funcoes','metas','objetivo_fin'];
+    const COLS_VALIDAS = ['emp_nome','publico_alvo','p_ia_dados','saved_at','negocio_nome','cnpj','fundacao','segmento','modelo','local','colaboradores','mercado','missao','visao','valores','proposito','meta_smart','cap_social','cap_integralizado','cap_giro','investimento','reserva','ticket','clientes','receita_calc','fonte_receita','cfixos','cvariaveis','total_custos','margem','p_nome','p_idade','p_genero','p_escolaridade','p_ocupacao','p_renda','p_compra','p_pagamento','p_online','p_objetivos','p_desafios','p_motivacoes','p_objecoes','p_redes','p_ia_resultado','p4_produto','p4_preco','p4_praca','p4_promocao','c4_cliente','c4_custo','c4_conv','c4_comunic','sw_forcas','sw_fraquezas','sw_oportunidades','sw_ameacas','sw_est_of','sw_est_mel','sw_est_def','sw_est_sob','sw_est_ia','mkt_m1','mkt_m2','mkt_m3','mkt_m4','mkt_m5','mkt_m6','mkt_m7','mkt_m8','mkt_m9','mkt_m10','mkt_m11','mkt_m12','mkt_perc','mkt_cat_midia','mkt_cat_producao','mkt_cat_servicos','mkt_cat_trade','mkt_cat_outros','custos_fixos','custos_variaveis','acoes','sessoes','org_tipo','org_total','org_obs','org_funcoes','metas','objetivo_fin'];
     const raw = {...data, emp_nome:realEmpNome, saved_at:new Date().toLocaleString('pt-BR')};
     const payload = Object.fromEntries(Object.entries(raw).filter(([k])=>COLS_VALIDAS.includes(k)));
     // sbEscreve: se alguma coluna ainda não existir no banco (ex.: publico_alvo sem ALTER TABLE),
@@ -10384,6 +10419,7 @@ async function f2GerarPersonaIA(){
     const empNome = f2GetEmpNome();
     const F2 = getFase2DataSync(empNome);
     F2.p_ia_resultado = html;
+    F2.p_ia_dados = {...d, persona_nome:nome, gerado_em:new Date().toISOString(), gerado_por:USER_NAME};
     saveFase2Data(empNome, F2);
   } catch(err){
     document.getElementById('f2-persona-ia-content').innerHTML = '<p style="color:#dc2626;">⚠️ '+e(err.message||'Erro ao conectar com a IA.')+'</p>';
