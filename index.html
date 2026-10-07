@@ -7807,6 +7807,8 @@ async function renderFase2() {
   // Atualiza cache com dados parseados
   FASE2_CACHE[empNome] = F2;
   // Injeta HTML da análise IA de forma segura (evita quebrar template)
+  // Resultado de IA salvo que era só uma mensagem de erro (versão antiga) não é exibido
+  if(F2.p_ia_resultado && /Erro ao (gerar|conectar)/i.test(F2.p_ia_resultado) && F2.p_ia_resultado.length<300) F2.p_ia_resultado='';
   setTimeout(()=>{ const el=document.getElementById('f2-persona-ia-content'); if(el && F2.p_ia_resultado) el.innerHTML=F2.p_ia_resultado; },100);
   // Popula organograma visual
   setTimeout(()=>{ if(F2.org_funcoes?.length) f2OrgAtualizarVisual(F2.org_funcoes); },120);
