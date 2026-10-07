@@ -1531,6 +1531,7 @@ const IA_MODELOS = ['claude-sonnet-5','claude-haiku-4-5-20251001','claude-sonnet
 function _iaMsgErro(status, err){
   const t=(err&&err.type)||'', m=(err&&err.message)||'';
   if(status===401 || t==='authentication_error') return 'Chave da API inválida ou desativada. Confira a chave 🔑 na tela de Usuários (Coordenação Geral).';
+  if(/not scoped to a workspace|anthropic-workspace-id/i.test(m)) return 'A chave salva não pertence a um espaço de trabalho (chave do tipo sk-ant-usr). Crie uma chave em Claude Console → Chaves de API → Criar chave (espaço de trabalho Default) e cole no campo 🔑 da tela de Usuários.';
   if(/credit balance|billing|insufficient|too low/i.test(m)) return 'Sem créditos na conta da API Anthropic. Compre créditos em Claude Console → Faturamento.';
   if(status===403 || t==='permission_error') return 'A chave da API não tem permissão para este uso. Detalhe: '+m;
   if(status===429 || t==='rate_limit_error') return 'Limite de uso da API atingido. Aguarde um minuto e tente de novo.';
