@@ -571,6 +571,7 @@ async function buscarParticipantePortalPorCPF(cpf){
     return data&&data.length>0?data[0]:null;
   }catch(e){ return null; }
 }
+const APP_VERSAO='2026.10.07-seg1';
 const SB_HEADERS={'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'};
 
 // ===== CONFIG GLOBAL (API KEY salva no Supabase) =====
@@ -1545,16 +1546,39 @@ function _iaMsgErro(status, err){
   if(status>=500) return 'A API da Anthropic está instável. Tente novamente em instantes.';
   return 'Erro da API ('+status+'): '+(m||'resposta inesperada');
 }
+// 1º tenta a função do servidor (Supabase Edge Function "ia-proxy", chave protegida);
+// se ela ainda não estiver publicada, usa a chamada direta com a chave salva (modo antigo).
+const IA_PROXY_URL = SU + '/functions/v1/ia-proxy';
+let _iaProxyOk = null; // null = ainda não testado · true = usando servidor · false = indisponível
+function _iaChaveLocal(){
+  const k=(_GLOBAL_API_KEY || localStorage.getItem('enedes_apikey') || '').trim();
+  return /^sk-ant-/.test(k) ? k : '';
+}
+async function _iaChamar(body, opts){
+  if(_iaProxyOk !== false){
+    try{
+      const r = await fetch(IA_PROXY_URL, {method:'POST', headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'}, body: JSON.stringify(body)});
+      let data={}; try{ data = await r.json(); }catch(_){}
+      const funcaoInexistente = r.status===404 && !(data && data.error) ;
+      if(!funcaoInexistente){ _iaProxyOk = true; return {r, data, via:'servidor'}; }
+      _iaProxyOk = false;
+    }catch(e){ if(_iaProxyOk===true) throw new Error('Sem conexão com a IA. Verifique a internet e tente de novo.'); _iaProxyOk = false; }
+  }
+  const chave=_iaChaveLocal();
+  if(!chave) throw new Error('A IA ainda não está configurada no servidor (função ia-proxy) e não há chave local. Avise a Coordenação Geral.');
+  let r;
+  try{
+    r = await fetch('https://api.anthropic.com/v1/messages', {method:'POST', headers:{'Content-Type':'application/json','x-api-key':chave,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body: JSON.stringify(body)});
+  }catch(e){ throw new Error('Sem conexão com a IA. Verifique a internet e tente de novo.'); }
+  let data={}; try{ data = await r.json(); }catch(_){}
+  return {r, data, via:'direto'};
+}
 async function iaFetch(opts){
   const body = JSON.parse(opts.body||'{}');
   let ultimo = null;
   for(const modelo of IA_MODELOS){
     body.model = modelo;
-    let r, data;
-    try{
-      r = await fetch('https://api.anthropic.com/v1/messages', {...opts, body: JSON.stringify(body)});
-    }catch(e){ throw new Error('Sem conexão com a IA. Verifique a internet e tente de novo.'); }
-    try{ data = await r.json(); }catch(_){ data = {}; }
+    const {r, data} = await _iaChamar(body, opts);
     if(r.ok) return { ok:true, status:r.status, json: async()=>data };
     const err = data && data.error;
     const modeloInvalido = r.status===404 || (err && err.type==='not_found_error') || /model/i.test((err&&err.message)||'') && r.status===400;
@@ -1564,9 +1588,20 @@ async function iaFetch(opts){
   }
   throw new Error(ultimo || 'Não foi possível gerar com a IA.');
 }
+// Verifica se a função do servidor está publicada (para o painel da Coordenação)
+async function iaStatusServidor(){
+  try{
+    const r = await fetch(IA_PROXY_URL, {method:'POST', headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'}, body: JSON.stringify({model:IA_MODELOS[1], max_tokens:1, messages:[{role:'user',content:'ok'}]})});
+    let d={}; try{ d=await r.json(); }catch(_){}
+    if(r.status===404 && !(d&&d.error)) return {ok:false, msg:'Função ia-proxy ainda não publicada no Supabase.'};
+    if(r.ok) return {ok:true, msg:'IA funcionando pelo servidor — chave protegida.'};
+    return {ok:false, msg:_iaMsgErro(r.status, d&&d.error)};
+  }catch(e){ return {ok:false, msg:'Função ia-proxy ainda não publicada (ou sem conexão).'}; }
+}
 
 function getApiKey(){
-  return _GLOBAL_API_KEY || (document.getElementById('f2-apikey-input')?.value || localStorage.getItem('enedes_apikey') || '').trim();
+  // Com a função do servidor a chave não fica no navegador; 'servidor' libera as telas de IA.
+  return _GLOBAL_API_KEY || (document.getElementById('f2-apikey-input')?.value || localStorage.getItem('enedes_apikey') || '').trim() || 'servidor';
 }
 
 function f2CheckApiKey(){
@@ -1783,6 +1818,7 @@ async function showView(view){
     document.getElementById('app-main').innerHTML='<div style="padding:24px"><h2 style="color:#1a2035;margin-bottom:16px">Gerenciar Usuários</h2><div id="usuarios-panel"><div class="ld"><div class="spin"></div><br>Carregando usuários…</div></div></div>';
     await loadUsers();
     renderUsuarios();
+    if(isCoordGeral()) _atualizarStatusIAServidor();
   }
   else if(view === 'relatorios') {
     if(!canExport()){ sa('e','⚠️ Acesso restrito. Relatórios disponíveis apenas para coordenadores.'); return; }
@@ -2302,7 +2338,7 @@ const AUDIT_ROTULOS = {nome:'Nome',negocio:'Negócio',telefone:'Telefone',email:
   negocio_nome:'Nome do negócio',modelo:'Modelo de negócio',missao:'Missão',visao:'Visão',valores:'Valores',proposito:'Propósito',
   ticket:'Ticket médio',clientes:'Clientes/mês',cfixos:'Custos fixos',cvariaveis:'Custos variáveis',custos_fixos:'Custos fixos (itens)',custos_variaveis:'Custos variáveis (itens)',
   publico_alvo:'Público-alvo',p_nome:'Persona — nome',p_idade:'Persona — idade',p_renda:'Persona — renda',p_objetivos:'Persona — objetivos',p_desafios:'Persona — desafios',
-  sw_forcas:'SWOT — forças',sw_fraquezas:'SWOT — fraquezas',sw_oportunidades:'SWOT — oportunidades',sw_ameacas:'SWOT — ameaças',acoes:'Plano de ação (Fase 2)',sessoes:'Farol de acompanhamento',_criacao:'Criação'};
+  sw_forcas:'SWOT — forças',sw_fraquezas:'SWOT — fraquezas',sw_oportunidades:'SWOT — oportunidades',sw_ameacas:'SWOT — ameaças',acoes:'Plano de ação (Fase 2)',sessoes:'Farol de acompanhamento',_criacao:'Criação',logo_url:'Logo da empresa'};
 const _AUDIT_SNAP = {};      // último estado conhecido da Fase 2, por empreendedor
 const _AUDIT_PEND = {};      // alterações ainda não gravadas, por chave
 let _auditTimer = null;
@@ -2553,6 +2589,7 @@ function renderUsuarios(){
         <span id="apikey-save-msg" style="font-size:12px;color:#a7f3d0;opacity:0;transition:opacity .4s;">✓ Salvo!</span>
       </div>
       <div style="margin-top:10px;">${apiKeyStatus}</div>
+      <div id="ia-servidor-status" style="margin-top:10px;background:rgba(255,255,255,.1);border-radius:8px;padding:8px 12px;font-size:12px;">⏳ Verificando a IA no servidor…</div>
     </div>` : ''}
     <div class="lh"><div class="lt">👥 Gerenciar Usuários</div></div>
     <div style="background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
@@ -2660,6 +2697,13 @@ function renderUsuarios(){
       </div>
       <div class="lerr" id="nu-err" style="background:#fff5f5;color:#e53e3e;border-radius:8px;padding:8px;margin-top:8px;display:none;"></div>
     </div>`;
+}
+async function _atualizarStatusIAServidor(){
+  const el=document.getElementById('ia-servidor-status'); if(!el) return;
+  const st=await iaStatusServidor();
+  el.innerHTML = st.ok
+    ? '🛡️ <strong style="color:#a7f3d0;">'+e(st.msg)+'</strong><br><span style="opacity:.8;">Etapa de segurança concluída: a chave pode ser apagada daqui (SQL da etapa 1, passo 3).</span>'
+    : '⚠️ <strong style="color:#fde68a;">'+e(st.msg)+'</strong><br><span style="opacity:.8;">Enquanto isso, o sistema usa a chave salva acima (modo antigo, menos seguro).</span>';
 }
 async function removerUsuario(i){
   const users=getUsers();
@@ -4281,8 +4325,10 @@ function renderDetalhe(){
       </div>
     </div>` : ''}
     <div class="card">
+      <div style="display:flex;align-items:center;gap:14px;">${logoMini(r.logo_url,64)}<div>
       <div class="dn">${e(r.nome||'—')}</div>
       <div class="dm">${e(r.negocio||'')}${r.segmento?' · '+e(r.segmento):''} · ${r.data_mentoria||r.saved_at?.split(',')[0]||'—'}</div>
+      </div></div>
       ${sec("🔎 1D — Diagnosticar","sg2",`
         <div class="dg">
           ${row("Negócio",r.negocio)}${row("CNPJ",r.cnpj)}${row("Segmento",r.segmento)}
@@ -4400,7 +4446,7 @@ function nf(){return{
   nome:"",negocio:"",cnpj:"",seg:"",data:"",fmt:"",mentor:USER_NAME||'',area:"",campus:"",telefone:"",email:"",est:"",desa:[],desaOutro:"",
   faturamento_faixa:"",
   cnae_codigo:"",cnae_descricao:"",cnae_classe:"",cnae_classe_desc:"",
-  empreendedor_interno:false, tipo_vinculo:'',
+  empreendedor_interno:false, tipo_vinculo:'', logo_url:'',
   pils:{
     "Produto/Serviço":{n:"",c:"",o:"",resps:["","","",""]},
     "Vendas/Marketing":{n:"",c:"",o:"",resps:["","","",""]},
@@ -4586,6 +4632,7 @@ function editarAtendimento(){
   F.empreendedor_usuario = r.empreendedor_usuario||'';
   F.nome = r.nome||'';
   F.negocio = r.negocio||'';
+  F.logo_url = r.logo_url||'';
   F.telefone = r.telefone||'';
   F.email = r.email||'';
   F.cnpj = r.cnpj||'';
@@ -5218,6 +5265,92 @@ function rPrecificacaoExtra(){
   </div>`;
 }
 
+
+// =====================================================================
+// ===== LOGO DA EMPRESA (1D) ==========================================
+// Imagem redimensionada no navegador (máx. 512px) e enviada ao Supabase
+// Storage (bucket "logos"). A URL fica em atendimentos_5d.logo_url.
+// Se o Storage não estiver configurado, guarda uma versão pequena (256px)
+// direto no registro, para não perder a logo.
+// =====================================================================
+function _logoRedimensionar(file, max, tipo){
+  return new Promise((ok,erro)=>{
+    const img=new Image(), url=URL.createObjectURL(file);
+    img.onload=()=>{
+      const esc=Math.min(1, max/Math.max(img.width,img.height));
+      const c=document.createElement('canvas'); c.width=Math.round(img.width*esc); c.height=Math.round(img.height*esc);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob(b=>b?ok({blob:b, dataUrl:c.toDataURL(tipo, .85)}):erro(new Error('Não foi possível processar a imagem.')), tipo, .85);
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); erro(new Error('Arquivo de imagem inválido.')); };
+    img.src=url;
+  });
+}
+function _logoBox(){
+  const temLogo=!!F.logo_url;
+  return `<div class="fg full">
+    <label class="lbl">🖼️ Logo da empresa <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0;">(opcional · PNG, JPG ou WEBP até 5 MB)</span></label>
+    <div id="logo-box" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:#f8fafb;border:1.5px dashed ${temLogo?'#9fd1b4':'var(--border)'};border-radius:12px;padding:12px 16px;">
+      <div style="width:96px;height:96px;border-radius:12px;background:#fff;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">
+        ${temLogo?`<img src="${e(F.logo_url)}" alt="Logo" style="max-width:100%;max-height:100%;object-fit:contain;">`:`<span style="font-size:30px;opacity:.35;">🏢</span>`}
+      </div>
+      <div style="flex:1;min-width:200px;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${temLogo?'Logo cadastrada. Ela aparece no detalhe do atendimento, na Fase 2 e nos relatórios.':'Envie a logo para personalizar o diagnóstico, a Fase 2 e os relatórios do empreendedor.'}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <label style="background:var(--navy,#1d3557);color:#fff;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">
+            ${temLogo?'🔄 Trocar logo':'⬆️ Enviar logo'}
+            <input type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="logoEnviar(this)">
+          </label>
+          ${temLogo?`<button type="button" onclick="logoRemover()" style="background:#fff;border:1.5px solid #fca5a5;color:#dc2626;border-radius:9px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Remover</button>`:''}
+        </div>
+        <div id="logo-status" style="font-size:11px;margin-top:6px;color:var(--muted);"></div>
+      </div>
+    </div>
+  </div>`;
+}
+function _logoAtualizarBox(){ const b=document.getElementById('logo-box'); if(b) b.parentElement.outerHTML=_logoBox(); }
+async function logoEnviar(inp){
+  const file=inp.files&&inp.files[0]; if(!file) return;
+  const st=document.getElementById('logo-status');
+  if(!/^image\/(png|jpeg|webp)$/.test(file.type)){ if(st) st.innerHTML='<span style="color:#dc2626;">Use uma imagem PNG, JPG ou WEBP.</span>'; return; }
+  if(file.size>5*1024*1024){ if(st) st.innerHTML='<span style="color:#dc2626;">Imagem acima de 5 MB. Reduza o tamanho e tente de novo.</span>'; return; }
+  if(st) st.textContent='⏳ Enviando logo…';
+  const tipo = file.type==='image/jpeg' ? 'image/jpeg' : 'image/png';
+  try{
+    const grande=await _logoRedimensionar(file, 512, tipo);
+    const rec=(F._editIndex>=0 && ALL[F._editIndex]) ? ALL[F._editIndex] : null;
+    const base=(rec&&rec.id) ? 'atend-'+rec.id : 'novo-'+(F.nome||'empresa').normalize('NFD').replace(/[^\w]+/g,'-').toLowerCase().slice(0,40);
+    const caminho=base+'-'+Date.now()+(tipo==='image/jpeg'?'.jpg':'.png');
+    let url='';
+    try{
+      const r=await fetch(SU+'/storage/v1/object/logos/'+caminho,{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':tipo,'x-upsert':'true'},body:grande.blob});
+      if(r.ok) url=SU+'/storage/v1/object/public/logos/'+caminho;
+      else console.warn('[logo] Storage recusou:', r.status, await r.text());
+    }catch(e2){ console.warn('[logo] Storage indisponível:', e2.message); }
+    if(!url){ // plano B: versão pequena embutida no registro
+      const peq=await _logoRedimensionar(file, 256, tipo);
+      url=peq.dataUrl;
+    }
+    F.logo_url=url;
+    _logoAtualizarBox();
+    const st2=document.getElementById('logo-status');
+    if(st2) st2.innerHTML='<span style="color:#16a34a;">✓ Logo carregada. Clique em <strong>💾 Salvar</strong> para gravar no atendimento.</span>';
+    try{ f5MarkDirty&&f5MarkDirty(); }catch(_){}
+  }catch(err){ if(st) st.innerHTML='<span style="color:#dc2626;">'+e(err.message)+'</span>'; }
+  finally{ inp.value=''; }
+}
+function logoRemover(){
+  if(!confirm('Remover a logo deste atendimento?')) return;
+  F.logo_url=''; _logoAtualizarBox();
+  const st=document.getElementById('logo-status'); if(st) st.innerHTML='Logo removida. Clique em <strong>💾 Salvar</strong> para confirmar.';
+}
+// miniatura reutilizável (detalhe, Fase 2, painel, relatórios)
+function logoMini(url, tam, fundo){
+  if(!url) return '';
+  return `<img src="${e(url)}" alt="Logo" style="width:${tam}px;height:${tam}px;object-fit:contain;border-radius:10px;background:${fundo||'#fff'};padding:4px;border:1px solid rgba(0,0,0,.08);flex-shrink:0;">`;
+}
+
 function rP0(){
   // Coord geral e apoio_tec podem editar o consultor; coord_prog vê readonly; consultor vê seu próprio nome readonly
   let mentorField;
@@ -5243,6 +5376,7 @@ function rP0(){
     <div class="g2">
       <div class="fg full"><label class="lbl">Nome do(a) Empreendedor(a) *</label><input type="text" id="f0" value="${e(F.nome)}" placeholder="Nome completo"></div>
       <div class="fg full"><label class="lbl">Nome do Negócio / Marca</label><input type="text" id="f1" value="${e(F.negocio)}" placeholder="Como o negócio é conhecido?"></div>
+      ${_logoBox()}
       <div class="fg"><label class="lbl">Telefone</label><input type="text" id="ftel" value="${e(F.telefone)}" placeholder="(61) 9 0000-0000"></div>
       <div class="fg"><label class="lbl">E-mail</label><input type="text" id="femail" value="${e(F.email)}" placeholder="email@exemplo.com"></div>
       <div class="fg"><label class="lbl">CNPJ (se houver)</label><input type="text" id="f2" value="${e(F.cnpj)}" placeholder="00.000.000/0001-00"></div>
@@ -6568,6 +6702,7 @@ function buildRecFromF(){
   const rec={
     saved_at:new Date().toLocaleString('pt-BR'),
     empreendedor_usuario:F.empreendedor_usuario,
+    logo_url:(F.logo_url||null),
     nome:F.nome,negocio:F.negocio,telefone:F.telefone,email:F.email,cnpj:F.cnpj,segmento:F.seg,
     data_mentoria:F.data,formato:F.fmt,mentor:(F.mentor||USER_NAME),area:F.area,campus:F.campus,
     estagio:F.est,desafios:F.desa.join(', '),desafio_outro:F.desaOutro,
@@ -6661,6 +6796,7 @@ async function salvar(){
   const rec={
     saved_at:new Date().toLocaleString('pt-BR'),
     empreendedor_usuario:F.empreendedor_usuario,
+    logo_url:(F.logo_url||null),
     nome:F.nome,negocio:F.negocio,telefone:F.telefone,email:F.email,cnpj:F.cnpj,segmento:F.seg,
     data_mentoria:F.data,formato:F.fmt,mentor:(F.mentor||USER_NAME),area:F.area,campus:F.campus,
     estagio:F.est,desafios:F.desa.join(', '),desafio_outro:F.desaOutro,
@@ -7589,6 +7725,7 @@ async function renderEmpPainel(){
   document.getElementById('app-main').innerHTML=`
     <div class="emp-hero">
       <div style="position:relative;z-index:1;">
+        ${meu.logo_url?`<div style="margin-bottom:8px;">${logoMini(meu.logo_url,56)}</div>`:''}
         <div class="emp-hero-name">Olá, ${e(meu.nome||USER_NAME)}! 👋</div>
         <div class="emp-hero-neg">${e(meu.negocio||'Meu Negócio')}${meu.segmento?' · '+e(meu.segmento):''}</div>
         <div class="emp-badges">
@@ -8052,6 +8189,7 @@ async function renderFase2() {
       </div>
     </div>
     <div class="f2-hero-right">
+      ${meu.logo_url?`<div style="display:flex;justify-content:flex-end;margin-bottom:6px;">${logoMini(meu.logo_url,56)}</div>`:''}
       <div class="emp-name" id="f2-emp-nome-display">${e(empNome)}</div>
       <div class="emp-neg">${e(diag.negocio)}${diag.segmento?' · '+e(diag.segmento):''}</div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;justify-content:flex-end;">
@@ -11923,6 +12061,7 @@ function f2GerarResumo(){
 
       
       <div style="background:linear-gradient(135deg,#0f2644,#1a5e3a);color:#fff;border-radius:14px;padding:24px 28px;margin-bottom:20px;">
+        ${meu?.logo_url?`<div style="margin-bottom:8px;">${logoMini(meu.logo_url,64)}</div>`:''}
         <div style="font-size:20px;font-weight:800;margin-bottom:4px;">${e(F2.negocio_nome||meu?.negocio||empNome)}</div>
         <div style="opacity:.7;font-size:13px;">${e(F2.segmento||meu?.segmento||'–')} · ${e(F2.local||meu?.campus||'–')}</div>
         <div style="opacity:.6;font-size:11px;margin-top:8px;">Relatório gerado em ${new Date().toLocaleString('pt-BR')}</div>
@@ -12461,5 +12600,7 @@ async function empUploadArquivoEvidencia(empNome, acaoIdx){
 }
 
 </script>
+<div id="app-versao" style="position:fixed;left:10px;bottom:8px;z-index:50;font-size:10px;color:#94a3b8;background:rgba(255,255,255,.85);border:1px solid #e2e8f0;border-radius:10px;padding:2px 8px;pointer-events:none;font-family:inherit;"></div>
+<script>try{ document.getElementById('app-versao').textContent='Rota v'+APP_VERSAO; console.info('Rota versão',APP_VERSAO); }catch(_){}</script>
 </body>
 </html>
