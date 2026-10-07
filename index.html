@@ -1018,7 +1018,7 @@ async function gerarModelosIA(){
   const ideia = [F.id_para_quem, F.id_dor, F.id_oferta].filter(Boolean).join(' | ') || 'ideia ainda em estruturação';
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await iaFetch({
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body: JSON.stringify({
@@ -1041,7 +1041,7 @@ Seja muito concreto e prático. Não mencione Sebrae. Mencione o IFB/ENEDES quan
     const text = data.content?.find(c=>c.type==='text')?.text || '';
     result.innerHTML = `<div style="background:#fff;border:1px solid #d1fae5;border-radius:10px;padding:14px;font-size:12px;color:#334155;line-height:1.7;white-space:pre-wrap;">${text}</div>`;
   } catch(err) {
-    result.innerHTML = '<div style="color:#e53e3e;font-size:12px;padding:8px;">Erro ao conectar com a IA. Verifique a chave da API.</div>';
+    result.innerHTML = '<div style="color:#e53e3e;font-size:12px;padding:8px;">⚠️ '+e(err.message||'Erro ao conectar com a IA.')+'</div>';
   } finally {
     btn.disabled = false;
     btn.innerHTML = '🤖 Gerar sugestões com IA';
@@ -1522,6 +1522,40 @@ function togglePwd(id, btn){
   el.type = show ? 'text' : 'password';
   btn.innerHTML = show ? '🙈' : '👁';
   btn.style.color = show ? 'rgba(255,255,255,.8)' : 'rgba(255,255,255,.5)';
+}
+
+
+// ===== IA (Anthropic): chamada central com modelo atual, fallback e erro legível =====
+// Ordem de tentativa: se um modelo não existir/estiver aposentado, tenta o próximo.
+const IA_MODELOS = ['claude-sonnet-5','claude-haiku-4-5-20251001','claude-sonnet-4-20250514'];
+function _iaMsgErro(status, err){
+  const t=(err&&err.type)||'', m=(err&&err.message)||'';
+  if(status===401 || t==='authentication_error') return 'Chave da API inválida ou desativada. Confira a chave 🔑 na tela de Usuários (Coordenação Geral).';
+  if(/credit balance|billing|insufficient|too low/i.test(m)) return 'Sem créditos na conta da API Anthropic. Compre créditos em Claude Console → Faturamento.';
+  if(status===403 || t==='permission_error') return 'A chave da API não tem permissão para este uso. Detalhe: '+m;
+  if(status===429 || t==='rate_limit_error') return 'Limite de uso da API atingido. Aguarde um minuto e tente de novo.';
+  if(status===529 || t==='overloaded_error') return 'A IA está sobrecarregada no momento. Tente novamente em instantes.';
+  if(status>=500) return 'A API da Anthropic está instável. Tente novamente em instantes.';
+  return 'Erro da API ('+status+'): '+(m||'resposta inesperada');
+}
+async function iaFetch(opts){
+  const body = JSON.parse(opts.body||'{}');
+  let ultimo = null;
+  for(const modelo of IA_MODELOS){
+    body.model = modelo;
+    let r, data;
+    try{
+      r = await fetch('https://api.anthropic.com/v1/messages', {...opts, body: JSON.stringify(body)});
+    }catch(e){ throw new Error('Sem conexão com a IA. Verifique a internet e tente de novo.'); }
+    try{ data = await r.json(); }catch(_){ data = {}; }
+    if(r.ok) return { ok:true, status:r.status, json: async()=>data };
+    const err = data && data.error;
+    const modeloInvalido = r.status===404 || (err && err.type==='not_found_error') || /model/i.test((err&&err.message)||'') && r.status===400;
+    ultimo = _iaMsgErro(r.status, err);
+    console.warn('[IA] '+modelo+' falhou:', r.status, err);
+    if(!modeloInvalido) break;   // erro de chave/crédito/limite: não adianta trocar de modelo
+  }
+  throw new Error(ultimo || 'Não foi possível gerar com a IA.');
 }
 
 function getApiKey(){
@@ -10303,7 +10337,7 @@ async function f2GerarPersonaIA(){
   const prompt = `Você é um especialista em marketing e comportamento do consumidor. Analise a seguinte buyer persona para um negócio e gere uma análise completa em português.\n\nNEGÓCIO: ${negocio} (${segmento})\nPERSONA — estado civil: ${f2GetVal('f2-p-civil')||'—'}; filhos: ${f2GetVal('f2-p-filhos')||'—'}; escolaridade: ${f2GetVal('f2-p-escolaridade')||'—'}\nMODELO DE NEGÓCIO: ${(()=>{const pa=f2ColetarPA({});return (pa.modelos||[]).join(', ')+(pa.principal?' (principal: '+pa.principal+')':'');})()}\nPÚBLICO-ALVO DELIMITADO: ${_paResumoTexto(f2ColetarPA({}))||'não informado'}\nPERSONA: ${nome}, ${idade} anos, ${genero}, ${ocupacao}\nRenda: ${renda}\nObjetivos: ${objetivos}\nDesafios: ${desafios}\nMotivações: ${motivacoes}\nObjeções comuns: ${objecoes}\n\nGere uma análise estruturada em HTML com as seguintes seções usando divs com estilo inline:\n1. Perfil Psicológico (valores, crenças, personalidade)\n2. Jornada de Compra (como descobre, pesquisa e decide)\n3. Mensagens-Chave que Ressoam (o que falar para convencer)\n4. Canais de Comunicação Ideais (onde e como alcançar)\n5. Score de Compatibilidade com o negócio e com o público-alvo delimitado (0-100, com justificativa; aponte qualquer incoerência entre a persona e o público-alvo)\n6. 3 Estratégias de Abordagem personalizadas\n\nUse cores e ícones para tornar visualmente rico. Responda APENAS com o HTML, sem markdown.`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await iaFetch({
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
@@ -10313,7 +10347,8 @@ async function f2GerarPersonaIA(){
       })
     });
     const data = await res.json();
-    const html = data.content?.map(c=>c.text||'').join('') || '<p>Erro ao gerar análise.</p>';
+    const html = (data.content?.map(c=>c.text||'').join('') || '').replace(/^```html\s*|```\s*$/g,'').trim();
+    if(!html) throw new Error('A IA não retornou conteúdo. Tente novamente.');
     const resultEl = document.getElementById('f2-persona-ia-content');
     if(resultEl) resultEl.innerHTML = html;
     document.getElementById('f2-persona-result').style.display='block';
@@ -10322,7 +10357,7 @@ async function f2GerarPersonaIA(){
     F2.p_ia_resultado = html;
     saveFase2Data(empNome, F2);
   } catch(err){
-    document.getElementById('f2-persona-ia-content').innerHTML = '<p style="color:#dc2626;">Erro ao conectar com a IA. Verifique sua conexão.</p>';
+    document.getElementById('f2-persona-ia-content').innerHTML = '<p style="color:#dc2626;">⚠️ '+e(err.message||'Erro ao conectar com a IA.')+'</p>';
     document.getElementById('f2-persona-result').style.display='block';
   } finally {
     document.getElementById('f2-persona-loading').style.display='none';
@@ -10358,7 +10393,7 @@ async function f2GerarSWOTIA(){
   const prompt = `Você é um consultor de negócios especializado em estratégia. Com base na análise SWOT abaixo, gere estratégias cruzadas em português para o negócio.\n\nNEGÓCIO: ${negocio} (segmento: ${segmento})\n\nFORÇAS: ${forcas}\nFRAQUEZAS: ${fraquezas}\nOPORTUNIDADES: ${oportunidades}\nAMEAÇAS: ${ameacas}\n\nGere EXATAMENTE 4 blocos de estratégias no formato JSON abaixo (responda APENAS com o JSON, sem markdown):\n{\n  "ofensiva": ["estratégia 1 OFENSIVA (Forças × Oportunidades)", "estratégia 2", "estratégia 3"],\n  "defensiva": ["estratégia 1 DEFENSIVA (Forças × Ameaças)", "estratégia 2", "estratégia 3"],\n  "melhoria": ["estratégia 1 CONFRONTATIVA (Fraquezas × Oportunidades)", "estratégia 2", "estratégia 3"],\n  "sobrevivencia": ["estratégia 1 de REFORÇO (Fraquezas × Ameaças)", "estratégia 2", "estratégia 3"]\n}`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await iaFetch({
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
@@ -10395,7 +10430,7 @@ async function f2GerarSWOTIA(){
 
     document.getElementById('f2-swot-est-resultado').style.display='block';
   } catch(err){
-    alert('Erro ao gerar estratégias. Verifique sua conexão com a IA.');
+    alert('Erro ao gerar estratégias: '+(err.message||'verifique a conexão com a IA.'));
   } finally {
     document.getElementById('f2-swot-ia-loading').style.display='none';
     if(btn){ btn.disabled=false; btn.innerHTML='🤖 Gerar Estratégias com IA'; }
