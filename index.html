@@ -3654,6 +3654,7 @@ function _relNovo(tipo, data){
       {titulo:'Arquétipo', header:['Arquétipo','Qtd.','%'], rows:dist(d=>d.arquetipo?.nome)},
       {titulo:'DISC — perfil dominante', header:['DISC','Qtd.','%'], rows:dist(d=>DISC[d.disc?.dominante]||d.disc?.dominante)},
       {titulo:'MBTI', header:['Tipo','Qtd.','%'], rows:dist(d=>d.mbti?.tipo?(d.mbti.tipo+' — '+(d.mbti.nome||'')):'')},
+      {titulo:'Emoções dominantes (Plutchik)', header:['Emoção','Personas','%'], rows:(()=>{ const m={}; let n=0; lista.forEach(p=>{ const ks=(p.p_ia_dados.plutchik&&p.p_ia_dados.plutchik.emocoes_dominantes)||[]; if(ks.length) n++; ks.forEach(k=>{ const em=PLUTCHIK.find(x=>x.k===k); const l=em?em.lbl:k; m[l]=(m[l]||0)+1; }); }); return Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,v,_pct(v,n||1)]); })()},
       {titulo:'Gatilhos de compra mais frequentes', header:['Gatilho','Personas','%'], rows:Object.entries(gat).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,n])=>[k,n,_pct(n,tot)])},
       {titulo:'Personas por empreendedor', header:['Empreendedor','Persona','Arquétipo','DISC','MBTI','Aderência','Insight estratégico'],
         rows:lista.map(p=>{const d=p.p_ia_dados; return [p.emp_nome,d.persona_nome||'',d.arquetipo?.nome||'',d.disc?.perfil||'',d.mbti?.tipo||'',d.compatibilidade?.nota??'',(d.insight_estrategico||'').slice(0,160)];})},
@@ -7851,7 +7852,15 @@ async function renderFase2() {
   // Injeta HTML da análise IA de forma segura (evita quebrar template)
   // Resultado de IA salvo que era só uma mensagem de erro (versão antiga) não é exibido
   if(F2.p_ia_resultado && /Erro ao (gerar|conectar)/i.test(F2.p_ia_resultado) && F2.p_ia_resultado.length<300) F2.p_ia_resultado='';
-  setTimeout(()=>{ const el=document.getElementById('f2-persona-ia-content'); if(el && F2.p_ia_resultado) el.innerHTML=F2.p_ia_resultado; },100);
+  setTimeout(()=>{
+    const el=document.getElementById('f2-persona-ia-content'); if(!el) return;
+    // Radiografia: redesenha a partir dos dados estruturados (sempre com o layout e os "?" atuais)
+    let d=F2.p_ia_dados; if(typeof d==='string'){ try{ d=JSON.parse(d);}catch(_){ d=null; } }
+    if(d && d.mbti){
+      try{ const pa=_f2PA(F2); el.innerHTML=_f2RenderPersonaCard(d, d.persona_nome||F2.p_nome||'', F2.p_idade||'', pa.regiao||F2.local||''); document.getElementById('f2-persona-result').style.display='block'; return; }catch(_){}
+    }
+    if(F2.p_ia_resultado) el.innerHTML=F2.p_ia_resultado;
+  },100);
   // Popula organograma visual
   setTimeout(()=>{ if(F2.org_funcoes?.length) f2OrgAtualizarVisual(F2.org_funcoes); },120);
   // Popula painéis de ações prioritárias no farol
@@ -8449,6 +8458,7 @@ async function renderFase2() {
         ✨ Gerar Radiografia da Persona com IA
       </button>
       <div style="font-size:11px;color:var(--muted);margin-top:6px;">MBTI · DISC · Arquétipo · Mapa de Empatia · Gatilhos de compra · Vocabulário · Aderência ao público-alvo</div>
+      <button type="button" onclick="f2ExplicaTudo()" style="margin-top:8px;background:#fff;border:1.5px solid #cdd9ee;color:#1d3557;border-radius:20px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📘 Entenda os conceitos (MBTI, DISC, Arquétipo…)</button>
     </div>
 
     
@@ -8460,6 +8470,8 @@ async function renderFase2() {
       <div style="font-size:32px;animation:spin 1s linear infinite;display:inline-block;">⏳</div>
       <div style="margin-top:12px;font-size:14px;color:var(--muted);">IA analisando a persona...</div>
     </div>
+
+    ${_f2HtmlPlutchik(F2)}
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
       <button class="f2-btn-save" onclick="f2Salvar()">💾 Salvar Persona</button>
@@ -10350,6 +10362,262 @@ function f2Salvar(){
 }
 
 // ===== IA: GERAR PERSONA =====
+// =====================================================================
+// ===== POP-UPS EXPLICATIVOS DOS CONCEITOS DA PERSONA (para alunos) ===
+// =====================================================================
+const F2_EXPLICA = {
+  mbti:{t:'🧠 MBTI — Tipos de personalidade', h:`
+    <p>O <strong>MBTI</strong> (Myers-Briggs Type Indicator) foi criado por Isabel Myers e Katharine Briggs a partir das ideias do psiquiatra Carl Jung. Ele descreve <strong>como uma pessoa prefere perceber o mundo e tomar decisões</strong>, combinando 4 pares de letras:</p>
+    <table class="f2x-tab">
+      <tr><td><b>E</b> Extroversão × <b>I</b> Introversão</td><td>De onde a pessoa tira energia: do contato com os outros ou da reflexão a sós.</td></tr>
+      <tr><td><b>S</b> Sensação × <b>N</b> Intuição</td><td>Como percebe as informações: fatos concretos e detalhes, ou padrões e possibilidades.</td></tr>
+      <tr><td><b>T</b> Pensamento × <b>F</b> Sentimento</td><td>Como decide: pela lógica e critérios objetivos, ou pelos valores e pelas pessoas envolvidas.</td></tr>
+      <tr><td><b>J</b> Julgamento × <b>P</b> Percepção</td><td>Como organiza a vida: com planejamento e prazos, ou de forma flexível e espontânea.</td></tr>
+    </table>
+    <p>Combinando as letras surgem <strong>16 tipos</strong> (ex.: <b>INTJ</b> = introvertido, intuitivo, racional e planejador).</p>
+    <p><strong>Para que serve aqui:</strong> entender como a persona pesquisa e decide uma compra — se precisa de dados, de conversa, de tempo para pensar, etc.</p>
+    <p class="f2x-obs">⚠️ O MBTI é muito usado no mercado, mas sua validade científica é questionada por pesquisadores. Use como linguagem de apoio, nunca como diagnóstico.</p>`},
+  disc:{t:'📊 DISC — Estilo de comportamento', h:`
+    <p>O <strong>DISC</strong> vem da teoria do psicólogo William Moulton Marston (1928) e descreve o <strong>estilo de comportamento</strong> de uma pessoa — muito usado em vendas e atendimento. São 4 fatores:</p>
+    <table class="f2x-tab">
+      <tr><td style="color:#DC2626;"><b>D — Dominância</b></td><td>Direto, objetivo, foca em resultados e decide rápido. <em>Como vender:</em> vá direto ao ponto, mostre ganhos.</td></tr>
+      <tr><td style="color:#D97706;"><b>I — Influência</b></td><td>Comunicativo, entusiasmado, gosta de reconhecimento. <em>Como vender:</em> conte histórias, crie conexão, mostre novidades.</td></tr>
+      <tr><td style="color:#16A34A;"><b>S — Estabilidade</b></td><td>Calmo, leal, evita riscos e mudanças bruscas. <em>Como vender:</em> transmita segurança, garantia e acompanhamento.</td></tr>
+      <tr><td style="color:#2563EB;"><b>C — Conformidade</b></td><td>Analítico, detalhista, quer precisão e dados. <em>Como vender:</em> apresente números, provas e especificações.</td></tr>
+    </table>
+    <p>Todo mundo tem um pouco de cada fator; o perfil mostra os <strong>mais fortes</strong>. Ex.: <b>CD</b> = principalmente analítico (C), com traços de dominância (D).</p>`},
+  arquetipo:{t:'⚡ Arquétipo', h:`
+    <p><strong>Arquétipos</strong> são padrões de comportamento e motivação que aparecem em histórias de todas as culturas — ideia de Carl Jung. Margaret Mark e Carol Pearson aplicaram o conceito ao marketing no livro <em>O Herói e o Fora-da-Lei</em> (2001), com <strong>12 arquétipos</strong>:</p>
+    <table class="f2x-tab">
+      <tr><td><b>Inocente</b> — busca simplicidade e otimismo</td><td><b>Explorador</b> — busca liberdade e descoberta</td></tr>
+      <tr><td><b>Sábio</b> — busca conhecimento e verdade</td><td><b>Herói</b> — busca superar desafios</td></tr>
+      <tr><td><b>Fora-da-Lei</b> — busca romper regras</td><td><b>Mago</b> — busca transformação</td></tr>
+      <tr><td><b>Cara Comum</b> — busca pertencimento</td><td><b>Amante</b> — busca prazer e conexão</td></tr>
+      <tr><td><b>Bobo da Corte</b> — busca diversão</td><td><b>Cuidador</b> — busca proteger os outros</td></tr>
+      <tr><td><b>Criador</b> — busca criar algo novo</td><td><b>Governante</b> — busca controle e ordem</td></tr>
+    </table>
+    <p><strong>Para que serve aqui:</strong> o arquétipo indica com que <strong>tipo de mensagem e de marca</strong> a persona se identifica — e como o negócio deve se comunicar com ela.</p>`},
+  empatia:{t:'🗺 Mapa de Empatia', h:`
+    <p>O <strong>Mapa de Empatia</strong> é uma ferramenta criada por Dave Gray (XPLANE) para <strong>enxergar o mundo pelos olhos do cliente</strong>. Aqui usamos 4 quadrantes:</p>
+    <table class="f2x-tab">
+      <tr><td><b>PENSA</b></td><td>O que passa pela cabeça dela: preocupações, dúvidas, desejos.</td></tr>
+      <tr><td><b>SENTE</b></td><td>As emoções envolvidas na compra: medo, ansiedade, empolgação…</td></tr>
+      <tr><td><b>FAZ</b></td><td>O comportamento real: como pesquisa, onde compra, o que costuma fazer.</td></tr>
+      <tr><td><b>OUVE</b></td><td>Quem a influencia: amigos, família, colegas, especialistas, redes sociais.</td></tr>
+    </table>
+    <p><strong>Dica:</strong> compare o que a persona <em>pensa</em> com o que ela <em>faz</em> — a diferença entre os dois costuma revelar oportunidades de negócio.</p>`},
+  gatilhos:{t:'🎯 Gatilhos de compra', h:`
+    <p><strong>Gatilhos de compra</strong> (ou gatilhos mentais) são <strong>atalhos que o cérebro usa para decidir</strong> sem analisar tudo do zero. Foram estudados pelo psicólogo Robert Cialdini no livro <em>As Armas da Persuasão</em>. Os principais:</p>
+    <table class="f2x-tab">
+      <tr><td><b>Prova social</b></td><td>"Se outros parecidos comigo compraram, deve ser bom" — depoimentos, avaliações, casos.</td></tr>
+      <tr><td><b>Autoridade</b></td><td>Confiamos em especialistas — certificações, experiência, recomendação técnica.</td></tr>
+      <tr><td><b>Escassez</b></td><td>Valorizamos o que é limitado — poucas vagas, edição especial, prazo.</td></tr>
+      <tr><td><b>Reciprocidade</b></td><td>Retribuímos o que recebemos — amostra grátis, diagnóstico gratuito, conteúdo útil.</td></tr>
+      <tr><td><b>Compromisso</b></td><td>Mantemos coerência com pequenos "sins" — teste, cadastro, primeira compra menor.</td></tr>
+      <tr><td><b>Afinidade</b></td><td>Compramos de quem gostamos e se parece conosco.</td></tr>
+    </table>
+    <p class="f2x-obs">⚖️ Use gatilhos com ética: eles devem ajudar o cliente a decidir, nunca enganá-lo (ex.: escassez falsa).</p>`},
+  vocabulario:{t:'💬 Vocabulário da persona', h:`
+    <p>São <strong>palavras e expressões que a persona usa no dia a dia</strong> quando fala do problema que o negócio resolve.</p>
+    <p><strong>Para que serve:</strong> usar essas mesmas palavras em posts, anúncios, site, catálogo e na conversa de venda. Quando a mensagem "fala a língua" do cliente, ele se sente compreendido e confia mais.</p>
+    <p><strong>Exemplo:</strong> se a persona diz "marmita fit", não adianta anunciar "refeição balanceada com controle de macronutrientes".</p>`},
+  aderencia:{t:'🎯 Aderência ao público-alvo', h:`
+    <p>Nota de <strong>0 a 100</strong> que a IA dá para indicar <strong>o quanto esta persona representa bem o público-alvo</strong> definido na aba Público-Alvo — e combina com o negócio.</p>
+    <table class="f2x-tab">
+      <tr><td style="color:#16A34A;"><b>75 a 100</b></td><td>Persona coerente com o público. Pode seguir.</td></tr>
+      <tr><td style="color:#D97706;"><b>50 a 74</b></td><td>Há pontos fora do recorte. Leia a justificativa e ajuste o que fizer sentido.</td></tr>
+      <tr><td style="color:#DC2626;"><b>Abaixo de 50</b></td><td>A persona não representa o público. Revise a persona ou o público-alvo.</td></tr>
+    </table>
+    <p>Lembre: a <strong>persona</strong> é uma pessoa fictícia que <strong>representa</strong> o público-alvo. Se ela foge muito do recorte, as estratégias criadas a partir dela também vão errar o alvo.</p>`},
+  risco:{t:'🚨 Risco de perda e ⚡ Insight estratégico', h:`
+    <p><strong>Risco de perda</strong>: o que faria esta persona <strong>deixar de comprar</strong> ou trocar de fornecedor. Serve para o empreendedor prevenir — melhorando o ponto fraco antes que o cliente vá embora.</p>
+    <p><strong>Insight estratégico</strong>: uma <strong>ideia prática e acionável</strong> que a IA sugere a partir de tudo o que foi analisado. Discuta com o empreendedor se faz sentido e, se fizer, leve para o <strong>Plano de Ação</strong>.</p>`},
+  plutchik:{t:'🎡 Roda das Emoções de Plutchik', h:`
+    <p>O psicólogo <strong>Robert Plutchik</strong> (1980) propôs que existem <strong>8 emoções básicas</strong>, organizadas em pares opostos:</p>
+    <table class="f2x-tab">
+      <tr><td><b>Alegria</b> × <b>Tristeza</b></td><td><b>Confiança</b> × <b>Aversão</b></td></tr>
+      <tr><td><b>Medo</b> × <b>Raiva</b></td><td><b>Surpresa</b> × <b>Antecipação</b></td></tr>
+    </table>
+    <p>Cada pétala tem <strong>3 intensidades</strong>: do <strong>centro (mais forte)</strong> para a <strong>borda (mais leve)</strong>. Ex.: Medo → Terror (forte), Medo (média), Apreensão (leve).</p>
+    <p><strong>Para que serve aqui:</strong> descobrir <strong>quais emoções estão presentes quando a persona pensa em comprar</strong>. Isso orienta o tom da comunicação. Ex.: se domina o <em>medo</em>, a mensagem deve transmitir segurança; se domina a <em>antecipação</em>, vale destacar novidades e o que está por vir.</p>
+    <p>Você pode clicar nas pétalas para ajustar a seleção feita pela IA.</p>`},
+};
+function f2Explica(chave){
+  const x=F2_EXPLICA[chave]; if(!x) return;
+  document.getElementById('f2x-ov')?.remove();
+  const ov=document.createElement('div'); ov.id='f2x-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(15,38,68,.55);z-index:100001;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:620px;width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.3);">
+    <div style="background:linear-gradient(135deg,#0f2644,#1a5e3a);color:#fff;padding:14px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;">
+      <div style="font-size:16px;font-weight:800;">${x.t}</div>
+      <button onclick="document.getElementById('f2x-ov').remove()" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;width:30px;height:30px;cursor:pointer;">✕</button>
+    </div>
+    <div class="f2x-corpo" style="padding:16px 20px;font-size:13px;color:#334155;line-height:1.7;">${x.h}</div>
+    <div style="padding:0 20px 16px;text-align:right;"><button onclick="document.getElementById('f2x-ov').remove()" style="background:#1a5e3a;color:#fff;border:none;border-radius:9px;padding:9px 20px;font-weight:700;cursor:pointer;font-family:inherit;">Entendi</button></div>
+  </div>`;
+  ov.addEventListener('click',ev=>{ if(ev.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+function f2ExplicaTudo(){
+  F2_EXPLICA.__todos={t:'📘 Entenda os conceitos da Persona', h:['mbti','disc','arquetipo','empatia','gatilhos','vocabulario','aderencia','risco','plutchik']
+    .map(k=>`<details style="border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px;"><summary style="cursor:pointer;padding:10px 12px;font-weight:800;color:#1d3557;">${F2_EXPLICA[k].t}</summary><div style="padding:0 12px 10px;">${F2_EXPLICA[k].h}</div></details>`).join('')};
+  f2Explica('__todos');
+}
+// botão "?" usado nos títulos (também dentro do cartão salvo)
+function f2Q(chave, cor){ return `<span role="button" tabindex="0" title="O que é isso?" onclick="f2Explica('${chave}')" style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;border:1.5px solid ${cor||'#1d3557'};color:${cor||'#1d3557'};font-size:10px;font-weight:900;cursor:pointer;margin-left:6px;vertical-align:middle;background:#fff;letter-spacing:0;text-transform:none;">?</span>`; }
+// estilos dos pop-ups
+(function(){ try{ const st=document.createElement('style'); st.textContent='.f2x-tab{width:100%;border-collapse:collapse;margin:8px 0 10px;font-size:12px;}.f2x-tab td{border:1px solid #e2e8f0;padding:7px 9px;vertical-align:top;}.f2x-obs{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;font-size:12px;color:#92400e;}.f2x-corpo p{margin:0 0 8px;}'; document.head.appendChild(st);}catch(_){} })();
+
+// =====================================================================
+// ===== RODA DAS EMOÇÕES — PLUTCHIK (aba Persona da Fase 2) ==========
+// Resultado salvo em fase2v2.p_ia_dados.plutchik (junto da Radiografia)
+// =====================================================================
+const PLUTCHIK = [ // ordem horária a partir do topo
+  {k:'anticipation', lbl:'Antecipação', niv:['Vigilância','Antecipação','Interesse'], c:['#E65100','#FB8C00','#FFCC80'], txt:'#6d3b00'},
+  {k:'joy',          lbl:'Alegria',     niv:['Êxtase','Alegria','Serenidade'],        c:['#F9A825','#FDD835','#FFF59D'], txt:'#6b5300'},
+  {k:'trust',        lbl:'Confiança',   niv:['Admiração','Confiança','Aceitação'],    c:['#558B2F','#8BC34A','#DCEDC8'], txt:'#2e5b00'},
+  {k:'fear',         lbl:'Medo',        niv:['Terror','Medo','Apreensão'],            c:['#1B5E20','#43A047','#A5D6A7'], txt:'#1b4d1b'},
+  {k:'surprise',     lbl:'Surpresa',    niv:['Espanto','Surpresa','Distração'],       c:['#01579B','#29B6F6','#B3E5FC'], txt:'#01426b'},
+  {k:'sadness',      lbl:'Tristeza',    niv:['Pesar','Tristeza','Melancolia'],        c:['#283593','#5C6BC0','#C5CAE9'], txt:'#1a1f5e'},
+  {k:'disgust',      lbl:'Aversão',     niv:['Repulsa','Aversão','Tédio'],            c:['#6A1B9A','#AB47BC','#E1BEE7'], txt:'#4a0066'},
+  {k:'anger',        lbl:'Raiva',       niv:['Fúria','Raiva','Aborrecimento'],        c:['#B71C1C','#E53935','#FFCDD2'], txt:'#7f0000'},
+];
+let _plutSel = {}; // { joy: 2 (intensidade 1=forte,2=média,3=leve), ... }
+
+function _plutPolar(cx,cy,r,ang){ const a=(ang-90)*Math.PI/180; return [cx+r*Math.cos(a), cy+r*Math.sin(a)]; }
+function _plutSetor(cx,cy,r0,r1,a0,a1){
+  const [x0,y0]=_plutPolar(cx,cy,r1,a0),[x1,y1]=_plutPolar(cx,cy,r1,a1),[x2,y2]=_plutPolar(cx,cy,r0,a1),[x3,y3]=_plutPolar(cx,cy,r0,a0);
+  return `M${x0.toFixed(1)},${y0.toFixed(1)} A${r1},${r1} 0 0,1 ${x1.toFixed(1)},${y1.toFixed(1)} L${x2.toFixed(1)},${y2.toFixed(1)} A${r0},${r0} 0 0,0 ${x3.toFixed(1)},${y3.toFixed(1)} Z`;
+}
+// Desenha a roda (SVG). Emoções selecionadas ficam em destaque; as demais esmaecem.
+function plutchikSVG(sel, editavel){
+  sel = sel || {};
+  const algum = Object.keys(sel).length>0;
+  const cx=190, cy=190, rings=[[44,84],[84,122],[122,158]];
+  let out=`<svg viewBox="-55 0 490 380" width="100%" style="max-width:400px;display:block;margin:0 auto;" role="img" aria-label="Roda das emoções de Plutchik">`;
+  PLUTCHIK.forEach((em,i)=>{
+    const a0=i*45-22.5+1, a1=i*45+22.5-1;
+    const ativo = sel[em.k]!==undefined;
+    const op = !algum ? 0.95 : (ativo ? 1 : 0.22);
+    out+=`<g ${editavel?`onclick="plutchikToggle('${em.k}')" style="cursor:pointer;"`:''}><title>${em.lbl}: ${em.niv.join(' → ')}</title>`;
+    rings.forEach((r,ri)=>{
+      const forte = ativo && sel[em.k]===ri+1;
+      out+=`<path d="${_plutSetor(cx,cy,r[0],r[1],a0,a1)}" fill="${em.c[ri]}" opacity="${op}" stroke="${forte?'#0f2644':'#fff'}" stroke-width="${forte?3:1.5}"/>`;
+    });
+    const [lx,ly]=_plutPolar(cx,cy,173,i*45);
+    const anc = Math.abs(lx-cx)<8 ? 'middle' : (lx>cx?'start':'end');
+    out+=`<text x="${lx.toFixed(1)}" y="${(ly+4).toFixed(1)}" text-anchor="${anc}" font-size="12" font-weight="800" fill="${em.txt}" opacity="${!algum||ativo?1:0.45}" font-family="inherit">${em.lbl}${ativo?' ●':''}</text>`;
+    out+=`</g>`;
+  });
+  out+=`<circle cx="${cx}" cy="${cy}" r="42" fill="#fff" stroke="#E5E7EB" stroke-width="2"/>
+    <text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="11" font-weight="800" fill="#374151" font-family="inherit">PERSONA</text>
+    <text x="${cx}" y="${cy+12}" text-anchor="middle" font-size="9" fill="#9CA3AF" font-family="inherit">Plutchik</text></svg>`;
+  return out;
+}
+function plutchikToggle(k){
+  if(_plutSel[k]!==undefined) delete _plutSel[k]; else _plutSel[k]=2;
+  plutchikRender();
+  _plutSalvarSelecaoManual();
+}
+function _plutTags(sel){
+  const ks=Object.keys(sel||{});
+  if(!ks.length) return '<span style="font-size:12px;color:var(--muted);font-style:italic;">Nenhuma emoção selecionada</span>';
+  return ks.map(k=>{ const em=PLUTCHIK.find(x=>x.k===k); if(!em) return ''; const n=sel[k]||2;
+    const nv=em.niv[n-1];
+    return `<span style="background:${em.c[1]};color:#fff;border-radius:20px;padding:4px 11px;font-size:12px;font-weight:700;">${nv}${nv!==em.lbl?` <span style="opacity:.8;font-weight:500;">(${em.lbl})</span>`:''}</span>`; }).join(' ');
+}
+function plutchikRender(){
+  const w=document.getElementById('f2-plut-roda'); if(w) w.innerHTML=plutchikSVG(_plutSel, !isEmpreend() || true);
+  const t=document.getElementById('f2-plut-tags'); if(t) t.innerHTML=_plutTags(_plutSel);
+}
+function _plutHtmlResultado(p){
+  if(!p || !p.analise) return '';
+  const pill=(x,bg,c)=>`<span style="background:${bg};color:${c};border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;">${e(x)}</span>`;
+  return `
+    <div style="font-size:12px;font-weight:800;color:#5B21B6;text-transform:uppercase;letter-spacing:1px;margin:4px 0 6px;">🧠 Leitura emocional</div>
+    <div style="font-size:13px;color:#334155;line-height:1.7;">${(p.analise||'').split(/\n\n+/).map(x=>'<p style="margin:0 0 8px;">'+e(x)+'</p>').join('')}</div>
+    ${p.tom_comunicacao?.length?`<div style="font-size:12px;font-weight:800;color:#5B21B6;text-transform:uppercase;letter-spacing:1px;margin:12px 0 6px;">🗣️ Tom de comunicação</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${p.tom_comunicacao.map(x=>pill(x,'#EDE9FE','#5B21B6')).join('')}</div>`:''}
+    ${p.gatilhos?.length?`<div style="font-size:12px;font-weight:800;color:#5B21B6;text-transform:uppercase;letter-spacing:1px;margin:12px 0 6px;">⚡ Gatilhos emocionais</div>${p.gatilhos.map((g,i)=>`<div style="display:flex;gap:8px;font-size:13px;color:#334155;margin-bottom:5px;"><strong style="color:#7C3AED;">${i+1}.</strong><span>${e(g)}</span></div>`).join('')}`:''}
+    ${p.evitar?.length?`<div style="font-size:12px;font-weight:800;color:#B91C1C;text-transform:uppercase;letter-spacing:1px;margin:12px 0 6px;">🚫 Emoções a não provocar</div><div style="display:flex;gap:6px;flex-wrap:wrap;">${p.evitar.map(x=>pill(x,'#FEE2E2','#B91C1C')).join('')}</div>`:''}
+    ${p.gerado_em?`<div style="font-size:10px;color:#94a3b8;margin-top:10px;">Gerado por IA em ${new Date(p.gerado_em).toLocaleString('pt-BR')}${p.manual?' · seleção ajustada manualmente':''}</div>`:''}`;
+}
+function _f2HtmlPlutchik(F2){
+  let dados=F2.p_ia_dados; if(typeof dados==='string'){ try{ dados=JSON.parse(dados);}catch(_){ dados={}; } }
+  const p=(dados&&dados.plutchik)||{};
+  _plutSel = {...(p.selecao||{})};
+  return `
+    <div class="f2-card" id="f2-plutchik">
+      <div class="f2-card-title"><span>🎡</span> Roda das Emoções — Plutchik ${f2Q('plutchik')}</div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-left:4px solid #2563eb;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e3a8a;line-height:1.6;margin-bottom:14px;">
+        <strong>Como funciona:</strong> com base nas dores, motivações e objeções da persona (e no público-alvo), a IA identifica as emoções dominantes no modelo de Robert Plutchik. Cada pétala tem três intensidades — do centro (mais forte) para fora (mais leve). As emoções destacadas orientam o <strong>tom de comunicação</strong> e os <strong>gatilhos de compra</strong>. Também é possível clicar nas pétalas para ajustar manualmente.
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px;align-items:start;">
+        <div>
+          <div id="f2-plut-roda">${plutchikSVG(_plutSel,true)}</div>
+          <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px;">Clique nas pétalas para selecionar/desmarcar · passe o mouse para ver as intensidades</div>
+        </div>
+        <div>
+          <button class="f2-btn-save" id="btn-plutchik-ia" onclick="f2AnalisarPlutchikIA()" style="width:100%;background:linear-gradient(135deg,#7C3AED,#5B21B6);">🎡 Analisar emoções com IA</button>
+          <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:14px 0 6px;">Emoções dominantes</div>
+          <div id="f2-plut-tags" style="display:flex;gap:6px;flex-wrap:wrap;">${_plutTags(_plutSel)}</div>
+          <div id="f2-plut-resultado" style="margin-top:12px;">${_plutHtmlResultado(p)}</div>
+        </div>
+      </div>
+    </div>`;
+}
+function _plutGravar(plut){
+  const empNome=f2GetEmpNome(); if(!empNome) return;
+  const F2=getFase2DataSync(empNome);
+  let dados=F2.p_ia_dados; if(typeof dados==='string'){ try{ dados=JSON.parse(dados);}catch(_){ dados={}; } }
+  F2.p_ia_dados={...(dados||{}), plutchik:plut};
+  saveFase2Data(empNome, F2);
+}
+let _plutTimer=null;
+function _plutSalvarSelecaoManual(){
+  clearTimeout(_plutTimer);
+  _plutTimer=setTimeout(()=>{
+    const empNome=f2GetEmpNome(); if(!empNome) return;
+    const F2=getFase2DataSync(empNome);
+    let dados=F2.p_ia_dados; if(typeof dados==='string'){ try{ dados=JSON.parse(dados);}catch(_){ dados={}; } }
+    const atual=(dados&&dados.plutchik)||{};
+    _plutGravar({...atual, selecao:{..._plutSel}, emocoes_dominantes:Object.keys(_plutSel), manual:true});
+  }, 800);
+}
+async function f2AnalisarPlutchikIA(){
+  const nome=f2GetVal('f2-p-nome'), dores=f2GetVal('f2-p-desafios'), motiv=f2GetVal('f2-p-motivacoes');
+  if(!dores.trim() && !motiv.trim()){ alert('Preencha os Desafios e/ou o que Motiva a persona antes de analisar as emoções.'); return; }
+  const apiKey=getApiKey(); if(!apiKey){ alert('A chave da API Anthropic não está configurada.'); return; }
+  const btn=document.getElementById('btn-plutchik-ia');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Mapeando emoções…'; }
+  const pa=f2ColetarPA({});
+  const prompt='Você é especialista em psicologia do consumidor e no modelo de emoções de Robert Plutchik, apoiando consultores da ENEDES/IFB.\n\n'
+    +'PERSONA: '+(nome||'—')+', '+(f2GetVal('f2-p-idade')||'—')+' anos, '+(f2GetVal('f2-p-ocupacao')||'—')+'\n'
+    +'Objetivos: '+(f2GetVal('f2-p-objetivos')||'—')+'\nDores/desafios: '+(dores||'—')+'\nMotivações: '+(motiv||'—')+'\nObjeções: '+(f2GetVal('f2-p-objecoes')||'—')+'\n'
+    +'NEGÓCIO: '+(f2GetVal('f2-negocio-nome')||f2GetEmpNome())+' ('+(f2GetVal('f2-segmento')||'—')+') · modelo: '+((pa.modelos||[]).join(', ')||'—')+'\n'
+    +'PÚBLICO-ALVO: '+(_paResumoTexto(pa)||'não informado')+'\n\n'
+    +'Responda APENAS com JSON válido, sem markdown:\n'
+    +'{"emocoes":[{"emocao":"trust","intensidade":2}],"analise":"2 parágrafos curtos explicando quais emoções dominam a persona no contexto de compra e por quê (use os nomes em português)","tom_comunicacao":["4 palavras"],"gatilhos":["3 gatilhos emocionais concretos para esta persona comprar"],"evitar":["2 emoções ou sensações que a comunicação NÃO deve provocar"]}\n\n'
+    +'emocoes: 2 a 4 das 8 emoções primárias, com os nomes em inglês (joy, trust, fear, surprise, sadness, disgust, anger, anticipation); intensidade 1=forte, 2=média, 3=leve.';
+  try{
+    const res=await iaFetch({method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-5',max_tokens:1500,messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const txt=(data.content||[]).map(c=>c.text||'').join('');
+    let p; try{ p=JSON.parse(txt.slice(txt.indexOf('{'),txt.lastIndexOf('}')+1)); }catch(_){ throw new Error('A IA respondeu fora do formato esperado. Tente novamente.'); }
+    const validas=new Set(PLUTCHIK.map(x=>x.k));
+    _plutSel={};
+    (p.emocoes||[]).forEach(x=>{ if(validas.has(x.emocao)) _plutSel[x.emocao]=[1,2,3].includes(+x.intensidade)?+x.intensidade:2; });
+    const plut={selecao:{..._plutSel}, emocoes_dominantes:Object.keys(_plutSel), analise:p.analise||'', tom_comunicacao:p.tom_comunicacao||[], gatilhos:p.gatilhos||[], evitar:p.evitar||[], gerado_em:new Date().toISOString(), gerado_por:USER_NAME};
+    plutchikRender();
+    const r=document.getElementById('f2-plut-resultado'); if(r) r.innerHTML=_plutHtmlResultado(plut);
+    _plutGravar(plut);
+  }catch(err){
+    const r=document.getElementById('f2-plut-resultado'); if(r) r.innerHTML='<p style="color:#dc2626;font-size:13px;">⚠️ '+e(err.message||'Erro ao gerar.')+'</p>';
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='🔄 Reanalisar emoções com IA'; }
+  }
+}
+
 async function f2GerarPersonaIA(){
   const negocio = f2GetVal('f2-negocio-nome') || f2GetEmpNome();
   const segmento = f2GetVal('f2-segmento') || '';
@@ -10419,7 +10687,8 @@ async function f2GerarPersonaIA(){
     const empNome = f2GetEmpNome();
     const F2 = getFase2DataSync(empNome);
     F2.p_ia_resultado = html;
-    F2.p_ia_dados = {...d, persona_nome:nome, gerado_em:new Date().toISOString(), gerado_por:USER_NAME};
+    let _antes=F2.p_ia_dados; if(typeof _antes==='string'){ try{ _antes=JSON.parse(_antes);}catch(_){ _antes={}; } }
+    F2.p_ia_dados = {...d, persona_nome:nome, gerado_em:new Date().toISOString(), gerado_por:USER_NAME, ...(_antes&&_antes.plutchik?{plutchik:_antes.plutchik}:{})};
     saveFase2Data(empNome, F2);
   } catch(err){
     document.getElementById('f2-persona-ia-content').innerHTML = '<p style="color:#dc2626;">⚠️ '+e(err.message||'Erro ao conectar com a IA.')+'</p>';
@@ -10460,27 +10729,27 @@ function _f2RenderPersonaCard(d, nome, idade, local){
     </div>
     <div style="text-align:center;background:rgba(255,255,255,.95);border-radius:12px;padding:8px 14px;">
       <div style="font-size:24px;font-weight:900;color:${notaCor};line-height:1;">${nota}</div>
-      <div style="font-size:9px;font-weight:800;color:#475569;letter-spacing:1px;">ADERÊNCIA AO<br>PÚBLICO-ALVO</div>
+      <div style="font-size:9px;font-weight:800;color:#475569;letter-spacing:1px;">ADERÊNCIA AO<br>PÚBLICO-ALVO ${f2Q('aderencia','#475569')}</div>
     </div>
   </div>
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));">
-    <div style="${cel}border-right:1px solid #E5E7EB;">${lbl(cor,'🧠 MBTI — '+t(mbti.tipo))}
+    <div style="${cel}border-right:1px solid #E5E7EB;">${lbl(cor,'🧠 MBTI — '+t(mbti.tipo)+f2Q('mbti',cor))}
       <div style="font-size:12px;color:#475569;line-height:1.6;margin-bottom:6px;">${t(mbti.justificativa)}</div>
       <div style="background:#F8FAFC;border-left:3px solid ${cor};padding:6px 9px;font-size:11px;color:#475569;"><strong>Como compra:</strong> ${t(mbti.comportamento_compra)}</div></div>
-    <div style="${cel}">${lbl(dc,'📊 DISC — '+t(disc.perfil))}
+    <div style="${cel}">${lbl(dc,'📊 DISC — '+t(disc.perfil)+f2Q('disc',dc))}
       <div style="font-size:12px;color:#475569;line-height:1.6;margin-bottom:6px;">${t(disc.justificativa)}</div>
       <div style="background:#F8FAFC;border-left:3px solid ${dc};padding:6px 9px;font-size:11px;color:#475569;"><strong>Gatilho:</strong> ${t(disc.gatilho)}</div></div>
-    <div style="${cel}border-right:1px solid #E5E7EB;">${lbl('#B45309','⚡ Arquétipo: '+t(arq.nome))}
+    <div style="${cel}border-right:1px solid #E5E7EB;">${lbl('#B45309','⚡ Arquétipo: '+t(arq.nome)+f2Q('arquetipo','#B45309'))}
       <div style="font-size:12px;color:#475569;line-height:1.6;margin-bottom:5px;">${t(arq.descricao)}</div>
       <div style="font-size:11px;color:#64748b;margin-bottom:6px;">Marcas de referência: <strong>${t(arq.marcas_referencia)}</strong></div>
       <div style="background:#FFFBEB;border-left:3px solid #B45309;padding:6px 9px;font-size:11px;color:#475569;"><strong>Como comunicar:</strong> ${t(arq.como_comunicar)}</div></div>
-    <div style="${cel}">${lbl('#1D4ED8','🗺 Mapa de Empatia')}
+    <div style="${cel}">${lbl('#1D4ED8','🗺 Mapa de Empatia'+f2Q('empatia','#1D4ED8'))}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
         ${quad('PENSA',me.pensa,'#EFF6FF','#BFDBFE','#1D4ED8')}${quad('SENTE',me.sente,'#FEF2F2','#FECACA','#DC2626')}
         ${quad('FAZ',me.faz,'#F0FDF4','#BBF7D0','#16A34A')}${quad('OUVE',me.ouve,'#FFFBEB','#FDE68A','#B45309')}
       </div></div>
   </div>
-  <div style="${cel}">${lbl('#DC2626','🎯 Gatilhos de Compra')}
+  <div style="${cel}">${lbl('#DC2626','🎯 Gatilhos de Compra'+f2Q('gatilhos','#DC2626'))}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;">
       ${(d.gatilhos||[]).slice(0,3).map((g,i)=>`<div style="background:#F8FAFC;border:1px solid #E5E7EB;border-top:3px solid ${gcores[i]};border-radius:6px;padding:10px;">
         <div style="font-weight:800;font-size:12px;color:${gcores[i]};margin-bottom:3px;">${t(g.gatilho)}</div>
@@ -10488,13 +10757,13 @@ function _f2RenderPersonaCard(d, nome, idade, local){
         <div style="font-size:11px;color:#1d3557;line-height:1.5;"><strong>Aplicação:</strong> ${t(g.aplicacao)}</div></div>`).join('')}
     </div></div>
   <div style="padding:10px 16px;border-bottom:1px solid #E5E7EB;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-    <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#64748b;">💬 Vocabulário</div>
+    <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#64748b;">💬 Vocabulário${f2Q('vocabulario','#64748b')}</div>
     ${(d.vocabulario||[]).map(w=>`<span style="background:#F8FAFC;border:1px solid #E5E7EB;padding:3px 10px;font-size:12px;color:#334155;border-radius:20px;">${t(w)}</span>`).join('')}
   </div>
   ${d.canais?`<div style="${cel}">${lbl('#0369a1','📍 Onde e como alcançar')}<div style="font-size:12px;color:#334155;line-height:1.6;">${t(d.canais)}</div></div>`:''}
-  ${comp.justificativa?`<div style="${cel}background:#F8FAFC;">${lbl(notaCor,'🎯 Aderência ao público-alvo — '+nota+'/100')}<div style="font-size:12px;color:#334155;line-height:1.6;">${t(comp.justificativa)}</div></div>`:''}
+  ${comp.justificativa?`<div style="${cel}background:#F8FAFC;">${lbl(notaCor,'🎯 Aderência ao público-alvo — '+nota+'/100'+f2Q('aderencia',notaCor))}<div style="font-size:12px;color:#334155;line-height:1.6;">${t(comp.justificativa)}</div></div>`:''}
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
-    <div style="padding:13px 16px;background:#FEF2F2;">${lbl('#DC2626','🚨 Risco de perda')}<div style="font-size:12px;color:#1f2937;line-height:1.6;">${t(d.risco_perda)}</div></div>
+    <div style="padding:13px 16px;background:#FEF2F2;">${lbl('#DC2626','🚨 Risco de perda'+f2Q('risco','#DC2626'))}<div style="font-size:12px;color:#1f2937;line-height:1.6;">${t(d.risco_perda)}</div></div>
     <div style="padding:13px 16px;background:#FFFBEB;">${lbl('#B45309','⚡ Insight estratégico')}<div style="font-size:12px;color:#1f2937;line-height:1.6;font-weight:600;">${t(d.insight_estrategico)}</div></div>
   </div>
   <div style="padding:8px 16px;font-size:10px;color:#94a3b8;background:#fff;">Gerado por IA a partir dos dados da persona e do público-alvo. Use como apoio à análise do consultor — não como diagnóstico.</div>
@@ -11705,7 +11974,9 @@ function f2GerarResumo(){
         </div>
         ${F2.p_objetivos?`<div style="margin-top:8px;"><strong>Objetivos:</strong> ${e(F2.p_objetivos)}</div>`:''}
         ${F2.p_desafios?`<div style="margin-top:4px;"><strong>Desafios:</strong> ${e(F2.p_desafios)}</div>`:''}
-        ${F2.p_redes?.length?`<div style="margin-top:4px;"><strong>Redes:</strong> ${F2.p_redes.join(', ')}</div>`:''}`
+        ${F2.p_redes?.length?`<div style="margin-top:4px;"><strong>Redes:</strong> ${F2.p_redes.join(', ')}</div>`:''}
+        ${(()=>{ let d=F2.p_ia_dados; if(typeof d==='string'){ try{d=JSON.parse(d);}catch(_){d=null;} } const pl=d&&d.plutchik; if(!pl||!pl.emocoes_dominantes?.length) return '';
+          return `<div style="margin-top:6px;"><strong>Emoções dominantes (Plutchik):</strong> ${pl.emocoes_dominantes.map(k=>{const em=PLUTCHIK.find(x=>x.k===k); return em?em.niv[(pl.selecao?.[k]||2)-1]+' ('+em.lbl+')':k;}).join(', ')}${pl.tom_comunicacao?.length?' · <strong>Tom:</strong> '+pl.tom_comunicacao.map(e).join(', '):''}</div>`; })()}`
       ) : ''}
 
       
