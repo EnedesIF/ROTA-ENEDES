@@ -571,7 +571,7 @@ async function buscarParticipantePortalPorCPF(cpf){
     return data&&data.length>0?data[0]:null;
   }catch(e){ return null; }
 }
-const APP_VERSAO='2026.10.07-seg1';
+const APP_VERSAO='2026.10.07-seg1b';
 const SB_HEADERS={'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'};
 
 // ===== CONFIG GLOBAL (API KEY salva no Supabase) =====
@@ -2588,7 +2588,7 @@ function renderUsuarios(){
         " style="background:#52b47a;border:none;border-radius:8px;padding:9px 18px;cursor:pointer;font-size:13px;font-weight:700;color:#fff;">Salvar Chave</button>
         <span id="apikey-save-msg" style="font-size:12px;color:#a7f3d0;opacity:0;transition:opacity .4s;">✓ Salvo!</span>
       </div>
-      <div style="margin-top:10px;">${apiKeyStatus}</div>
+      <div id="ia-chave-local-status" style="margin-top:10px;">${apiKeyStatus}</div>
       <div id="ia-servidor-status" style="margin-top:10px;background:rgba(255,255,255,.1);border-radius:8px;padding:8px 12px;font-size:12px;">⏳ Verificando a IA no servidor…</div>
     </div>` : ''}
     <div class="lh"><div class="lt">👥 Gerenciar Usuários</div></div>
@@ -2701,8 +2701,13 @@ function renderUsuarios(){
 async function _atualizarStatusIAServidor(){
   const el=document.getElementById('ia-servidor-status'); if(!el) return;
   const st=await iaStatusServidor();
+  if(st.ok){
+    // Chave fica só no servidor: esconde o campo antigo para não confundir
+    const inp=document.getElementById('coord-apikey-input'); if(inp && inp.parentElement) inp.parentElement.style.display='none';
+    const loc=document.getElementById('ia-chave-local-status'); if(loc) loc.style.display='none';
+  }
   el.innerHTML = st.ok
-    ? '🛡️ <strong style="color:#a7f3d0;">'+e(st.msg)+'</strong><br><span style="opacity:.8;">Etapa de segurança concluída: a chave pode ser apagada daqui (SQL da etapa 1, passo 3).</span>'
+    ? '🛡️ <strong style="color:#a7f3d0;">'+e(st.msg)+'</strong><br><span style="opacity:.8;">A chave fica guardada nos Secrets do Supabase (Edge Functions → Secrets → ANTHROPIC_API_KEY). Para trocar a chave, edite-a lá.</span>'
     : '⚠️ <strong style="color:#fde68a;">'+e(st.msg)+'</strong><br><span style="opacity:.8;">Enquanto isso, o sistema usa a chave salva acima (modo antigo, menos seguro).</span>';
 }
 async function removerUsuario(i){
