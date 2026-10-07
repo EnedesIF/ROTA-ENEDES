@@ -590,16 +590,22 @@ async function loadGlobalConfig(){
 }
 
 async function saveGlobalApiKey(key){
-  localStorage.setItem('enedes_apikey', key);
+  key=(key||'').trim();
+  try{ localStorage.setItem('enedes_apikey', key); }catch(_){}
   _GLOBAL_API_KEY = key;
-  // Tenta salvar no Supabase (upsert)
   try{
-    await fetch(SU+'/rest/v1/config_global', {
-      method:'POST',
-      headers:{...SB_HEADERS,'Prefer':'resolution=merge-duplicates,return=minimal'},
-      body: JSON.stringify({chave:'anthropic_api_key', valor:key})
+    // 1) Atualiza TODAS as linhas existentes da chave (evita ficar lendo uma chave antiga)
+    const r = await fetch(SU+'/rest/v1/config_global?chave=eq.anthropic_api_key', {
+      method:'PATCH', headers:{...SB_HEADERS,'Prefer':'return=representation'}, body: JSON.stringify({valor:key})
     });
-  }catch(_){}
+    const linhas = r.ok ? await r.json() : [];
+    // 2) Se não existia nenhuma, cria
+    if(!linhas.length){
+      await fetch(SU+'/rest/v1/config_global', {
+        method:'POST', headers:{...SB_HEADERS,'Prefer':'return=minimal'}, body: JSON.stringify({chave:'anthropic_api_key', valor:key})
+      });
+    }
+  }catch(e){ console.error('[saveGlobalApiKey]', e); }
 }
 
 const SEGS=["Alimentação e Bebidas","Moda e Vestuário","Beleza e Estética","Saúde e Bem-estar","Tecnologia","Educação","Construção e Reforma","Comércio Varejista","Serviços Gerais","Artesanato","Transporte e Logística","Outro"];
@@ -1022,7 +1028,7 @@ async function gerarModelosIA(){
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body: JSON.stringify({
-        model:'claude-sonnet-4-20250514', max_tokens:1000,
+        model:'claude-sonnet-4-20250514', max_tokens:2000,
         system:'Você é consultor de negócios da ENEDES – Escola de Negócios e Desenvolvimento Social do IFB. Responda sempre em português brasileiro, de forma direta e prática.',
         messages:[{role:'user', content:`Empreendedor em fase de IDEAÇÃO:
 - Negócio: ${negocio}
@@ -1531,7 +1537,7 @@ const IA_MODELOS = ['claude-sonnet-5','claude-haiku-4-5-20251001','claude-sonnet
 function _iaMsgErro(status, err){
   const t=(err&&err.type)||'', m=(err&&err.message)||'';
   if(status===401 || t==='authentication_error') return 'Chave da API inválida ou desativada. Confira a chave 🔑 na tela de Usuários (Coordenação Geral).';
-  if(/not scoped to a workspace|anthropic-workspace-id/i.test(m)) return 'A chave salva não pertence a um espaço de trabalho (chave do tipo sk-ant-usr). Crie uma chave em Claude Console → Chaves de API → Criar chave (espaço de trabalho Default) e cole no campo 🔑 da tela de Usuários.';
+  if(/not scoped to a workspace|anthropic-workspace-id/i.test(m)) return 'A chave salva tem escopo de Organização e não funciona aqui. Crie uma chave em Claude Console → Chaves de API → Criar chave, com Escopo = Espaço de trabalho padrão (Default), e cole no campo 🔑 da tela de Usuários.';
   if(/credit balance|billing|insufficient|too low/i.test(m)) return 'Sem créditos na conta da API Anthropic. Compre créditos em Claude Console → Faturamento.';
   if(status===403 || t==='permission_error') return 'A chave da API não tem permissão para este uso. Detalhe: '+m;
   if(status===429 || t==='rate_limit_error') return 'Limite de uso da API atingido. Aguarde um minuto e tente de novo.';
@@ -8405,13 +8411,14 @@ async function renderFase2() {
     </div>
     <div style="text-align:center;margin:8px 0 20px;">
       <button class="f2-btn-save" id="btn-persona-ia" onclick="f2GerarPersonaIA()" style="font-size:15px;padding:15px 32px;">
-        🤖 Gerar Análise Completa da Persona com IA
+        ✨ Gerar Radiografia da Persona com IA
       </button>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">MBTI · DISC · Arquétipo · Mapa de Empatia · Gatilhos de compra · Vocabulário · Aderência ao público-alvo</div>
     </div>
 
     
     <div class="f2-card" id="f2-persona-result" style="display:${F2.p_ia_resultado?'block':'none'};">
-      <div class="f2-card-title"><span>✨</span> Análise da Persona — Gerada por IA</div>
+      <div class="f2-card-title"><span>✨</span> Radiografia da Persona — Gerada por IA</div>
       <div id="f2-persona-ia-content" style="font-size:13px;line-height:1.7;"></div>
     </div>
     <div id="f2-persona-loading" style="display:none;text-align:center;padding:32px;">
@@ -10313,45 +10320,64 @@ async function f2GerarPersonaIA(){
   const segmento = f2GetVal('f2-segmento') || '';
   const nome = f2GetVal('f2-p-nome');
   const idade = f2GetVal('f2-p-idade');
-  const genero = f2GetVal('f2-p-genero');
-  const ocupacao = f2GetVal('f2-p-ocupacao');
-  const renda = f2GetVal('f2-p-renda');
   const objetivos = f2GetVal('f2-p-objetivos');
   const desafios = f2GetVal('f2-p-desafios');
-  const motivacoes = f2GetVal('f2-p-motivacoes');
-  const objecoes = f2GetVal('f2-p-objecoes');
-
   if(!nome || !objetivos || !desafios){
     alert('Preencha pelo menos: Nome da Persona, Objetivos Principais e Principais Desafios.');
     return;
   }
-
   const apiKey = getApiKey();
-  if(!apiKey){
-    alert('Cole sua chave da API Anthropic no campo 🔑 no topo da página antes de usar a IA.');
-    return;
-  }
+  if(!apiKey){ alert('A chave da API Anthropic não está configurada (tela de Usuários → 🔑).'); return; }
 
   const btn = document.getElementById('btn-persona-ia');
-  if(btn){ btn.disabled=true; btn.innerHTML='<span style="display:inline-block;animation:spin 1s linear infinite;margin-right:8px;">⏳</span>Analisando com IA…'; }
+  if(btn){ btn.disabled=true; btn.innerHTML='<span style="display:inline-block;animation:spin 1s linear infinite;margin-right:8px;">⏳</span>Gerando radiografia…'; }
   document.getElementById('f2-persona-result').style.display='none';
   document.getElementById('f2-persona-loading').style.display='block';
 
-  const prompt = `Você é um especialista em marketing e comportamento do consumidor. Analise a seguinte buyer persona para um negócio e gere uma análise completa em português.\n\nNEGÓCIO: ${negocio} (${segmento})\nPERSONA — estado civil: ${f2GetVal('f2-p-civil')||'—'}; filhos: ${f2GetVal('f2-p-filhos')||'—'}; escolaridade: ${f2GetVal('f2-p-escolaridade')||'—'}\nMODELO DE NEGÓCIO: ${(()=>{const pa=f2ColetarPA({});return (pa.modelos||[]).join(', ')+(pa.principal?' (principal: '+pa.principal+')':'');})()}\nPÚBLICO-ALVO DELIMITADO: ${_paResumoTexto(f2ColetarPA({}))||'não informado'}\nPERSONA: ${nome}, ${idade} anos, ${genero}, ${ocupacao}\nRenda: ${renda}\nObjetivos: ${objetivos}\nDesafios: ${desafios}\nMotivações: ${motivacoes}\nObjeções comuns: ${objecoes}\n\nGere uma análise estruturada em HTML com as seguintes seções usando divs com estilo inline:\n1. Perfil Psicológico (valores, crenças, personalidade)\n2. Jornada de Compra (como descobre, pesquisa e decide)\n3. Mensagens-Chave que Ressoam (o que falar para convencer)\n4. Canais de Comunicação Ideais (onde e como alcançar)\n5. Score de Compatibilidade com o negócio e com o público-alvo delimitado (0-100, com justificativa; aponte qualquer incoerência entre a persona e o público-alvo)\n6. 3 Estratégias de Abordagem personalizadas\n\nUse cores e ícones para tornar visualmente rico. Responda APENAS com o HTML, sem markdown.`;
+  const pa = f2ColetarPA({});
+  const redes = ['Facebook','Instagram','WhatsApp','YouTube','LinkedIn','TikTok','Twitter/X','Pinterest']
+    .filter(r=>document.getElementById('f2-p-rs-'+r.toLowerCase().replace('/',''))?.checked).join(', ');
+  const local = pa.regiao || f2GetVal('f2-local') || '';
+  const dados = [
+    'Nome: '+nome, 'Idade: '+(idade||'—'), 'Gênero: '+(f2GetVal('f2-p-genero')||'—'),
+    'Escolaridade: '+(f2GetVal('f2-p-escolaridade')||'—'), 'Estado civil: '+(f2GetVal('f2-p-civil')||'—'), 'Filhos: '+(f2GetVal('f2-p-filhos')||'—'),
+    'Ocupação: '+(f2GetVal('f2-p-ocupacao')||'—'), 'Renda: '+(f2GetVal('f2-p-renda')||'—'), 'Local: '+(local||'—'),
+    'Comportamento de compra: '+(f2GetVal('f2-p-compra')||'—'), 'Pagamento preferido: '+(f2GetVal('f2-p-pagamento')||'—'),
+    'Redes sociais: '+(redes||'—'), 'Tempo online: '+(f2GetVal('f2-p-online')||'—'),
+    'Objetivos: '+objetivos, 'Desafios/dores: '+desafios,
+    'Motivações: '+(f2GetVal('f2-p-motivacoes')||'—'), 'Objeções: '+(f2GetVal('f2-p-objecoes')||'—')
+  ].join('\n');
+  const contexto = 'Negócio: '+negocio+' ('+segmento+')\n'
+    + 'Modelo de negócio: '+((pa.modelos||[]).join(', ')||'não informado')+(pa.principal?' (principal: '+pa.principal+')':'')+'\n'
+    + 'Público-alvo delimitado: '+(_paResumoTexto(pa)||'não informado');
+
+  const prompt = 'Você é especialista em psicologia do consumidor, neuromarketing e marketing estratégico, apoiando consultores da ENEDES/IFB que atendem micro e pequenos empreendedores do DF.\n\n'
+   + 'PERSONA\n'+dados+'\n\nCONTEXTO DO NEGÓCIO\n'+contexto+'\n\n'
+   + 'Baseie-se SOMENTE nos dados acima; quando inferir, seja coerente com eles. Linguagem clara e prática, em português do Brasil.\n'
+   + 'Responda APENAS com JSON válido, sem markdown nem texto extra, exatamente nesta estrutura:\n'
+   + '{"mbti":{"tipo":"XXXX","nome":"nome do tipo em português","justificativa":"2-3 frases baseadas nos dados","comportamento_compra":"como decide a compra"},'
+   + '"disc":{"perfil":"ex: SC","dominante":"D|I|S|C","justificativa":"2-3 frases","gatilho":"o que aciona a compra"},'
+   + '"arquetipo":{"nome":"O Cuidador","descricao":"1-2 frases","marcas_referencia":"3 marcas conhecidas no Brasil e por quê","como_comunicar":"instrução de tom e mensagem"},'
+   + '"mapa_empatia":{"pensa":"","sente":"","faz":"","ouve":""},'
+   + '"gatilhos":[{"gatilho":"nome","descricao":"como ativa na persona","aplicacao":"como o negócio usa"},{"gatilho":"","descricao":"","aplicacao":""},{"gatilho":"","descricao":"","aplicacao":""}],'
+   + '"vocabulario":["6 palavras ou expressões que a persona usa"],'
+   + '"canais":"onde e como alcançar esta persona (2 frases)",'
+   + '"compatibilidade":{"nota":0,"justificativa":"0 a 100: quanto a persona representa o público-alvo e combina com o negócio; aponte incoerências"},'
+   + '"risco_perda":"o que faria a persona trocar de fornecedor",'
+   + '"insight_estrategico":"insight único e acionável para o empreendedor"}';
 
   try {
     const res = await iaFetch({
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
+      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await res.json();
-    const html = (data.content?.map(c=>c.text||'').join('') || '').replace(/^```html\s*|```\s*$/g,'').trim();
-    if(!html) throw new Error('A IA não retornou conteúdo. Tente novamente.');
+    const txt = (data.content?.map(c=>c.text||'').join('') || '');
+    const i0 = txt.indexOf('{'), i1 = txt.lastIndexOf('}');
+    let d;
+    try{ d = JSON.parse(txt.slice(i0, i1+1)); }catch(_){ throw new Error('A IA respondeu fora do formato esperado. Clique em gerar novamente.'); }
+    const html = _f2RenderPersonaCard(d, nome, idade, local);
     const resultEl = document.getElementById('f2-persona-ia-content');
     if(resultEl) resultEl.innerHTML = html;
     document.getElementById('f2-persona-result').style.display='block';
@@ -10364,8 +10390,79 @@ async function f2GerarPersonaIA(){
     document.getElementById('f2-persona-result').style.display='block';
   } finally {
     document.getElementById('f2-persona-loading').style.display='none';
-    if(btn){ btn.disabled=false; btn.innerHTML='🤖 Gerar Análise Completa da Persona com IA'; }
+    if(btn){ btn.disabled=false; btn.innerHTML='✨ Gerar Radiografia da Persona com IA'; }
   }
+}
+
+// Cartão "Radiografia Psicológica da Persona" (MBTI, DISC, Arquétipo, Mapa de Empatia, Gatilhos…)
+function _f2RenderPersonaCard(d, nome, idade, local){
+  const t = v => e(String(v ?? '—'));
+  const arcCores={'Herói':'#DC2626','Cuidador':'#16A34A','Explorador':'#D97706','Sábio':'#1D4ED8','Criador':'#7C3AED','Inocente':'#DB2777','Governante':'#1E40AF','Bobo':'#CA8A04','Amante':'#B91C1C','Mágico':'#6D28D9','Rebelde':'#991B1B','Cara':'#0F766E','Comum':'#0F766E'};
+  const arcNome=((d.arquetipo&&d.arquetipo.nome)||'').replace(/^(O|A|Os|As) /,'').split(' ')[0];
+  const cor=arcCores[arcNome]||'#4F46E5';
+  const discCores={D:'#DC2626',I:'#F59E0B',S:'#16A34A',C:'#2563EB'};
+  const dc=discCores[(d.disc&&d.disc.dominante)||'']||'#4F46E5';
+  const mbti=d.mbti||{}, disc=d.disc||{}, arq=d.arquetipo||{}, me=d.mapa_empatia||{}, comp=d.compatibilidade||{};
+  const nota=Math.max(0,Math.min(100,parseInt(comp.nota)||0));
+  const notaCor=nota>=75?'#16A34A':nota>=50?'#D97706':'#DC2626';
+  const lbl=(c,txt)=>`<div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:${c};margin-bottom:6px;">${txt}</div>`;
+  const cel='padding:14px 16px;border-bottom:1px solid #E5E7EB;';
+  const quad=(tit,txt,bg,bd,c)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:6px;padding:7px 9px;"><div style="font-size:9px;font-weight:800;color:${c};letter-spacing:1px;margin-bottom:3px;">${tit}</div><div style="font-size:11px;color:#334155;line-height:1.5;">${t(txt)}</div></div>`;
+  const gcores=[cor,'#D97706','#1D4ED8'];
+  return `<div style="background:#fff;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(15,38,68,.08);font-family:inherit;">
+  <div style="background:linear-gradient(135deg,${cor},${cor}bb);padding:18px 22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+    <svg width="64" height="64" viewBox="0 0 80 80" style="flex-shrink:0;"><circle cx="40" cy="40" r="40" fill="rgba(255,255,255,.15)"/><circle cx="40" cy="31" r="15" fill="rgba(255,255,255,.9)"/><ellipse cx="40" cy="70" rx="22" ry="17" fill="rgba(255,255,255,.9)"/><text x="40" y="36" text-anchor="middle" font-family="Arial" font-weight="900" font-size="18" fill="${cor}">${t((nome||'?').charAt(0).toUpperCase())}</text></svg>
+    <div style="flex:1;min-width:200px;">
+      <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.75);font-weight:700;">✨ Radiografia Psicológica da Persona</div>
+      <div style="font-weight:900;font-size:22px;color:#fff;">${t(nome)}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.8);margin-top:2px;">${t(idade?idade+' anos':'')}${local?' · '+t(local):''}</div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+        <span style="background:rgba(255,255,255,.2);padding:3px 10px;border-radius:20px;font-weight:700;font-size:11px;color:#fff;">${t(mbti.tipo)} — ${t(mbti.nome)}</span>
+        <span style="background:rgba(255,255,255,.2);padding:3px 10px;border-radius:20px;font-weight:700;font-size:11px;color:#fff;">DISC: ${t(disc.perfil)}</span>
+        <span style="background:rgba(255,255,255,.2);padding:3px 10px;border-radius:20px;font-weight:700;font-size:11px;color:#fff;">${t(arq.nome)}</span>
+      </div>
+    </div>
+    <div style="text-align:center;background:rgba(255,255,255,.95);border-radius:12px;padding:8px 14px;">
+      <div style="font-size:24px;font-weight:900;color:${notaCor};line-height:1;">${nota}</div>
+      <div style="font-size:9px;font-weight:800;color:#475569;letter-spacing:1px;">ADERÊNCIA AO<br>PÚBLICO-ALVO</div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));">
+    <div style="${cel}border-right:1px solid #E5E7EB;">${lbl(cor,'🧠 MBTI — '+t(mbti.tipo))}
+      <div style="font-size:12px;color:#475569;line-height:1.6;margin-bottom:6px;">${t(mbti.justificativa)}</div>
+      <div style="background:#F8FAFC;border-left:3px solid ${cor};padding:6px 9px;font-size:11px;color:#475569;"><strong>Como compra:</strong> ${t(mbti.comportamento_compra)}</div></div>
+    <div style="${cel}">${lbl(dc,'📊 DISC — '+t(disc.perfil))}
+      <div style="font-size:12px;color:#475569;line-height:1.6;margin-bottom:6px;">${t(disc.justificativa)}</div>
+      <div style="background:#F8FAFC;border-left:3px solid ${dc};padding:6px 9px;font-size:11px;color:#475569;"><strong>Gatilho:</strong> ${t(disc.gatilho)}</div></div>
+    <div style="${cel}border-right:1px solid #E5E7EB;">${lbl('#B45309','⚡ Arquétipo: '+t(arq.nome))}
+      <div style="font-size:12px;color:#475569;line-height:1.6;margin-bottom:5px;">${t(arq.descricao)}</div>
+      <div style="font-size:11px;color:#64748b;margin-bottom:6px;">Marcas de referência: <strong>${t(arq.marcas_referencia)}</strong></div>
+      <div style="background:#FFFBEB;border-left:3px solid #B45309;padding:6px 9px;font-size:11px;color:#475569;"><strong>Como comunicar:</strong> ${t(arq.como_comunicar)}</div></div>
+    <div style="${cel}">${lbl('#1D4ED8','🗺 Mapa de Empatia')}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+        ${quad('PENSA',me.pensa,'#EFF6FF','#BFDBFE','#1D4ED8')}${quad('SENTE',me.sente,'#FEF2F2','#FECACA','#DC2626')}
+        ${quad('FAZ',me.faz,'#F0FDF4','#BBF7D0','#16A34A')}${quad('OUVE',me.ouve,'#FFFBEB','#FDE68A','#B45309')}
+      </div></div>
+  </div>
+  <div style="${cel}">${lbl('#DC2626','🎯 Gatilhos de Compra')}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;">
+      ${(d.gatilhos||[]).slice(0,3).map((g,i)=>`<div style="background:#F8FAFC;border:1px solid #E5E7EB;border-top:3px solid ${gcores[i]};border-radius:6px;padding:10px;">
+        <div style="font-weight:800;font-size:12px;color:${gcores[i]};margin-bottom:3px;">${t(g.gatilho)}</div>
+        <div style="font-size:11px;color:#475569;line-height:1.5;margin-bottom:4px;">${t(g.descricao)}</div>
+        <div style="font-size:11px;color:#1d3557;line-height:1.5;"><strong>Aplicação:</strong> ${t(g.aplicacao)}</div></div>`).join('')}
+    </div></div>
+  <div style="padding:10px 16px;border-bottom:1px solid #E5E7EB;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#64748b;">💬 Vocabulário</div>
+    ${(d.vocabulario||[]).map(w=>`<span style="background:#F8FAFC;border:1px solid #E5E7EB;padding:3px 10px;font-size:12px;color:#334155;border-radius:20px;">${t(w)}</span>`).join('')}
+  </div>
+  ${d.canais?`<div style="${cel}">${lbl('#0369a1','📍 Onde e como alcançar')}<div style="font-size:12px;color:#334155;line-height:1.6;">${t(d.canais)}</div></div>`:''}
+  ${comp.justificativa?`<div style="${cel}background:#F8FAFC;">${lbl(notaCor,'🎯 Aderência ao público-alvo — '+nota+'/100')}<div style="font-size:12px;color:#334155;line-height:1.6;">${t(comp.justificativa)}</div></div>`:''}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+    <div style="padding:13px 16px;background:#FEF2F2;">${lbl('#DC2626','🚨 Risco de perda')}<div style="font-size:12px;color:#1f2937;line-height:1.6;">${t(d.risco_perda)}</div></div>
+    <div style="padding:13px 16px;background:#FFFBEB;">${lbl('#B45309','⚡ Insight estratégico')}<div style="font-size:12px;color:#1f2937;line-height:1.6;font-weight:600;">${t(d.insight_estrategico)}</div></div>
+  </div>
+  <div style="padding:8px 16px;font-size:10px;color:#94a3b8;background:#fff;">Gerado por IA a partir dos dados da persona e do público-alvo. Use como apoio à análise do consultor — não como diagnóstico.</div>
+</div>`;
 }
 
 // ===== IA: GERAR ESTRATÉGIAS SWOT =====
@@ -10401,7 +10498,7 @@ async function f2GerarSWOTIA(){
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
+        max_tokens: 4000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
