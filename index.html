@@ -571,7 +571,7 @@ async function buscarParticipantePortalPorCPF(cpf){
     return data&&data.length>0?data[0]:null;
   }catch(e){ return null; }
 }
-const APP_VERSAO='2026.10.07-seg1b';
+const APP_VERSAO = '2026.10.08-f2b';
 const SB_HEADERS={'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'};
 
 // ===== CONFIG GLOBAL (API KEY salva no Supabase) =====
@@ -7986,6 +7986,7 @@ async function renderFase2() {
     return;
   }
 
+  _f2MeuAtual = meu;
   const empNome = meu.nome || USER_NAME || 'Empreendedor';
   // Pré-carrega cache antes de renderizar
   const F2 = _f2ParseArrays(await getFase2Data(empNome));
@@ -8072,6 +8073,8 @@ async function renderFase2() {
 .f2-tabs-wrap{position:relative;margin-bottom:24px;}
 .f2-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
 .f2-tabs::-webkit-scrollbar{display:none;}
+.f2-tab-grupo{align-self:center;font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);opacity:.7;white-space:nowrap;padding:0 2px 0 8px;border-left:2px solid var(--border);margin-left:4px;}
+.f2-tab-grupo:first-child{border-left:none;margin-left:0;padding-left:0;}
 .f2-tab{background:#fff;border:1.5px solid var(--border);border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .2s;color:var(--muted);}
 .f2-tab:hover{border-color:var(--green);color:var(--green);}
 .f2-tab.active{background:var(--green);border-color:var(--green);color:#fff;}
@@ -8208,15 +8211,21 @@ async function renderFase2() {
   
   <div class="f2-tabs-wrap">
     <div class="f2-tabs" id="f2-tabs-scroll">
+      <span class="f2-tab-grupo">Mercado</span>
       <button class="f2-tab active" onclick="f2ShowTab('negocio',this)">🏢 Negócio</button>
-      <button class="f2-tab" onclick="f2ShowTab('organograma',this)">🏗️ Estrutura</button>
-      <button class="f2-tab" onclick="f2ShowTab('financeiro',this)">💰 Financeiro</button>
       <button class="f2-tab" onclick="f2ShowTab('publico',this)">🎯 Público-Alvo</button>
       <button class="f2-tab" onclick="f2ShowTab('persona',this)">👥 Persona</button>
-      <button class="f2-tab" onclick="f2ShowTab('mix',this)">🎯 4Ps + 4Cs</button>
+      <button class="f2-tab" onclick="f2ShowTab('concorrencia',this)">🥊 Concorrência</button>
+      <button class="f2-tab" onclick="f2ShowTab('proposta',this)">💎 Proposta de Valor</button>
+      <span class="f2-tab-grupo">Oferta e operação</span>
+      <button class="f2-tab" onclick="f2ShowTab('mix',this)">🧩 4Ps + 4Cs</button>
+      <button class="f2-tab" onclick="f2ShowTab('organograma',this)">🏗️ Estrutura</button>
+      <button class="f2-tab" onclick="f2ShowTab('financeiro',this)">💰 Financeiro</button>
+      <span class="f2-tab-grupo">Estratégia</span>
       <button class="f2-tab" onclick="f2ShowTab('swot',this)">⚖️ SWOT</button>
       <button class="f2-tab" onclick="f2ShowTab('acoes',this)">✅ Plano de Ação</button>
       <button class="f2-tab" onclick="f2ShowTab('marketing',this)">📣 Plano de Marketing</button>
+      <span class="f2-tab-grupo">Execução</span>
       <button class="f2-tab" onclick="f2ShowTab('farol',this)">🔦 Farol de Acompanhamento</button>
       <button class="f2-tab" onclick="f2ShowTab('relatorio',this)">📄 Relatório</button>
     </div>
@@ -8287,7 +8296,7 @@ async function renderFase2() {
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
       <button class="f2-btn-save" onclick="f2Salvar()">💾 Salvar Negócio</button>
-      <button class="f2-btn-sec" onclick="f2ShowTab('organograma',document.querySelectorAll('.f2-tab')[1])">Próximo: Estrutura Funcional →</button>
+      <button class="f2-btn-sec" onclick="f2ShowTab('publico')">Próximo: Público-Alvo →</button>
     </div>
   </div>
 
@@ -8346,7 +8355,7 @@ async function renderFase2() {
     </div>
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
-      <button class="f2-btn-sec" onclick="f2ShowTab('financeiro',document.querySelectorAll('.f2-tab')[2])">Próximo: Financeiro →</button>
+      <button class="f2-btn-sec" onclick="f2ShowTab('financeiro')">Próximo: Financeiro →</button>
     </div>
   </div>
 
@@ -8440,9 +8449,9 @@ async function renderFase2() {
 
     <div class="f2-card" style="background:linear-gradient(135deg,#0f2644,#1a5e3a);color:#fff;">
       <div class="f2-card-title" style="color:#fff;border-bottom-color:rgba(255,255,255,.15);"><span>⚖️</span> Ponto de Equilíbrio <i class="f2-tip" onclick="f2ShowTip('ponto_equilibrio')" style="background:rgba(255,255,255,.2);color:#fff;">?</i></div>
-      <div style="font-size:12px;opacity:.7;margin-bottom:16px;">Faturamento mínimo mensal para cobrir todos os custos sem lucro nem prejuízo</div>
+      <div style="font-size:12px;opacity:.7;margin-bottom:16px;">Faturamento mínimo mensal para pagar todos os custos, sem lucro nem prejuízo. Os custos variáveis acompanham as vendas, por isso o cálculo usa a margem de contribuição.</div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px;">
         <div style="background:rgba(255,255,255,.1);border-radius:10px;padding:14px;text-align:center;">
           <div style="font-size:11px;opacity:.7;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Custos Fixos</div>
           <div id="f2-pe-fixos" style="font-size:20px;font-weight:800;">R$ 0</div>
@@ -8455,12 +8464,17 @@ async function renderFase2() {
           <div style="font-size:11px;opacity:.7;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Total de Custos</div>
           <div id="f2-pe-total" style="font-size:20px;font-weight:800;">R$ 0</div>
         </div>
+        <div style="background:rgba(116,198,157,.18);border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:11px;opacity:.8;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Margem de Contribuição</div>
+          <div id="f2-pe-mc" style="font-size:20px;font-weight:800;">—</div>
+          <div style="font-size:10px;opacity:.6;margin-top:2px;">(Receita − Variáveis) ÷ Receita</div>
+        </div>
       </div>
 
       <div style="background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.3);border-radius:14px;padding:20px;text-align:center;margin-bottom:16px;">
         <div style="font-size:12px;opacity:.7;margin-bottom:6px;text-transform:uppercase;letter-spacing:2px;">Ponto de Equilíbrio Mensal</div>
         <div id="f2-pe-valor" style="font-size:36px;font-weight:900;color:#74c69d;letter-spacing:-1px;">R$ 0,00</div>
-        <div style="font-size:11px;opacity:.6;margin-top:4px;">= Custo Fixo + Custo Variável</div>
+        <div style="font-size:11px;opacity:.6;margin-top:4px;">= Custos Fixos ÷ Margem de Contribuição</div>
       </div>
 
       <div style="background:rgba(255,255,255,.08);border-radius:10px;padding:14px;margin-bottom:14px;">
@@ -8490,6 +8504,8 @@ async function renderFase2() {
       </div>
     </div>
 
+    <div id="f2-coerencia"></div>
+
     <div class="f2-card">
       <div class="f2-card-title"><span>🎯</span> Indicadores de Desempenho</div>
       <div class="f2-grid3" style="margin-bottom:0;">
@@ -8511,11 +8527,13 @@ async function renderFase2() {
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
       <button class="f2-btn-save" onclick="f2Salvar()">💾 Salvar Financeiro</button>
       <button onclick="f2AtualizarFinanceiro()" style="padding:10px 22px;background:#0f2644;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">🔄 Atualizar</button>
-      <button class="f2-btn-sec" onclick="f2ShowTab('publico')">Próximo: Público-Alvo →</button>
+      <button class="f2-btn-sec" onclick="f2ShowTab('swot')">Próximo: SWOT →</button>
     </div>
   </div>
 
   ${_f2HtmlPublico(F2)}
+  ${_f2HtmlConcorrencia(F2)}
+  ${_f2HtmlProposta(F2)}
 
   <div class="f2-sec" id="f2-persona">
     ${_f2HtmlPersonaTopo(F2)}
@@ -8618,7 +8636,7 @@ async function renderFase2() {
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
       <button class="f2-btn-save" onclick="f2Salvar()">💾 Salvar Persona</button>
-      <button class="f2-btn-sec" onclick="f2ShowTab('mix',document.querySelectorAll('.f2-tab')[4])">Próximo: 4Ps + 4Cs →</button>
+      <button class="f2-btn-sec" onclick="f2ShowTab('concorrencia')">Próximo: Concorrência →</button>
     </div>
   </div>
 
@@ -8668,7 +8686,7 @@ async function renderFase2() {
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
       <button class="f2-btn-save" onclick="f2Salvar()">💾 Salvar Mix de Marketing</button>
-      <button class="f2-btn-sec" onclick="f2ShowTab('swot',document.querySelectorAll('.f2-tab')[5])">Próximo: SWOT →</button>
+      <button class="f2-btn-sec" onclick="f2ShowTab('organograma')">Próximo: Estrutura Funcional →</button>
     </div>
   </div>
 
@@ -8693,6 +8711,10 @@ async function renderFase2() {
           <label>⚡ Ameaças (Externas)</label>
           <textarea id="f2-sw-ameacas" placeholder="Concorrência, riscos externos...">${F2.sw_ameacas||''}</textarea>
         </div>
+      </div>
+      <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <button class="f2-btn-sec" onclick="f2ImportarSWOT()">📥 Sugerir a partir da Fase 1 e da Concorrência</button>
+        <span style="font-size:11px;color:var(--muted);">Pilares com nota baixa ou urgentes viram fraquezas; os de nota alta e o diferencial, forças; pontos fortes dos concorrentes, ameaças; e os fracos, oportunidades.</span>
       </div>
     </div>
 
@@ -8728,7 +8750,7 @@ async function renderFase2() {
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
       <button class="f2-btn-save" onclick="f2Salvar()">💾 Salvar SWOT</button>
-      <button class="f2-btn-sec" onclick="f2ShowTab('acoes',document.querySelectorAll('.f2-tab')[6])">Próximo: Plano de Ação →</button>
+      <button class="f2-btn-sec" onclick="f2ShowTab('acoes')">Próximo: Plano de Ação →</button>
     </div>
   </div>
 
@@ -8821,7 +8843,7 @@ async function renderFase2() {
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
       <button class="f2-btn-save" onclick="f2SalvarMkt()">💾 Salvar Plano de Marketing</button>
-      <button class="f2-btn-sec" onclick="f2ShowTab('farol',document.querySelectorAll('.f2-tab')[8])">Próximo: Farol de Acompanhamento →</button>
+      <button class="f2-btn-sec" onclick="f2ShowTab('farol')">Próximo: Farol de Acompanhamento →</button>
     </div>
   </div>
 
@@ -8978,7 +9000,7 @@ async function renderFase2() {
     </div>
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
-      <button class="f2-btn-sec" onclick="f2ShowTab('marketing',document.querySelectorAll('.f2-tab')[7])">Próximo: Plano de Marketing →</button>
+      <button class="f2-btn-sec" onclick="f2ShowTab('marketing')">Próximo: Plano de Marketing →</button>
     </div>
   </div>
 
@@ -9138,7 +9160,7 @@ async function renderFase2() {
       </div>
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
-      <button class="f2-btn-sec" onclick="f2ShowTab('relatorio',document.querySelectorAll('.f2-tab')[9])">Próximo: Relatório →</button>
+      <button class="f2-btn-sec" onclick="f2ShowTab('relatorio')">Próximo: Relatório →</button>
     </div>
   </div>
 
@@ -9688,6 +9710,257 @@ function _f2HtmlPublico(F2){
     </div>
   </div>`;
 }
+// --- Aba Concorrência (dados guardados dentro de publico_alvo) ---
+const CONC_TIPOS = ['','Direto (vende o mesmo para o mesmo público)','Indireto (resolve o mesmo problema de outro jeito)','Substituto (o cliente pode trocar por isso)'];
+const POS_PRECO = ['','Mais barato que a média','Na média do mercado','Mais caro que a média'];
+const POS_VALOR = ['','Básico (atende o essencial)','Intermediário (bom custo-benefício)','Premium (experiência/qualidade superior)'];
+function _concLista(pa){
+  const l = Array.isArray(pa.concorrentes) ? pa.concorrentes.slice(0,4) : [];
+  while(l.length<4) l.push({});
+  return l;
+}
+function _f2NumBR(v){
+  if(v===undefined||v===null) return 0;
+  let s=String(v).replace(/[^\d,.\-]/g,'');
+  if(s.includes(',')) s=s.replace(/\./g,'').replace(',','.');
+  const n=parseFloat(s); return isNaN(n)?0:n;
+}
+let _f2MeuAtual = null;
+// "~18 mil domicílios" → 18000 ; "1,2 milhão" → 1200000 ; "5.000 pessoas" → 5000
+function _f2TamanhoNum(t){
+  const m=String(t||'').match(/([\d][\d.,]*)\s*(mil(h(ão|ões|oes|ao))?|k)?/i); if(!m) return 0;
+  let n=_f2NumBR(m[1]); const mult=(m[2]||'').toLowerCase();
+  if(/^milh/.test(mult)) n*=1e6; else if(mult==='mil'||mult==='k') n*=1e3;
+  return n;
+}
+function _f2HtmlConcorrencia(F2){
+  const pa=_f2PA(F2);
+  const conc=_concLista(pa);
+  return `
+  <div class="f2-sec" id="f2-concorrencia">
+    <div class="f2-card" style="background:#f5f9ff;border-color:#cdd9ee;">
+      <div style="font-size:13px;color:#1d3557;line-height:1.6;">
+        <strong>🥊 Por que olhar a concorrência?</strong> O cliente sempre compara. Conhecer quem ele já usa hoje ajuda a definir <em>preço</em>, <em>diferencial</em> e <em>onde estar</em>. Lembre: “não tenho concorrente” quase nunca é verdade — se ninguém vende igual, alguém resolve o mesmo problema de outro jeito (concorrente indireto). <i class="f2-tip" onclick="f2ShowTip('concorrencia')">?</i>
+      </div>
+    </div>
+    <div class="f2-card">
+      <div class="f2-card-title"><span>🔎</span> Principais concorrentes <span style="font-size:11px;font-weight:600;color:var(--muted);">— até 4</span></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;">
+      ${conc.map((c,i)=>`
+        <div style="border:1.5px solid var(--border);border-radius:12px;padding:14px;background:#fff;">
+          <div style="font-size:12px;font-weight:800;color:var(--navy);margin-bottom:6px;">Concorrente ${i+1}</div>
+          <label class="f2-lbl">Nome</label>
+          <input class="f2-inp f2-conc" data-i="${i}" data-k="nome" value="${e(c.nome||'')}" placeholder="Ex: Padaria do Bairro, iFood, marmita caseira">
+          <label class="f2-lbl">Tipo <i class="f2-tip" onclick="f2ShowTip('conc_tipo')">?</i></label>
+          <select class="f2-sel f2-conc" data-i="${i}" data-k="tipo">${CONC_TIPOS.map(o=>`<option value="${e(o)}" ${c.tipo===o?'selected':''}>${o||'Selecione...'}</option>`).join('')}</select>
+          <div class="f2-grid2" style="gap:8px;">
+            <div><label class="f2-lbl">Preço médio (R$)</label>
+              <input class="f2-inp f2-conc" data-i="${i}" data-k="preco" value="${e(c.preco||'')}" placeholder="Ex: 35,00" inputmode="decimal" oninput="f2RenderConcPrecos()"></div>
+            <div><label class="f2-lbl">Onde vende</label>
+              <input class="f2-inp f2-conc" data-i="${i}" data-k="canal" value="${e(c.canal||'')}" placeholder="Loja, Instagram, app..."></div>
+          </div>
+          <label class="f2-lbl">Pontos fortes (o que faz bem)</label>
+          <textarea class="f2-ta f2-conc" data-i="${i}" data-k="fortes" rows="2" placeholder="Ex: entrega rápida, marca conhecida">${e(c.fortes||'')}</textarea>
+          <label class="f2-lbl">Pontos fracos (onde deixa a desejar)</label>
+          <textarea class="f2-ta f2-conc" data-i="${i}" data-k="fracos" rows="2" placeholder="Ex: atendimento demorado, pouca variedade">${e(c.fracos||'')}</textarea>
+        </div>`).join('')}
+      </div>
+    </div>
+    <div class="f2-card">
+      <div class="f2-card-title"><span>📍</span> Meu posicionamento <i class="f2-tip" onclick="f2ShowTip('posicionamento')">?</i></div>
+      <div id="f2-conc-precos" style="margin-bottom:12px;"></div>
+      <div class="f2-grid2">
+        <div><label class="f2-lbl">Em preço, quero ser...</label>${_paSel('f2-pos-preco',POS_PRECO,pa.pos_preco||'')}</div>
+        <div><label class="f2-lbl">Em valor percebido, quero ser...</label>${_paSel('f2-pos-valor',POS_VALOR,pa.pos_valor||'')}</div>
+      </div>
+      <label class="f2-lbl">Meu diferencial competitivo <i class="f2-tip" onclick="f2ShowTip('diferencial')">?</i></label>
+      <textarea class="f2-ta" id="f2-conc-diferencial" rows="3" placeholder="Ex: única marmita fit da região com cardápio montado por nutricionista e entrega no mesmo dia.">${e(pa.diferencial||'')}</textarea>
+      <label class="f2-lbl">Por que o cliente escolheria você e não o concorrente?</label>
+      <textarea class="f2-ta" id="f2-conc-porque" rows="2" placeholder="Responda como se fosse o cliente: “Eu compro dele porque...”">${e(pa.porque||'')}</textarea>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <button class="f2-btn-save" onclick="f2Salvar()">💾 Salvar Concorrência</button>
+      <button class="f2-btn-sec" onclick="f2ShowTab('proposta')">Próximo: Proposta de Valor →</button>
+    </div>
+  </div>`;
+}
+// Comparativo de preço (meu ticket x média dos concorrentes)
+function f2RenderConcPrecos(){
+  const box=document.getElementById('f2-conc-precos'); if(!box) return;
+  const precos=[...document.querySelectorAll('.f2-conc[data-k="preco"]')].map(i=>_f2NumBR(i.value)).filter(n=>n>0);
+  const ticket=_f2NumBR(document.getElementById('f2-ticket')?.value);
+  if(!precos.length){ box.innerHTML='<div style="font-size:12px;color:var(--muted);">Informe o preço médio de pelo menos um concorrente para comparar com o seu ticket médio.</div>'; return; }
+  const media=precos.reduce((a,b)=>a+b,0)/precos.length;
+  const fmt=v=>'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  let rel='';
+  if(ticket>0){
+    const dif=(ticket/media-1)*100;
+    rel = Math.abs(dif)<10 ? 'na média dos concorrentes' : (dif>0 ? `${dif.toFixed(0)}% acima da média` : `${Math.abs(dif).toFixed(0)}% abaixo da média`);
+  }
+  box.innerHTML=`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;">
+    <div style="background:var(--soft);border-radius:10px;padding:10px 14px;"><div style="color:var(--muted);">Preço médio dos concorrentes</div><div style="font-size:16px;font-weight:800;color:var(--navy);">${fmt(media)}</div></div>
+    <div style="background:var(--soft);border-radius:10px;padding:10px 14px;"><div style="color:var(--muted);">Meu ticket médio (aba Financeiro)</div><div style="font-size:16px;font-weight:800;color:var(--navy);">${ticket>0?fmt(ticket):'—'}</div></div>
+    ${rel?`<div style="background:#eef6ff;border-radius:10px;padding:10px 14px;align-self:center;font-weight:700;color:#1d4ed8;">Meu preço está ${rel}</div>`:''}
+  </div>`;
+}
+
+// --- Aba Proposta de Valor (Canvas simplificado) ---
+function _f2HtmlProposta(F2){
+  const pa=_f2PA(F2);
+  const campo=(id,k,tip,titulo,ph,cor)=>`
+    <div style="background:${cor};border-radius:12px;padding:12px;">
+      <label class="f2-lbl" style="margin-top:0;">${titulo} <i class="f2-tip" onclick="f2ShowTip('${tip}')">?</i></label>
+      <textarea class="f2-ta" id="${id}" rows="4" placeholder="${ph}" oninput="f2RenderEncaixeVP()">${e(pa[k]||'')}</textarea>
+    </div>`;
+  return `
+  <div class="f2-sec" id="f2-proposta">
+    <div class="f2-card" style="background:#f5f9ff;border-color:#cdd9ee;">
+      <div style="font-size:13px;color:#1d3557;line-height:1.6;">
+        <strong>💎 Proposta de Valor</strong> é a promessa que faz o cliente escolher você. Ela nasce do encaixe entre <em>o que a persona precisa</em> (lado esquerdo) e <em>o que o seu negócio entrega</em> (lado direito). Se um lado não conversa com o outro, a proposta não convence. <i class="f2-tip" onclick="f2ShowTip('proposta_valor')">?</i>
+      </div>
+      <button class="f2-btn-sec" style="margin-top:10px;" onclick="f2ImportarVP()">📥 Trazer o que já foi preenchido (Público-Alvo, Persona, 4Ps e Concorrência)</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+      <div class="f2-card" style="margin-bottom:0;">
+        <div class="f2-card-title"><span>👤</span> O cliente (persona)</div>
+        <div style="display:grid;gap:10px;">
+          ${campo('f2-vp-tarefas','vp_tarefas','vp_tarefas','🎯 O que ele quer resolver','Ex: ter almoço saudável sem perder tempo cozinhando','#f8fafc')}
+          ${campo('f2-vp-dores','vp_dores','vp_dores','😣 Dores','Ex: falta de tempo, comida de restaurante pesada e cara','#fef2f2')}
+          ${campo('f2-vp-ganhos','vp_ganhos','vp_ganhos','😀 Ganhos que deseja','Ex: emagrecer, sentir-se disposto, economizar','#f0fdf4')}
+        </div>
+      </div>
+      <div class="f2-card" style="margin-bottom:0;">
+        <div class="f2-card-title"><span>🏪</span> O meu negócio</div>
+        <div style="display:grid;gap:10px;">
+          ${campo('f2-vp-produtos','vp_produtos','vp_produtos','📦 Produtos e serviços','Ex: kit semanal de 10 marmitas fit congeladas','#f8fafc')}
+          ${campo('f2-vp-aliviadores','vp_aliviadores','vp_aliviadores','💊 Como alivio as dores','Ex: entrega pronta em casa; preço por refeição menor que restaurante','#fef2f2')}
+          ${campo('f2-vp-criadores','vp_criadores','vp_criadores','🚀 Como gero os ganhos','Ex: cardápio balanceado por nutricionista; contagem de calorias no rótulo','#f0fdf4')}
+        </div>
+      </div>
+    </div>
+    <div class="f2-card" style="margin-top:16px;">
+      <div class="f2-card-title"><span>✍️</span> Frase da proposta de valor <i class="f2-tip" onclick="f2ShowTip('vp_frase')">?</i></div>
+      <div id="f2-vp-encaixe" style="margin-bottom:10px;"></div>
+      <textarea class="f2-ta" id="f2-vp-frase" rows="3" placeholder="Para [público], que [dor ou necessidade], o [meu produto] é [o que é] que [principal ganho]. Diferente de [concorrente], nós [diferencial].">${e(pa.vp_frase||'')}</textarea>
+      <button class="f2-btn-sec" style="margin-top:6px;" onclick="f2MontarFraseVP()">🪄 Montar rascunho da frase</button>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <button class="f2-btn-save" onclick="f2Salvar()">💾 Salvar Proposta de Valor</button>
+      <button class="f2-btn-sec" onclick="f2ShowTab('mix')">Próximo: 4Ps + 4Cs →</button>
+    </div>
+  </div>`;
+}
+function _f2Val(id){ const el=document.getElementById(id); return el?el.value.trim():''; }
+function _f2Junta(...partes){ return [...new Set(partes.map(p=>(p||'').trim()).filter(Boolean))].join('\n'); }
+// Preenche só os campos vazios do canvas com o que já existe em outras abas
+function f2ImportarVP(){
+  const F2=(typeof getFase2DataSync==='function' ? getFase2DataSync(f2GetEmpNome()) : {})||{};
+  let d=F2.p_ia_dados; if(typeof d==='string'){ try{ d=JSON.parse(d);}catch(_){ d=null; } }
+  const me=(d&&d.mapa_empatia)||{};
+  const conc=[...document.querySelectorAll('.f2-conc[data-k="fracos"]')].map(t=>t.value.trim()).filter(Boolean);
+  const sug={
+    'f2-vp-tarefas': _f2Junta(_f2Val('f2-pa-necessidade')),
+    'f2-vp-dores': _f2Junta(_f2Val('f2-p-desafios'), me.sente),
+    'f2-vp-ganhos': _f2Junta(_f2Val('f2-p-objetivos'), _f2Val('f2-pa-beneficio')),
+    'f2-vp-produtos': _f2Junta(_f2Val('f2-4p-produto')),
+    'f2-vp-aliviadores': conc.length ? 'Fazer melhor onde os concorrentes falham: '+conc.join('; ') : '',
+    'f2-vp-criadores': _f2Junta(_f2Val('f2-conc-diferencial')),
+  };
+  let n=0;
+  Object.entries(sug).forEach(([id,v])=>{ const el=document.getElementById(id); if(el && !el.value.trim() && v){ el.value=v; n++; } });
+  if(typeof f2MarkDirty==='function') f2MarkDirty();
+  f2RenderEncaixeVP();
+  alert(n ? `✅ ${n} campo(s) preenchido(s) com o que já estava nas outras abas. Revise e ajuste com suas palavras.` : 'Nada novo para trazer: os campos já estão preenchidos ou as outras abas ainda estão vazias (Público-Alvo, Persona, 4Ps, Concorrência).');
+}
+function f2RenderEncaixeVP(){
+  const box=document.getElementById('f2-vp-encaixe'); if(!box) return;
+  const pares=[['Dores','f2-vp-dores','Alívio das dores','f2-vp-aliviadores'],['Ganhos desejados','f2-vp-ganhos','Geração de ganhos','f2-vp-criadores'],['O que quer resolver','f2-vp-tarefas','Produtos e serviços','f2-vp-produtos']];
+  const falta=[];
+  pares.forEach(([a,ia,b,ib])=>{ const va=_f2Val(ia), vb=_f2Val(ib); if(va && !vb) falta.push(`há <strong>${a}</strong> mas falta <strong>${b}</strong>`); if(!va && vb) falta.push(`há <strong>${b}</strong> mas falta <strong>${a}</strong>`); });
+  const cheios=['f2-vp-tarefas','f2-vp-dores','f2-vp-ganhos','f2-vp-produtos','f2-vp-aliviadores','f2-vp-criadores'].filter(id=>_f2Val(id)).length;
+  box.innerHTML = falta.length
+    ? `<div style="font-size:12px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:8px 12px;">⚠️ Encaixe incompleto: ${falta.join('; ')}.</div>`
+    : (cheios===6 ? `<div style="font-size:12px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:10px;padding:8px 12px;">✅ Os dois lados do canvas estão preenchidos. Confira se cada dor tem um alívio e cada ganho tem uma entrega.</div>` : '');
+}
+function f2MontarFraseVP(){
+  const pa=f2ColetarPA({});
+  const um=s=>(s||'').split(/\n|;/)[0].trim().replace(/\.$/,'');
+  const publico = um(pa.frase) || 'nosso público';
+  const dor = um(pa.vp_dores) || um(pa.vp_tarefas) || '[dor ou necessidade]';
+  const prod = _f2Val('f2-negocio-nome') || 'o nosso negócio';
+  const oque = um(pa.vp_produtos) || '[o que é]';
+  const ganho = um(pa.vp_ganhos) || um(pa.vp_criadores) || '[principal ganho]';
+  const conc = (pa.concorrentes||[]).find(c=>c&&c.nome);
+  const dif = um(pa.diferencial);
+  const mi=t=>t.charAt(0).toLowerCase()+t.slice(1);
+  let f = `Para ${mi(publico)}, que lida com ${mi(dor)}, ${prod} oferece ${mi(oque)} para ${mi(ganho)}.`;
+  if(conc || dif) f += ` Diferente de ${conc?conc.nome:'outras opções'}, o nosso diferencial é ${dif?mi(dif):'[diferencial]'}.`;
+  const el=document.getElementById('f2-vp-frase');
+  if(el){ if(el.value.trim() && !confirm('Substituir a frase atual pelo rascunho?')) return; el.value=f; if(typeof f2MarkDirty==='function') f2MarkDirty(); }
+}
+
+// --- Fio condutor: avisos de coerência no Financeiro ---
+function f2RenderCoerencia(){
+  const box=document.getElementById('f2-coerencia'); if(!box) return;
+  const pa=f2ColetarPA({});
+  const ticket=_f2NumBR(_f2Val('f2-ticket'));
+  const clientes=_f2NumBR(_f2Val('f2-clientes'));
+  const avisos=[];
+  // 1) Clientes por mês x tamanho do público
+  const tam=_f2TamanhoNum(pa.tamanho);
+  if(clientes>0 && tam>0){
+    const pct=clientes/tam*100;
+    if(pct>100) avisos.push(['🚨',`Você prevê <strong>${clientes} clientes/mês</strong>, mais do que o tamanho estimado do público (<strong>${e(pa.tamanho)}</strong>). Revise a meta de clientes ou o recorte do público-alvo.`]);
+    else if(pct>10) avisos.push(['⚠️',`A meta de <strong>${clientes} clientes/mês</strong> equivale a ${pct.toFixed(0)}% do público estimado (${e(pa.tamanho)}). Conquistar mais de 10% do mercado logo no início é raro; confira se é realista.`]);
+  } else if(clientes>0 && !pa.tamanho){
+    avisos.push(['ℹ️','Preencha o <strong>tamanho estimado do público</strong> na aba Público-Alvo para conferir se a meta de clientes/mês é realista.']);
+  }
+  // 2) Ticket x preço dos concorrentes e posicionamento
+  const precos=(pa.concorrentes||[]).map(c=>_f2NumBR(c&&c.preco)).filter(n=>n>0);
+  if(ticket>0 && precos.length){
+    const media=precos.reduce((a,b)=>a+b,0)/precos.length;
+    const r=ticket/media;
+    const premium=/Premium/.test(pa.pos_valor||''), barato=/barato/.test(pa.pos_preco||''), caro=/caro/.test(pa.pos_preco||'');
+    if(r>1.3 && !premium && !caro) avisos.push(['⚠️',`Seu ticket médio está ${((r-1)*100).toFixed(0)}% acima da média dos concorrentes, mas o posicionamento não é <em>Premium</em> nem <em>Mais caro</em>. Justifique o preço com o diferencial ou revise-o.`]);
+    if(barato && r>1.05) avisos.push(['⚠️','Você quer ser <strong>mais barato que a média</strong>, mas o ticket médio está acima do preço médio dos concorrentes.']);
+    if(caro && r<0.95) avisos.push(['ℹ️','Você se posicionou como <strong>mais caro</strong>, mas o ticket médio está abaixo da média dos concorrentes. Talvez esteja deixando dinheiro na mesa.']);
+    if(r<0.6) avisos.push(['⚠️',`Seu preço está ${((1-r)*100).toFixed(0)}% abaixo da média dos concorrentes. Confira se a margem de contribuição cobre os custos fixos (veja o Ponto de Equilíbrio).`]);
+  } else if(ticket>0 && !precos.length){
+    avisos.push(['ℹ️','Informe os preços dos concorrentes na aba <strong>Concorrência</strong> para comparar com o seu ticket médio.']);
+  }
+  // 3) Sensibilidade a preço do público x posicionamento
+  if(/alta/i.test(pa.preco||'') && /Premium/.test(pa.pos_valor||'')) avisos.push(['⚠️','O público-alvo foi marcado com <strong>alta sensibilidade a preço</strong>, mas o posicionamento é <em>Premium</em>. Confirme se esse público paga pelo diferencial.']);
+  box.innerHTML = avisos.length
+    ? `<div class="f2-card" style="border-color:#fde68a;background:#fffdf5;"><div class="f2-card-title"><span>🧵</span> Coerência com as outras etapas</div>${avisos.map(([i,t])=>`<div style="font-size:13px;line-height:1.55;margin:6px 0;">${i} ${t}</div>`).join('')}</div>`
+    : '';
+}
+
+// --- Fio condutor: sugestões para a SWOT a partir da Fase 1 e da Concorrência ---
+function f2ImportarSWOT(){
+  const meu=_f2MeuAtual||{};
+  const pa=f2ColetarPA({});
+  const PIL=[['Produto/Serviço','pilar_produto'],['Vendas/Marketing','pilar_vendas'],['Finanças','pilar_financas'],['Gestão/Processos','pilar_gestao']];
+  const forc=[], fraq=[], opo=[], ame=[];
+  PIL.forEach(([nome,k])=>{
+    const nota=+meu[k+'_nota']||0, cls=String(meu[k+'_class']||meu[k+'_classe']||'');
+    if(!nota) return;
+    if(nota<=2 || /urgente/i.test(cls)) fraq.push(`${nome}: nota ${nota}/5 no diagnóstico${cls?' ('+cls+')':''}`);
+    else if(nota>=4) forc.push(`${nome}: nota ${nota}/5 no diagnóstico`);
+  });
+  if(pa.diferencial) forc.push('Diferencial: '+pa.diferencial.split('\n')[0]);
+  (pa.concorrentes||[]).filter(c=>c&&c.nome).forEach(c=>{
+    if(c.fortes) ame.push(`${c.nome} — ${c.fortes.split('\n')[0]}`);
+    if(c.fracos) opo.push(`Lacuna deixada por ${c.nome}: ${c.fracos.split('\n')[0]}`);
+  });
+  const add=(id,itens)=>{ const el=document.getElementById(id); if(!el||!itens.length) return 0;
+    const atual=el.value; const novos=itens.filter(t=>!atual.includes(t));
+    if(!novos.length) return 0;
+    el.value=(atual.trim()?atual.trim()+'\n':'')+novos.map(t=>'• '+t).join('\n'); return novos.length; };
+  const n=add('f2-sw-forcas',forc)+add('f2-sw-fraquezas',fraq)+add('f2-sw-oportunidades',opo)+add('f2-sw-ameacas',ame);
+  if(typeof f2MarkDirty==='function') f2MarkDirty();
+  alert(n ? `✅ ${n} sugestão(ões) adicionada(s) à SWOT. Revise, apague o que não fizer sentido e complete.` : 'Nenhuma sugestão nova. Preencha os pilares na Fase 1 e os concorrentes na aba Concorrência para gerar sugestões.');
+}
+
 // Coleta os campos (Negócio + Público-Alvo + extras da Persona)
 function f2ColetarPA(existente){
   const pa = {...(existente||{})};
@@ -9704,7 +9977,15 @@ function f2ColetarPA(existente){
    ['frase','f2-pa-frase'],['persona_porte','f2-p-porte'],['persona_papel','f2-p-papel'],
    ['domicilio','f2-pa-domicilio'],['profissoes','f2-pa-profissoes'],['aspiracoes','f2-pa-aspiracoes'],['beneficio','f2-pa-beneficio'],
    ['preco','f2-pa-preco'],['gasto','f2-pa-gasto'],['influencia','f2-pa-influencia'],
-   ['persona_civil','f2-p-civil'],['persona_filhos','f2-p-filhos']].forEach(([k,id])=>setIf(k,id));
+   ['persona_civil','f2-p-civil'],['persona_filhos','f2-p-filhos'],
+   ['pos_preco','f2-pos-preco'],['pos_valor','f2-pos-valor'],['diferencial','f2-conc-diferencial'],['porque','f2-conc-porque'],
+   ['vp_tarefas','f2-vp-tarefas'],['vp_dores','f2-vp-dores'],['vp_ganhos','f2-vp-ganhos'],['vp_produtos','f2-vp-produtos'],
+   ['vp_aliviadores','f2-vp-aliviadores'],['vp_criadores','f2-vp-criadores'],['vp_frase','f2-vp-frase']].forEach(([k,id])=>setIf(k,id));
+  if(document.getElementById('f2-concorrencia')){
+    const l=[{},{},{},{}];
+    document.querySelectorAll('.f2-conc').forEach(el=>{ const i=+el.dataset.i; if(l[i]) l[i][el.dataset.k]=el.value.trim(); });
+    pa.concorrentes=l;
+  }
   if(document.getElementById('f2-publico')){
     ['faixas','rendas','portes','esferas','contrat','canais','civil','filhos','classe','escolaridade','ocupacao','compraonde','pagto','fatB2B','funcB2B'].forEach(k=>{
       pa[k]=[...document.querySelectorAll('.f2-pa-chk[data-k="'+k+'"]:checked')].map(c=>c.value);
@@ -9819,6 +10100,8 @@ function f2ShowTab(tab, btn) {
   const _b = [...document.querySelectorAll('.f2-tab')].find(b=>(b.getAttribute('onclick')||'').includes("'"+tab+"'")) || btn;
   if(_b){ _b.classList.add('active'); _b.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'}); }
   if(tab==='persona') setTimeout(f2RenderResumoPA, 50);
+  if(tab==='concorrencia') setTimeout(f2RenderConcPrecos, 50);
+  if(tab==='proposta') setTimeout(f2RenderEncaixeVP, 50);
   f2UpdateTabsFade();
 }
 
@@ -9836,6 +10119,9 @@ function f2AtualizarProgressoAbas(F2) {
     'negocio':   () => F2.negocioNome || document.getElementById('f2-negocio-nome')?.value,
     'financeiro':() => F2.ticket || document.getElementById('f2-ticket')?.value,
     'persona':   () => F2.pNome || document.getElementById('f2-p-nome')?.value,
+    'publico':   () => document.getElementById('f2-pa-frase')?.value,
+    'concorrencia': () => [...document.querySelectorAll('.f2-conc[data-k="nome"]')].some(i=>i.value.trim()),
+    'proposta':  () => document.getElementById('f2-vp-frase')?.value || document.getElementById('f2-vp-dores')?.value,
     'mix':       () => F2.f24pProduto || document.getElementById('f2-4p-produto')?.value,
     'swot':      () => F2.swForcas || document.getElementById('f2-sw-forcas')?.value,
     'acoes':     () => (F2.acoes||[]).some(a=>a&&a.a),
@@ -10127,32 +10413,36 @@ function f2CalcFin(){
   setT('f2-total-fixos-display',     fmt(totalFixos));
   setT('f2-total-variaveis-display', fmt(totalVariaveis));
 
-  // Ponto de Equilíbrio
-  const pe = totalCustos; // custo fixo + variável = faturamento mínimo
+  // Ponto de Equilíbrio (PE = Custos Fixos ÷ Margem de Contribuição %)
+  // Margem de contribuição = parte de cada R$ vendido que sobra depois dos custos variáveis
+  const mcPct = receita>0 ? (receita-totalVariaveis)/receita : 0;
+  const peValido = receita>0 && mcPct>0;
+  const pe = peValido ? totalFixos/mcPct : 0;
   setT('f2-pe-fixos',     fmt(totalFixos));
   setT('f2-pe-variaveis', fmt(totalVariaveis));
   setT('f2-pe-total',     fmt(totalCustos));
-  setT('f2-pe-valor',     fmt(pe));
+  setT('f2-pe-mc',        receita>0 ? (mcPct*100).toFixed(1).replace('.',',')+'%' : '—');
+  setT('f2-pe-valor',     peValido ? fmt(pe) : '—');
   setT('f2-pe-receita',   fmt(receita));
   setT('f2-pe-ticket',    fmt(ticket));
 
   // Vendas mínimas para PE
-  const vendasMin = ticket>0 ? Math.ceil(pe/ticket) : 0;
+  const vendasMin = (peValido && ticket>0) ? Math.ceil(pe/ticket) : 0;
   setT('f2-pe-vendas', vendasMin || '—');
 
   // Barra de progresso
   const barra = document.getElementById('f2-pe-barra');
   const status = document.getElementById('f2-pe-status');
-  if(barra && pe>0){
-    const pct = Math.min((receita/pe)*100, 100);
+  if(barra){
+    const pct = peValido ? (pe>0 ? Math.min((receita/pe)*100,100) : 100) : 0;
     barra.style.width = pct+'%';
     barra.style.background = pct>=100 ? '#74c69d' : pct>=70 ? '#fbbf24' : '#f87171';
   }
   if(status){
-    if(pe===0){ status.textContent='—'; status.style.color='rgba(255,255,255,.5)'; }
+    if(receita<=0){ status.textContent='Informe o ticket médio e os clientes por mês para calcular'; status.style.color='rgba(255,255,255,.5)'; }
+    else if(!peValido){ status.textContent='🚨 Os custos variáveis consomem toda a receita: cada venda dá prejuízo. Revise o preço ou os custos variáveis.'; status.style.color='#f87171'; }
     else if(receita>=pe){ status.textContent=`✅ Acima do equilíbrio em ${fmt(receita-pe)}`; status.style.color='#74c69d'; }
-    else if(receita>0){ status.textContent=`⚠️ Faltam ${fmt(pe-receita)} para atingir o equilíbrio`; status.style.color='#fbbf24'; }
-    else{ status.textContent=`Informe a receita estimada para comparar`; status.style.color='rgba(255,255,255,.5)'; }
+    else{ status.textContent=`⚠️ Faltam ${fmt(pe-receita)} de faturamento (≈ ${Math.ceil((pe-receita)/(ticket||1))} vendas) para atingir o equilíbrio`; status.style.color='#fbbf24'; }
   }
 
   // Indicadores
@@ -10170,6 +10460,8 @@ function f2CalcFin(){
     f2CalcMktOrcamento();
     f2CalcMktCats();
   }
+  try{ f2RenderCoerencia(); }catch(_){}
+  try{ f2RenderConcPrecos(); }catch(_){}
 }
 
 // ===== MARKETING =====
@@ -10356,10 +10648,42 @@ const F2_TIPS = {
     texto: 'São despesas que aumentam ou diminuem conforme a quantidade produzida ou vendida. Se você vender mais, esses custos sobem; se vender menos, caem.',
     exemplo: 'Ex: Embalagens, matéria-prima, comissão de vendedores, frete de entrega'
   },
+  concorrencia: {
+    titulo: '🥊 Concorrência',
+    texto: 'Concorrente é qualquer alternativa que o cliente tem para resolver o mesmo problema, não só quem vende exatamente o mesmo produto. Liste quem o seu público já usa hoje e anote preço, onde vende, o que faz bem e onde falha. Pesquise como cliente: visite, peça orçamento, leia avaliações.',
+    exemplo: 'Ex: Para uma marmitaria fit, são concorrentes outras marmitarias (diretos), restaurantes por quilo e apps de entrega (indiretos) e cozinhar em casa (substituto).'
+  },
+  conc_tipo: {
+    titulo: '🔎 Tipos de concorrente',
+    texto: '<strong>Direto</strong>: vende o mesmo tipo de produto para o mesmo público. <strong>Indireto</strong>: oferece outro produto que resolve a mesma necessidade. <strong>Substituto</strong>: aquilo que o cliente faz no lugar de comprar (inclusive “fazer sozinho” ou “não fazer nada”).',
+    exemplo: 'Ex: Academia → direto: outra academia; indireto: personal trainer, app de treino; substituto: correr na rua.'
+  },
+  posicionamento: {
+    titulo: '📍 Posicionamento',
+    texto: 'É o lugar que você quer ocupar na cabeça do cliente em comparação aos concorrentes. Combine duas escolhas: <strong>preço</strong> (mais barato, na média, mais caro) e <strong>valor percebido</strong> (básico, intermediário, premium). Preço alto exige valor percebido alto; preço baixo exige custos baixos.',
+    exemplo: 'Ex: “Na média de preço, mas premium em atendimento” é uma posição de excelente custo-benefício.'
+  },
+  diferencial: {
+    titulo: '⭐ Diferencial competitivo',
+    texto: 'É o que você faz de forma diferente e que o cliente valoriza a ponto de escolher você. Bom diferencial é específico, difícil de copiar e importante para a persona. “Qualidade” e “bom atendimento” sozinhos são genéricos: diga o que exatamente é melhor.',
+    exemplo: 'Ex: Em vez de “atendimento de qualidade”: “resposta no WhatsApp em até 10 minutos e troca sem perguntas em 7 dias”.'
+  },
+  proposta_valor: {
+    titulo: '💎 Proposta de Valor (Canvas)',
+    texto: 'Baseado no Value Proposition Canvas (Osterwalder). À esquerda, o perfil do cliente: o que ele quer resolver, suas dores e os ganhos que deseja. À direita, o seu negócio: produtos/serviços, como eles aliviam as dores e como geram ganhos. Há encaixe quando cada dor importante tem um alívio e cada ganho desejado tem uma entrega.',
+    exemplo: 'Use o botão “Trazer o que já foi preenchido” para aproveitar as informações da Persona e do Público-Alvo.'
+  },
+  vp_tarefas: { titulo:'🎯 O que o cliente quer resolver', texto:'As tarefas, problemas ou necessidades que a persona tenta resolver no dia a dia, e que têm relação com o seu negócio.', exemplo:'Ex: “alimentar a família de forma saudável numa rotina corrida”.' },
+  vp_dores:   { titulo:'😣 Dores', texto:'O que incomoda, frustra, custa caro ou dá medo à persona antes, durante ou depois de resolver a tarefa. Inclua obstáculos e riscos.', exemplo:'Ex: “perde tempo no trânsito para buscar comida”, “medo de comprar e não gostar”.' },
+  vp_ganhos:  { titulo:'😀 Ganhos desejados', texto:'Os resultados e benefícios que a persona espera ou que a surpreenderiam positivamente: economia, conforto, status, segurança, bem-estar.', exemplo:'Ex: “ter mais tempo com os filhos”, “sentir-se bem com o próprio corpo”.' },
+  vp_produtos:{ titulo:'📦 Produtos e serviços', texto:'O que você oferece concretamente: produtos, serviços, planos, kits, assinaturas.', exemplo:'Ex: “kit semanal de 10 marmitas” + “consulta mensal com nutricionista”.' },
+  vp_aliviadores:{ titulo:'💊 Alívio das dores', texto:'Como o seu produto ou serviço elimina ou reduz cada dor listada à esquerda. Tente ligar uma coisa à outra.', exemplo:'Ex: dor “perde tempo buscando comida” → alívio “entrega na porta no horário escolhido”.' },
+  vp_criadores:{ titulo:'🚀 Geração de ganhos', texto:'Como o seu negócio produz os ganhos que a persona deseja. Aqui costuma aparecer o diferencial.', exemplo:'Ex: ganho “sentir-se bem” → entrega “cardápio balanceado e acompanhamento de resultados”.' },
+  vp_frase:   { titulo:'✍️ Frase da proposta de valor', texto:'Resume, em uma ou duas frases, para quem é, que problema resolve, o principal ganho e por que é diferente das alternativas. Ela orienta a comunicação no Plano de Marketing e o argumento de vendas.', exemplo:'Ex: “Para profissionais sem tempo que querem comer bem, a FitBox entrega marmitas balanceadas por nutricionista que cabem na rotina e no bolso. Diferente dos apps de entrega, cada refeição vem com a contagem de calorias e um plano semanal.”' },
   ponto_equilibrio: {
     titulo: '⚖️ Ponto de Equilíbrio',
-    texto: 'É o faturamento mínimo que o negócio precisa atingir para não ter lucro nem prejuízo — ou seja, para pagar todas as contas. Abaixo disso há prejuízo; acima, há lucro.',
-    exemplo: 'Ex: Seus custos totais são R$ 3.500/mês → você precisa faturar pelo menos R$ 3.500 para estar no ponto de equilíbrio'
+    texto: 'É o faturamento mínimo que o negócio precisa atingir para não ter lucro nem prejuízo. Abaixo disso há prejuízo; acima, há lucro. Como os custos variáveis crescem junto com as vendas, primeiro calculamos a Margem de Contribuição: quanto sobra de cada R$ 1 vendido depois de pagar os custos variáveis. Essa sobra é que paga os custos fixos. Fórmula: Ponto de Equilíbrio = Custos Fixos ÷ Margem de Contribuição.',
+    exemplo: 'Ex: Receita prevista R$ 10.000, custos variáveis R$ 3.000 e custos fixos R$ 5.000. Margem de contribuição = (10.000 − 3.000) ÷ 10.000 = 70%. Ponto de equilíbrio = 5.000 ÷ 0,70 ≈ R$ 7.143 por mês. Com ticket médio de R$ 100, são cerca de 72 vendas.'
   }
 };
 
@@ -12098,7 +12422,11 @@ function f2GerarResumo(){
           <div><strong>Custos Fixos:</strong><br>${fmt(F2.cfixos)}</div>
           <div><strong>Custos Variáveis:</strong><br>${fmt(F2.cvariaveis)}</div>
           <div><strong>Lucro Estimado:</strong><br><span style="color:${lucro>=0?'#16a34a':'#dc2626'};font-weight:800;">${fmt(lucro)}</span></div>
-        </div>`)}
+        </div>
+        ${(()=>{ const cf=+F2.cfixos||0, cv=+F2.cvariaveis||0; if(!(receita>0) || !(cf>0)) return '';
+          const mc=(receita-cv)/receita; if(mc<=0) return `<div style="margin-top:8px;color:#dc2626;"><strong>Ponto de Equilíbrio:</strong> não atingível — os custos variáveis consomem toda a receita.</div>`;
+          const pe=cf/mc; const tk=+F2.ticket||0;
+          return `<div style="margin-top:8px;"><strong>Margem de Contribuição:</strong> ${(mc*100).toFixed(1).replace('.',',')}% · <strong>Ponto de Equilíbrio:</strong> ${fmt(pe)}/mês${tk>0?` (≈ ${Math.ceil(pe/tk)} vendas)`:''} · ${receita>=pe?'<span style="color:#16a34a;font-weight:700;">acima do equilíbrio</span>':'<span style="color:#d97706;font-weight:700;">abaixo do equilíbrio</span>'}</div>`; })()}`)}
 
       
       ${(()=>{ const pa=_f2PA(F2); const r=_paResumoTexto(pa); if(!r && !pa.modelos.length) return '';
@@ -12109,6 +12437,22 @@ function f2GerarResumo(){
          ${pa.tamanho?`<div style="margin-top:4px;"><strong>Tamanho estimado:</strong> ${e(pa.tamanho)}${pa.fonte?' ('+e(pa.fonte)+')':''}</div>`:''}
          ${pa.canais?.length?`<div style="margin-top:4px;"><strong>Onde encontrar:</strong> ${pa.canais.map(e).join(', ')}</div>`:''}
          ${pa.exclusao?`<div style="margin-top:4px;"><strong>Não é cliente:</strong> ${e(pa.exclusao)}</div>`:''}`); })()}
+      ${(()=>{ const pa=_f2PA(F2); const cs=(pa.concorrentes||[]).filter(c=>c&&c.nome); if(!cs.length && !pa.diferencial && !pa.pos_preco) return '';
+        return bloco('🥊 Concorrência e Posicionamento','#b45309',
+        `${cs.length?`<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px;"><tr style="background:#fef3c7;"><th style="text-align:left;padding:5px;">Concorrente</th><th style="text-align:left;padding:5px;">Tipo</th><th style="text-align:left;padding:5px;">Preço</th><th style="text-align:left;padding:5px;">Pontos fortes</th><th style="text-align:left;padding:5px;">Pontos fracos</th></tr>
+          ${cs.map(c=>`<tr style="border-top:1px solid #f1f5f9;"><td style="padding:5px;font-weight:700;">${e(c.nome)}</td><td style="padding:5px;">${e((c.tipo||'').split(' (')[0])}</td><td style="padding:5px;">${c.preco?'R$ '+e(c.preco):'–'}</td><td style="padding:5px;">${e(c.fortes||'')}</td><td style="padding:5px;">${e(c.fracos||'')}</td></tr>`).join('')}</table>`:''}
+         ${pa.pos_preco||pa.pos_valor?`<div><strong>Posicionamento:</strong> ${[pa.pos_preco,pa.pos_valor].filter(Boolean).map(x=>e(x.split(' (')[0])).join(' · ')}</div>`:''}
+         ${pa.diferencial?`<div style="margin-top:4px;"><strong>Diferencial:</strong> ${e(pa.diferencial)}</div>`:''}
+         ${pa.porque?`<div style="margin-top:4px;"><strong>Por que nos escolher:</strong> ${e(pa.porque)}</div>`:''}`); })()}
+      ${(()=>{ const pa=_f2PA(F2); const ks=['vp_tarefas','vp_dores','vp_ganhos','vp_produtos','vp_aliviadores','vp_criadores']; if(!pa.vp_frase && !ks.some(k=>pa[k])) return '';
+        const cel=(t,k,cor)=>pa[k]?`<div style="background:${cor};border-radius:8px;padding:8px;"><strong>${t}</strong><br>${e(pa[k]).replace(/\n/g,'<br>')}</div>`:'';
+        return bloco('💎 Proposta de Valor','#0e7490',
+        `${pa.vp_frase?`<div style="font-size:14px;font-style:italic;border-left:4px solid #0e7490;padding:6px 12px;margin-bottom:10px;background:#ecfeff;">“${e(pa.vp_frase)}”</div>`:''}
+         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+           ${cel('🎯 O que o cliente quer resolver','vp_tarefas','#f8fafc')}${cel('📦 Produtos e serviços','vp_produtos','#f8fafc')}
+           ${cel('😣 Dores','vp_dores','#fef2f2')}${cel('💊 Alívio das dores','vp_aliviadores','#fef2f2')}
+           ${cel('😀 Ganhos desejados','vp_ganhos','#f0fdf4')}${cel('🚀 Geração de ganhos','vp_criadores','#f0fdf4')}
+         </div>`); })()}
       ${(F2.p_nome||F2.p_objetivos) ? bloco('👥 Buyer Persona','#7c3aed',
         `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           ${F2.p_nome?`<div><strong>Nome:</strong> ${e(F2.p_nome)}</div>`:''}
