@@ -572,7 +572,7 @@ async function buscarParticipantePortalPorCPF(cpf){
     return data&&data.length>0?data[0]:null;
   }catch(e){ return null; }
 }
-const APP_VERSAO = '2026.11.13-email2';
+const APP_VERSAO = '2026.11.13-email3';
 const SB_HEADERS={'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'};
 
 // ===== CONFIG GLOBAL (API KEY salva no Supabase) =====
@@ -2015,7 +2015,7 @@ async function loadNotifCount(){
 const EMAIL_FN_URL = SU + '/functions/v1/enviar-email';
 const ROTA_URL = 'https://empreendedor.enedesifb.com.br';
 const EM_TIPOS = {
-  lembrete:  {ico:'📅', nome:'Lembrete de consultoria', desc:'Data, horário, canal e pauta do próximo retorno.'},
+  lembrete:  {ico:'📅', nome:'Lembrete de encontro', desc:'Consultoria, oficina, curso, mentoria… com data, local, card e link.'},
   curso:     {ico:'🎓', nome:'Card de curso/capacitação', desc:'Sugestão de curso com descrição, data e link de inscrição.'},
   livre:     {ico:'✍️', nome:'Mensagem livre', desc:'Texto aberto para um ou vários empreendedores.'},
   pendencia: {ico:'⏰', nome:'Lembrete de pendência', desc:'Ex.: completar a Fase 1, avançar na Fase 2, atualizar o Farol.'},
@@ -2027,6 +2027,10 @@ const EM_PENDENCIAS = [
   'Agendar o próximo retorno com seu consultor',
   'Outra (descrever abaixo)',
 ];
+const EM_ENCONTROS = ['Consultoria','Mentoria','Oficina','Curso','Workshop','Palestra','Evento','Reunião','Outro'];
+const EM_FEM = {Consultoria:1,Mentoria:1,Oficina:1,Palestra:1,'Reunião':1};
+function _emEncontro(c){ return (c.encontro==='Outro' ? (c.encontroOutro||'atividade') : (c.encontro||'Consultoria')); }
+function _emArt(nome){ return EM_FEM[nome] || /^(atividade|aula|visita|banca|feira)/i.test(nome) ? 'a' : 'o'; }
 let EM = { aba:'novo', tipo:'lembrete', campos:{}, sel:new Set(), filtros:{busca:'',prog:'',vinc:'',est:'',ret:'',cons:''}, status:null, pre:null };
 
 function podeEnviarEmails(){ return ['coord','coord_abdi','coord_prog','consul','apoio_tec'].includes(PERFIL); }
@@ -2100,6 +2104,10 @@ function emMoldura(titulo, conteudo){
 Você recebeu este e-mail por participar da Rota Empreendedora da ENEDES/IFB.<br>Para não receber mais mensagens, responda a este e-mail pedindo o descadastro.</td></tr>
 </table></td></tr></table></body></html>`;
 }
+function _emImagem(c){
+  const u=_emLink(c.imagem);
+  return u ? `<img src="${_emEsc(u)}" alt="" width="544" style="display:block;width:100%;max-width:544px;height:auto;border-radius:10px;margin:0 0 18px;">` : '';
+}
 function _emBotao(texto, link, cor){
   if(!link) return '';
   return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 6px;"><tr><td style="background:${cor||'#2E75B6'};border-radius:9px;">
@@ -2118,30 +2126,35 @@ function emMontar(tipo, c, d){
   const S=t=>_emSubst(t,d);
   const primeiro=_emEsc(String(d.nome||'').trim().split(/\s+/)[0]||'empreendedor(a)');
   if(tipo==='lembrete'){
-    const usarAg = c.usarAgendada!==false;
+    const enc=_emEncontro(c), art=_emArt(enc), encMin=enc.toLowerCase();
+    const ehAcomp = /^(Consultoria|Mentoria)$/.test(c.encontro||'Consultoria');
+    const usarAg = c.usarAgendada!==false && ehAcomp && !!d.retorno_data;
     const data = usarAg ? d.retorno_data : c.data;
-    if(!data) return {pular: usarAg ? 'sem retorno agendado' : 'data não informada'};
+    if(!data) return {pular: ehAcomp ? 'sem retorno agendado e sem data no formulário' : 'data não informada'};
     const hora = usarAg ? (d.retorno_hora||c.hora) : c.hora;
     const canal = usarAg ? (d.retorno_canal||c.canal) : c.canal;
     const pauta = usarAg ? (d.retorno_obs||c.pauta) : c.pauta;
-    const linhas=[['📅 Data',_emDataExt(data)], hora?['🕐 Horário',hora]:null, canal?['📍 Canal / local',canal]:null, d.consultor?['👤 Consultor(a)',d.consultor]:null].filter(Boolean);
+    const linhas=[[`🏷️ Tipo`,enc], ['📅 Data',_emDataExt(data)], hora?['🕐 Horário',hora]:null, canal?['📍 Canal / local',canal]:null,
+      (ehAcomp&&d.consultor)?['👤 Consultor(a)',d.consultor]:null, c.facilitador?['👤 Facilitador(a)',c.facilitador]:null].filter(Boolean);
     const tab=linhas.map(([k,v])=>`<tr><td style="padding:8px 12px;font-size:13px;color:#475569;width:140px;">${k}</td><td style="padding:8px 12px;font-size:14px;font-weight:bold;color:#0f172a;">${_emEsc(v)}</td></tr>`).join('');
     const extra = c.mensagem ? _emParagrafos(S(c.mensagem)) : '';
+    const sua = art==='a' ? 'sua' : 'seu', da = art==='a' ? 'da' : 'do';
     return {
-      assunto: S(c.assunto||'Lembrete: sua consultoria ENEDES') ,
-      html: emMoldura('Lembrete da sua consultoria',
-        `<p style="font-size:15px;line-height:1.6;margin:0 0 14px;">Olá, ${primeiro}! Este é um lembrete do seu próximo encontro de acompanhamento${d.negocio?` sobre o <strong>${_emEsc(d.negocio)}</strong>`:''}.</p>
+      assunto: S(c.assunto || `Lembrete: ${sua} ${encMin} ENEDES`),
+      html: emMoldura(`Lembrete ${da} ${sua} ${_emEsc(encMin)}`,
+        `${_emImagem(c)}<p style="font-size:15px;line-height:1.6;margin:0 0 14px;">Olá, ${primeiro}! Este é um lembrete ${da} ${sua} ${_emEsc(encMin)}${ehAcomp&&d.negocio?` sobre o <strong>${_emEsc(d.negocio)}</strong>`:''}.</p>
 <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#f0f7ff;border-left:4px solid #2E75B6;border-radius:8px;">${tab}</table>
-${pauta?`<p style="font-size:14px;line-height:1.6;margin:14px 0 0;"><strong>Pauta:</strong> ${_emEsc(pauta)}</p>`:''}
+${pauta?`<p style="font-size:14px;line-height:1.6;margin:14px 0 0;"><strong>${ehAcomp?'Pauta':'Tema'}:</strong> ${_emEsc(pauta)}</p>`:''}
 <div style="margin-top:14px;">${extra}</div>
-<p style="font-size:14px;line-height:1.6;margin:6px 0 8px;">Se não puder comparecer, responda a este e-mail para remarcarmos. Até lá! 🌱</p>`)
+${_emBotao(c.botao||'Acessar', c.link)}
+<p style="font-size:14px;line-height:1.6;margin:6px 0 8px;">${ehAcomp?'Se não puder comparecer, responda a este e-mail para remarcarmos.':'Dúvidas? É só responder a este e-mail.'} Até lá! 🌱</p>`)
     };
   }
   if(tipo==='curso'){
     if(!c.titulo) return {pular:'título do curso não informado'};
     const info=[c.quando?['📅 Quando',c.quando]:null, c.formato?['📍 Formato / local',c.formato]:null, c.cargaHoraria?['⏱️ Carga horária',c.cargaHoraria]:null].filter(Boolean)
       .map(([k,v])=>`<tr><td style="padding:6px 0;font-size:13px;color:#475569;width:150px;">${k}</td><td style="padding:6px 0;font-size:14px;font-weight:bold;">${_emEsc(v)}</td></tr>`).join('');
-    const img = _emLink(c.imagem) ? `<img src="${_emEsc(_emLink(c.imagem))}" alt="" width="544" style="display:block;width:100%;max-width:544px;border-radius:10px 10px 0 0;">` : '';
+    const img = _emLink(c.imagem) ? `<img src="${_emEsc(_emLink(c.imagem))}" alt="" width="544" style="display:block;width:100%;max-width:544px;height:auto;border-radius:10px 10px 0 0;">` : '';
     return {
       assunto: S(c.assunto||('Sugestão de capacitação para você: '+c.titulo)),
       html: emMoldura('Uma capacitação para o seu negócio',
@@ -2162,7 +2175,7 @@ ${_emBotao(c.botao||'Quero me inscrever', c.link, '#1A6B3C')}</td></tr></table>
     return {
       assunto: S(c.assunto||('Rota ENEDES: '+pend)),
       html: emMoldura('Tem um passo esperando por você',
-        `<p style="font-size:15px;line-height:1.6;margin:0 0 14px;">Olá, ${primeiro}! Na sua Rota Empreendedora${d.negocio?` (<strong>${_emEsc(d.negocio)}</strong>)`:''}, ficou pendente:</p>
+        `${_emImagem(c)}<p style="font-size:15px;line-height:1.6;margin:0 0 14px;">Olá, ${primeiro}! Na sua Rota Empreendedora${d.negocio?` (<strong>${_emEsc(d.negocio)}</strong>)`:''}, ficou pendente:</p>
 <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#fffbeb;border-left:4px solid #d97706;border-radius:8px;"><tr><td style="padding:14px 16px;font-size:15px;font-weight:bold;color:#92400e;">⏰ ${_emEsc(pend)}</td></tr></table>
 <div style="margin-top:14px;">${_emParagrafos(S(c.texto||''))}</div>
 ${c.prazo?`<p style="font-size:14px;margin:0 0 8px;"><strong>Prazo sugerido:</strong> ${_emEsc(_emDataExt(c.prazo))}</p>`:''}
@@ -2174,7 +2187,7 @@ ${_emBotao('Acessar minha Rota', ROTA_URL, '#2E75B6')}
   if(!c.assunto || !c.texto) return {pular:'assunto ou texto vazio'};
   return {
     assunto: S(c.assunto),
-    html: emMoldura(_emEsc(S(c.titulo||c.assunto)), `${_emParagrafos(S(c.texto))}${_emBotao(c.botao||'Saiba mais', c.link)}`)
+    html: emMoldura(_emEsc(S(c.titulo||c.assunto)), `${_emImagem(c)}${_emParagrafos(S(c.texto))}${_emBotao(c.botao||'Saiba mais', c.link)}`)
   };
 }
 
@@ -2185,7 +2198,7 @@ async function renderEmails(){
   if(!ALL.length){ try{ await loadData(); }catch(_){} }
   try{ await loadUsers(); }catch(_){}
   if(EM.pre){ // atalho vindo de um atendimento
-    EM.aba='novo'; EM.tipo=EM.pre.tipo||'lembrete'; EM.sel=new Set([EM.pre.id]); EM.filtros={busca:'',prog:'',vinc:'',est:'',ret:'',cons:''}; EM.pre=null;
+    EM.aba='novo'; EM.tipo=EM.pre.tipo||'lembrete'; EM.campos={encontro:'Consultoria'}; EM.sel=new Set([EM.pre.id]); EM.filtros={busca:'',prog:'',vinc:'',est:'',ret:'',cons:''}; EM.pre=null;
   }
   main.innerHTML=`<div style="max-width:1100px;margin:0 auto;">
     <div style="font-family:'DM Serif Display',serif;font-size:24px;color:var(--navy);margin-bottom:6px;">✉️ E-mails para empreendedores</div>
@@ -2233,25 +2246,62 @@ function _emCampo(k, rotulo, tipo, ph, extra){
   const v=EM.campos[k]??'';
   if(tipo==='textarea') return `<div class="fg" style="margin-bottom:10px;"><label class="lbl">${rotulo}</label><textarea class="inp" rows="${extra||4}" oninput="emSet('${k}',this.value)" placeholder="${_emEsc(ph||'')}">${_emEsc(v)}</textarea></div>`;
   if(tipo==='select') return `<div class="fg" style="margin-bottom:10px;"><label class="lbl">${rotulo}</label><select class="inp" onchange="emSet('${k}',this.value,true)">${extra.map(o=>`<option ${v===o?'selected':''}>${_emEsc(o)}</option>`).join('')}</select></div>`;
-  return `<div class="fg" style="margin-bottom:10px;"><label class="lbl">${rotulo}</label><input class="inp" type="${tipo||'text'}" value="${_emEsc(v)}" oninput="emSet('${k}',this.value)" placeholder="${_emEsc(ph||'')}"></div>`;
+  return `<div class="fg" style="margin-bottom:10px;"><label class="lbl">${rotulo}</label><input class="inp" type="${tipo||'text'}" value="${_emEsc(v)}" oninput="emSet('${k}',this.value)" placeholder="${_emEsc(ph||'')}" style="width:100%;box-sizing:border-box;padding:11px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;font-family:inherit;background:#f8fafc;min-height:44px;"></div>`;
+}
+function _emCampoImagem(rotulo){
+  const u=_emLink(EM.campos.imagem);
+  return `<div class="fg" style="margin-bottom:12px;"><label class="lbl">${rotulo||'Imagem / card (opcional)'}</label>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <label style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:9px;border:1.5px solid #1A6B3C;color:#1A6B3C;background:#fff;font-size:13px;font-weight:700;cursor:pointer;">
+        📤 ${u?'Trocar imagem':'Subir imagem do card'}<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="emSubirImagem(this)"></label>
+      ${u?`<button type="button" onclick="emSet('imagem','',true)" style="padding:8px 12px;border-radius:9px;border:1px solid #cbd5e1;background:#fff;font-size:12px;cursor:pointer;font-family:inherit;">✕ Remover</button>`:''}
+      <span id="em-img-status" style="font-size:12px;color:#64748b;">PNG, JPG ou WEBP · até 5 MB</span>
+    </div>
+    ${u?`<img src="${_emEsc(u)}" alt="" style="margin-top:8px;max-width:220px;max-height:140px;border-radius:8px;border:1px solid #e2e8f0;display:block;">`:''}
+  </div>`;
+}
+async function emSubirImagem(inp){
+  const file=inp.files&&inp.files[0]; if(!file) return;
+  const st=document.getElementById('em-img-status');
+  if(!/^image\/(png|jpeg|webp)$/.test(file.type)){ st.innerHTML='<span style="color:#dc2626;">Use PNG, JPG ou WEBP.</span>'; return; }
+  if(file.size>5*1024*1024){ st.innerHTML='<span style="color:#dc2626;">Imagem acima de 5 MB.</span>'; return; }
+  st.textContent='⏳ Enviando imagem…';
+  try{
+    const img=await _logoRedimensionar(file, 1200, 'image/jpeg');
+    const caminho='emails/card-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.jpg';
+    const r=await fetch(SU+'/storage/v1/object/logos/'+caminho,{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'image/jpeg','x-upsert':'true'},body:img.blob});
+    if(!r.ok) throw new Error('O armazenamento recusou a imagem ('+r.status+').');
+    EM.campos.imagem=SU+'/storage/v1/object/public/logos/'+caminho;
+    emRenderNovo();
+  }catch(err){ const s2=document.getElementById('em-img-status'); if(s2) s2.innerHTML='<span style="color:#dc2626;">'+_emEsc(err.message)+'</span>'; }
+  finally{ inp.value=''; }
 }
 function emSet(k,v,rerender){ EM.campos[k]=v; if(rerender) emRenderNovo(); else emAgendarPrevia(); }
 let _emPrevT=null; function emAgendarPrevia(){ clearTimeout(_emPrevT); _emPrevT=setTimeout(emRenderPrevia,350); }
-function emTipo(t){ EM.tipo=t; EM.campos={}; if(t==='pendencia') EM.campos.pendencia=EM_PENDENCIAS[0]; emRenderNovo(); }
+function emTipo(t){ EM.tipo=t; EM.campos={}; if(t==='pendencia') EM.campos.pendencia=EM_PENDENCIAS[0]; if(t==='lembrete') EM.campos.encontro='Consultoria'; emRenderNovo(); }
 
 function _emFormTipo(){
   const t=EM.tipo, c=EM.campos;
   const dica=`<div style="font-size:11.5px;color:var(--muted);margin:-4px 0 10px;">Use <code>{{nome}}</code>, <code>{{negocio}}</code> ou <code>{{consultor}}</code> para personalizar cada e-mail.</div>`;
   if(t==='lembrete'){
+    const enc=c.encontro||'Consultoria';
+    const ehAcomp=/^(Consultoria|Mentoria)$/.test(enc);
     const usar=c.usarAgendada!==false;
-    return `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-bottom:12px;cursor:pointer;">
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px;">
+        ${_emCampo('encontro','Tipo de encontro','select','',EM_ENCONTROS)}
+        ${enc==='Outro'?_emCampo('encontroOutro','Qual?','text','Ex.: visita técnica'):'<div></div>'}</div>
+      ${ehAcomp?`<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 12px;cursor:pointer;">
         <input type="checkbox" ${usar?'checked':''} onchange="emSet('usarAgendada',this.checked,true)" style="margin-top:3px;">
-        <span><strong>Usar o retorno já agendado de cada empreendedor</strong> (data, horário, canal e pauta do 5D). Quem não tiver retorno agendado fica de fora.</span></label>
-      ${usar?'':`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0 12px;">
+        <span>Para quem já tem <strong>retorno agendado no 5D</strong>, usar a data, o horário e o canal de lá. Para os demais, vale o que for preenchido abaixo.</span></label>`:''}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 12px;">
         ${_emCampo('data','Data','date')}${_emCampo('hora','Horário','time')}${_emCampo('canal','Canal / local','text','Ex.: Google Meet, sala 12 do IFB')}</div>
-        ${_emCampo('pauta','Pauta','text','Ex.: revisão do plano de ação')}`}
-      ${_emCampo('assunto','Assunto','text','Lembrete: sua consultoria ENEDES')}
-      ${_emCampo('mensagem','Mensagem adicional (opcional)','textarea','Ex.: Traga a planilha de custos atualizada.',3)}${dica}`;
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px;">
+        ${_emCampo('pauta',ehAcomp?'Pauta':'Tema','text',ehAcomp?'Ex.: revisão do plano de ação':'Ex.: Precificação na prática')}
+        ${ehAcomp?'<div></div>':_emCampo('facilitador','Facilitador(a) (opcional)','text','Ex.: Profa. Carla')}</div>
+      ${_emCampo('assunto','Assunto (opcional)','text',`Lembrete: ${_emArt(_emEncontro(c))==='a'?'sua':'seu'} ${_emEncontro(c).toLowerCase()} ENEDES`)}
+      ${_emCampo('mensagem','Mensagem adicional (opcional)','textarea','Ex.: Traga a planilha de custos atualizada.',3)}
+      ${_emCampoImagem('Card / arte do encontro (opcional)')}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px;">${_emCampo('botao','Texto do botão (opcional)','text','Ex.: Entrar na sala')}${_emCampo('link','Link do botão (opcional)','url','https://meet.google.com/...')}</div>${dica}`;
   }
   if(t==='curso'){
     return `${_emCampo('titulo','Nome do curso *','text','Ex.: Gestão Financeira para MEI')}
@@ -2259,7 +2309,8 @@ function _emFormTipo(){
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0 12px;">
         ${_emCampo('quando','Quando','text','Ex.: 25/11, das 19h às 21h')}${_emCampo('formato','Formato / local','text','Ex.: Online (Zoom) ou IFB Campus Brasília')}${_emCampo('cargaHoraria','Carga horária','text','Ex.: 8h')}</div>
       ${_emCampo('link','Link de inscrição','url','https://...')}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px;">${_emCampo('botao','Texto do botão','text','Quero me inscrever')}${_emCampo('imagem','Imagem do curso (link, opcional)','url','https://... .jpg ou .png')}</div>
+      ${_emCampo('botao','Texto do botão','text','Quero me inscrever')}
+      ${_emCampoImagem('Card / arte do curso (opcional)')}
       ${_emCampo('intro','Frase de abertura (opcional)','text','Separamos uma oportunidade que combina com o momento do seu negócio.')}
       ${_emCampo('assunto','Assunto (opcional)','text','Sugestão de capacitação para você: ...')}${dica}`;
   }
@@ -2267,11 +2318,13 @@ function _emFormTipo(){
     return `${_emCampo('pendencia','Pendência','select','',EM_PENDENCIAS)}
       ${c.pendencia==='Outra (descrever abaixo)'?_emCampo('outra','Qual pendência? *','text','Ex.: Enviar fotos do produto para o catálogo'):''}
       ${_emCampo('texto','Mensagem','textarea','Ex.: Essa etapa ajuda seu consultor a preparar o próximo encontro. Leva cerca de 20 minutos.',3)}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px;">${_emCampo('prazo','Prazo sugerido (opcional)','date')}${_emCampo('assunto','Assunto (opcional)','text','Rota ENEDES: ...')}</div>${dica}`;
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px;">${_emCampo('prazo','Prazo sugerido (opcional)','date')}${_emCampo('assunto','Assunto (opcional)','text','Rota ENEDES: ...')}</div>
+      ${_emCampoImagem()}${dica}`;
   }
   return `${_emCampo('assunto','Assunto *','text','Ex.: Novidades da Rota ENEDES')}
     ${_emCampo('titulo','Título dentro do e-mail (opcional)','text','Se vazio, usa o assunto')}
     ${_emCampo('texto','Mensagem *','textarea','Olá, {{nome}}! ...',7)}
+    ${_emCampoImagem()}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px;">${_emCampo('botao','Texto do botão (opcional)','text','Saiba mais')}${_emCampo('link','Link do botão (opcional)','url','https://...')}</div>${dica}`;
 }
 
@@ -2301,7 +2354,7 @@ function emRenderNovo(){
       </div>
       <div class="card" style="padding:18px 20px;">
         <div style="font-size:13px;font-weight:800;color:var(--navy);margin-bottom:10px;">3. Destinatários <span id="em-cont" style="font-weight:600;color:#1A6B3C;"></span></div>
-        <div class="fg" style="margin-bottom:8px;"><input class="inp" placeholder="🔍 Buscar por nome, negócio ou e-mail" value="${_emEsc(f.busca)}" oninput="EM.filtros.busca=this.value;emRenderLista()"></div>
+        <input placeholder="🔍 Buscar por nome, negócio ou e-mail" value="${_emEsc(f.busca)}" oninput="EM.filtros.busca=this.value;emRenderLista()" style="width:100%;box-sizing:border-box;padding:11px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;font-family:inherit;background:#f8fafc;margin-bottom:8px;">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:10px;">
           <select class="inp" onchange="EM.filtros.prog=this.value;emRenderLista()">${opt('','Programa 12M: todos',f.prog)}${opt('sim','Só do Programa 12M',f.prog)}${opt('nao','Fora do Programa',f.prog)}</select>
           <select class="inp" onchange="EM.filtros.vinc=this.value;emRenderLista()">${opt('','Vínculo: todos',f.vinc)}${opt('interno','Interno IFB',f.vinc)}${opt('pedagogico','Uso pedagógico',f.vinc)}${opt('externo','Externo',f.vinc)}</select>
@@ -2358,14 +2411,18 @@ function _emPreparar(){
 function emRenderPrevia(){
   const fr=document.getElementById('em-prev'); if(!fr) return;
   const {dest, ok, pulados}=_emPreparar();
-  const exemplo = ok[0] || (()=>{ const d=dest[0]||{nome:'Maria Silva',negocio:'Doces da Maria',consultor:'Seu consultor',retorno_data:new Date(Date.now()+86400000).toISOString().slice(0,10),retorno_hora:'14:00',retorno_canal:'Google Meet'}; const m=emMontar(EM.tipo,EM.campos,d); return m.pular?null:{d,...m}; })();
-  fr.srcdoc = exemplo ? exemplo.html : `<div style="font-family:Arial;padding:30px;color:#64748b;font-size:14px;">Preencha o conteúdo para ver a prévia.</div>`;
+  const amostra={retorno_data:new Date(Date.now()+86400000).toISOString().slice(0,10),retorno_hora:'14:00',retorno_canal:'Google Meet'};
+  const exemplo = ok[0] || (()=>{
+    const base=dest[0]||{nome:'Maria Silva',negocio:'Doces da Maria',consultor:'Seu consultor'};
+    for(const d of [base, {...base, ...amostra}]){ const m=emMontar(EM.tipo,EM.campos,d); if(!m.pular) return {d,...m}; }
+    return null; })();
+  fr.srcdoc = exemplo ? exemplo.html : `<div style="font-family:Arial;padding:30px;color:#64748b;font-size:14px;">Preencha os campos obrigatórios (*) para ver a prévia.</div>`;
   const info=document.getElementById('em-prev-info');
   if(info) info.innerHTML = exemplo ? `<strong>Assunto:</strong> ${_emEsc(exemplo.assunto)} <span title="O Gmail às vezes quebra assuntos com acento ou emoji; por isso o sistema envia o assunto sem eles." style="cursor:help;">ⓘ vai sem acentos/emoji</span><br>Prévia para: ${_emEsc(exemplo.d.nome||'')}${ok[0]?'':' (exemplo)'}` : '';
   const av=document.getElementById('em-avisos');
   if(av) av.innerHTML = pulados.length ? `<div style="font-size:12px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:8px 12px;">⚠️ ${pulados.length} selecionado(s) ficarão de fora: ${[...new Set(pulados.map(p=>p.motivo))].join('; ')}.</div>` : '';
   const btn=document.getElementById('em-btn-enviar');
-  if(btn){ btn.textContent = ok.length ? `✉️ Enviar para ${ok.length} empreendedor${ok.length>1?'es':''}` : '✉️ Selecione destinatários'; btn.disabled=!ok.length; btn.style.opacity=ok.length?'1':'.5'; }
+  if(btn){ btn.textContent = ok.length ? `✉️ Enviar para ${ok.length} empreendedor${ok.length>1?'es':''}` : (dest.length ? '✉️ Complete os campos para enviar' : '✉️ Selecione destinatários'); btn.disabled=!ok.length; btn.style.opacity=ok.length?'1':'.5'; }
 }
 
 async function emEnviar(){
