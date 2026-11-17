@@ -68,6 +68,33 @@ header{background:linear-gradient(135deg,#080f1a,#0f2644 60%,#0d2a1a);padding:0 
 /* ===== MAIN ===== */
 .main{max-width:1200px;margin:0 auto;padding:28px 16px;}
 
+/* ===== LAYOUT CORPORATIVO (telas largas): menu lateral fixo + conteúdo em largura total ===== */
+@media (min-width:1100px){
+  #screen-app header{position:fixed;top:0;left:0;bottom:0;width:248px;padding:0;overflow-y:auto;
+    background:linear-gradient(180deg,#0b1a30 0%,#0f2644 55%,#0d2a1a 100%);border-bottom:none;border-right:1px solid rgba(255,255,255,.08);box-shadow:none;}
+  #screen-app .hi{max-width:none;margin:0;padding:22px 16px 18px;min-height:100%;box-sizing:border-box;
+    flex-direction:column;align-items:stretch;justify-content:flex-start;flex-wrap:nowrap;gap:18px;}
+  #screen-app .hlo{flex-direction:column;align-items:flex-start;gap:10px;padding:0 6px 16px;border-bottom:1px solid rgba(255,255,255,.1);}
+  #screen-app .hlo img{height:34px;}
+  #screen-app .ht{font-size:17px;line-height:1.25;}
+  #screen-app .hs{font-size:10.5px;line-height:1.5;}
+  #screen-app .hright{flex-direction:column;align-items:stretch;gap:14px;flex:1;flex-wrap:nowrap;}
+  #screen-app .hbdg{align-self:flex-start;margin-left:6px;}
+  #screen-app .hnav{flex-direction:column;gap:2px;}
+  #screen-app .hnav button{width:100%;text-align:left;background:transparent;border:none;border-left:3px solid transparent;
+    border-radius:0 8px 8px 0;padding:10px 12px;font-size:13px;color:rgba(255,255,255,.72);white-space:nowrap;}
+  #screen-app .hnav button:hover{background:rgba(255,255,255,.07);color:#fff;}
+  #screen-app .hnav button.active{background:rgba(116,198,157,.14);color:#fff;border-left-color:#74c69d;font-weight:700;}
+  #screen-app .hout{margin-top:auto;width:100%;text-align:left;padding:10px 12px;}
+  #screen-app .main{margin-left:248px;max-width:1680px;padding:28px 40px 48px;}
+  #app-versao{left:auto !important;right:12px;}
+  .kpis{gap:14px;}
+}
+@media (min-width:1500px){
+  #app-main .cgrid{grid-template-columns:repeat(3,1fr);grid-auto-flow:row dense;}
+}
+
+
 /* ===== 5D PHASES BAR ===== */
 .phases5d{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:24px;}
 .ph5{border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer;transition:all .3s;border:2px solid transparent;position:relative;}
@@ -572,7 +599,7 @@ async function buscarParticipantePortalPorCPF(cpf){
     return data&&data.length>0?data[0]:null;
   }catch(e){ return null; }
 }
-const APP_VERSAO = '2026.11.17-email6';
+const APP_VERSAO = '2026.11.17-layout1';
 const SB_HEADERS={'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'};
 
 // ===== CONFIG GLOBAL (API KEY salva no Supabase) =====
@@ -1718,9 +1745,22 @@ async function _salvarConsultorEscolhidoEmp(nomeConsultor){
   try{ await sbEscreve('PATCH', SU+'/rest/v1/usuarios_5d?usuario=eq.'+encodeURIComponent(USER_NAME), {supervisor:c.usuario}); }catch(e){ console.error(e); }
 }
 
+// Busca TODOS os registros, de 1000 em 1000 (o Supabase limita o tamanho de cada resposta)
+async function _sbGetAll(caminho){
+  let todos=[], off=0;
+  for(let i=0;i<100;i++){
+    const r=await fetch(SU+'/rest/v1/'+caminho+(caminho.includes('?')?'&':'?')+'limit=1000&offset='+off,{headers:SB_HEADERS});
+    if(!r.ok) return {ok:false,status:r.status,json:async()=>[]};
+    const lote=await r.json();
+    todos=todos.concat(lote);
+    if(!lote.length || lote.length<100) break;
+    off+=lote.length;
+  }
+  return {ok:true,status:200,json:async()=>todos};
+}
 async function loadData(){
   try{
-    const r = await fetch(SU+'/rest/v1/atendimentos_5d?select=*&order=created_at.desc', {headers:SB_HEADERS});
+    const r = await _sbGetAll('atendimentos_5d?select=*&order=created_at.desc,id.desc');
     if(r.ok){
       let data = await r.json();
       // Empreendedor só mantém em memória o PRÓPRIO atendimento
@@ -2203,7 +2243,7 @@ async function renderEmails(){
   if(EM.pre){ // atalho vindo de um atendimento
     EM.aba='novo'; EM.tipo=EM.pre.tipo||'lembrete'; EM.campos={encontro:'Consultoria'}; EM.sel=new Set([EM.pre.id]); EM.filtros={busca:'',prog:'',vinc:'',est:'',ret:'',cons:'',ctx:'',data:''}; EM.pre=null;
   }
-  main.innerHTML=`<div style="max-width:1100px;margin:0 auto;">
+  main.innerHTML=`<div style="max-width:1500px;margin:0 auto;">
     <div style="font-family:'DM Serif Display',serif;font-size:24px;color:var(--navy);margin-bottom:6px;">✉️ E-mails para empreendedores</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Lembretes, sugestões de cursos e mensagens com o visual da ENEDES. ${_emEhCoord()?'Você pode enviar para todos os empreendedores.':'Você pode enviar para os empreendedores que acompanha.'}</div>
     <div id="em-status" style="margin-bottom:14px;"></div>
@@ -3874,7 +3914,8 @@ function renderDashFiltrado(dataFull){
     data.forEach(r=>{const g=(+r.gut_g||0)*(+r.gut_u||0)*(+r.gut_t||0);if(g>0){if(g<=25)gutFaixas['Baixo (1-25)']++;else if(g<=64)gutFaixas['Médio (26-64)']++;else gutFaixas['Alto (65-125)']++;}});
     donut('c9',gutFaixas,['#74c69d','#f59e0b','#e53e3e']);
     const meses={};
-    data.forEach(r=>{const d=r.data_mentoria||r.saved_at?.split('T')[0]||r.created_at?.split('T')[0];if(d){const m=d.substring(0,7);meses[m]=(meses[m]||0)+1;}});
+    const _ym=v=>{ v=String(v||''); let m=v.match(/^(\d{4})-(\d{2})/); if(m) return m[1]+'-'+m[2]; m=v.match(/^(\d{2})\/(\d{2})\/(\d{4})/); if(m) return m[3]+'-'+m[2]; return ''; };
+    data.forEach(r=>{const m=_ym(r.data_mentoria)||_ym(r.created_at)||_ym(r.saved_at);if(m){meses[m]=(meses[m]||0)+1;}});
     const mesesOrdenados=Object.keys(meses).sort();
     const mesesObj={};mesesOrdenados.forEach(m=>{const [y,mo]=m.split('-');mesesObj[`${mo}/${y.slice(2)}`]=meses[m];});
     barChart('c10',mesesObj,'#457b9d');
@@ -8746,7 +8787,7 @@ async function renderFase2() {
   main.innerHTML = `
 <style>
 /* ===== FASE 2 STYLES ===== */
-.f2-wrap{max-width:1100px;margin:0 auto;padding:24px 20px;}
+.f2-wrap{max-width:1440px;margin:0 auto;padding:24px 20px;}
 .f2-hero{background:linear-gradient(135deg,#0f2644 0%,#1a5e3a 100%);border-radius:18px;padding:32px 36px;margin-bottom:28px;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;}
 .f2-hero-left h1{font-family:'DM Serif Display',serif;font-size:26px;margin-bottom:4px;}
 .f2-hero-left p{font-size:13px;opacity:.7;margin-bottom:12px;}
