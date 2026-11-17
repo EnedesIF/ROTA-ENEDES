@@ -599,7 +599,7 @@ async function buscarParticipantePortalPorCPF(cpf){
     return data&&data.length>0?data[0]:null;
   }catch(e){ return null; }
 }
-const APP_VERSAO = '2026.11.17-whats4';
+const APP_VERSAO = '2026.11.17-whats5';
 const SB_HEADERS={'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'};
 
 // ===== CONFIG GLOBAL (API KEY salva no Supabase) =====
@@ -2529,14 +2529,14 @@ function emPrepararWhats(){
   const itens=dest.map(d=>({d, txt: d.whats ? emTextoWhats(EM.tipo,EM.campos,d) : null}));
   const prontos=itens.filter(i=>i.txt), fora=itens.filter(i=>!i.txt);
   EM._whatsItens=prontos;
+  if(_emLink(EM.campos.imagem)) _emPrepararCardPng().catch(()=>{});
   const feitos=prontos.filter(i=>EM.whatsFeitos.has(i.d.id)).length;
   box.innerHTML=`<div style="border:1.5px solid #bbf7d0;background:#f0fdf4;border-radius:12px;padding:12px 14px;">
     <div style="font-size:13px;font-weight:800;color:#14532d;">💬 Fila do WhatsApp · ${feitos} de ${prontos.length} abertos</div>
     <div style="font-size:11.5px;color:#475569;margin:4px 0 10px;line-height:1.5;">Deixe o WhatsApp Web aberto com o número da Enedes. Clique em <strong>Abrir</strong>, confira a mensagem e aperte enviar no WhatsApp; depois volte aqui para o próximo.</div>
-    ${_emLink(EM.campos.imagem)?`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fff;border:1px dashed #86efac;border-radius:10px;padding:8px 10px;margin-bottom:10px;">
-      <img src="${_emEsc(_emLink(EM.campos.imagem))}" alt="" style="height:52px;border-radius:6px;">
-      <button onclick="emCopiarCard()" style="padding:8px 12px;border-radius:8px;border:none;background:#128C7E;color:#fff;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">🖼️ Copiar card</button>
-      <span id="em-card-status" style="flex:1;min-width:220px;font-size:11.5px;color:#475569;line-height:1.45;">Clique em <strong>Copiar card</strong> uma vez. Em cada conversa aberta, aperte <strong>Ctrl+V</strong>: o card entra como imagem e o texto vira a legenda. Depois é só enviar.</span>
+    ${_emLink(EM.campos.imagem)?`<div style="display:flex;gap:12px;align-items:center;background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+      <img src="${_emEsc(_emLink(EM.campos.imagem))}" alt="" style="height:56px;border-radius:6px;">
+      <div id="em-card-status" style="flex:1;font-size:12.5px;color:#78350f;line-height:1.5;"><strong>Mensagem com card.</strong> Ao clicar em <strong>Abrir</strong>, o card é copiado sozinho. Na conversa do WhatsApp, <strong>antes de enviar</strong>, aperte <strong>Ctrl+V</strong>: o card entra como imagem e o texto vira a legenda. Aí aperte <strong>Enter</strong>.</div>
     </div>`:''}
     ${fora.length?`<div style="font-size:11.5px;color:#9a3412;margin-bottom:8px;">⚠️ ${fora.length} fora da fila: ${fora.slice(0,6).map(i=>_emEsc(i.d.nome)+(i.d.whats?' (preencha o conteúdo)':' (sem telefone)')).join(', ')}${fora.length>6?'…':''}</div>`:''}
     <div style="max-height:380px;overflow:auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;">
@@ -2544,7 +2544,7 @@ function emPrepararWhats(){
       return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #f1f5f9;${ok?'opacity:.55;':''}">
         <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:#0f172a;">${ok?'✓ ':''}${_emEsc(i.d.nome)}</div><div style="font-size:11px;color:#64748b;">${_emEsc(i.d.telefone||i.d.whats)}</div></div>
         <button onclick="emCopiarWhats(${k})" title="Copiar o texto" style="padding:6px 10px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;font-size:12px;cursor:pointer;font-family:inherit;">📋</button>
-        <a href="https://wa.me/${i.d.whats}?text=${encodeURIComponent(i.txt)}" target="_blank" rel="noopener" onclick="emMarcarWhats(${JSON.stringify(i.d.id).replace(/"/g,'&quot;')})" style="padding:7px 14px;border-radius:8px;background:#25D366;color:#fff;font-size:12px;font-weight:800;text-decoration:none;white-space:nowrap;">${ok?'Abrir de novo':'Abrir'}</a>
+        <a href="https://wa.me/${i.d.whats}?text=${encodeURIComponent(i.txt)}" target="_blank" rel="noopener" onclick="return emAbrirWhats(event,${k})" style="padding:7px 14px;border-radius:8px;background:#25D366;color:#fff;font-size:12px;font-weight:800;text-decoration:none;white-space:nowrap;">${ok?'Abrir de novo':'Abrir'}</a>
       </div>`; }).join('')}
     </div></div>`;
 }
@@ -2563,6 +2563,34 @@ async function emCopiarCard(){
   }catch(e){
     if(st) st.innerHTML='<span style="color:#b45309;">Seu navegador não deixou copiar a imagem. Use o Chrome ou o Edge, ou salve o card (clique com o botão direito na miniatura → Salvar imagem) e anexe pelo clipe 📎 do WhatsApp.</span>';
   }
+}
+// Prepara o card como PNG uma vez (para copiar na hora do clique, sem atraso)
+let _emCardPng=null, _emCardUrl='';
+async function _emPrepararCardPng(){
+  const url=_emLink(EM.campos.imagem); if(!url){ _emCardPng=null; _emCardUrl=''; return null; }
+  if(_emCardPng && _emCardUrl===url) return _emCardPng;
+  const blob=await fetch(url).then(r=>{ if(!r.ok) throw new Error('img'); return r.blob(); });
+  _emCardPng=await new Promise((ok,erro)=>{ const img=new Image();
+    img.onload=()=>{ const c=document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight; c.getContext('2d').drawImage(img,0,0); c.toBlob(b=>b?ok(b):erro(new Error('png')),'image/png'); };
+    img.onerror=()=>erro(new Error('img')); img.src=URL.createObjectURL(blob); });
+  _emCardUrl=url; return _emCardPng;
+}
+function emAbrirWhats(ev, k){
+  const i=(EM._whatsItens||[])[k]; if(!i) return true;
+  if(_emLink(EM.campos.imagem) && navigator.clipboard && window.ClipboardItem){
+    try{
+      navigator.clipboard.write([new ClipboardItem({'image/png': _emPrepararCardPng()})])
+        .then(()=>emAvisoWhats('✅ Card copiado. Na conversa: <strong>Ctrl+V</strong> e depois <strong>Enter</strong>.'))
+        .catch(()=>emAvisoWhats('⚠️ Não consegui copiar o card. Salve a miniatura (botão direito → Salvar imagem) e anexe pelo clipe 📎.'));
+    }catch(_){}
+  }
+  EM.whatsFeitos.add(i.d.id); setTimeout(emPrepararWhats,600);
+  return true; // segue o link e abre o WhatsApp
+}
+function emAvisoWhats(html){
+  let t=document.getElementById('em-toast');
+  if(!t){ t=document.createElement('div'); t.id='em-toast'; t.style.cssText='position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;z-index:100001;box-shadow:0 8px 24px rgba(0,0,0,.25);max-width:90vw;'; document.body.appendChild(t); }
+  t.innerHTML=html; clearTimeout(t._h); t._h=setTimeout(()=>t.remove(),6000);
 }
 function emMarcarWhats(id){ EM.whatsFeitos.add(id); setTimeout(emPrepararWhats,300); }
 function emCopiarWhats(k){ const i=(EM._whatsItens||[])[k]; if(!i) return; try{ navigator.clipboard.writeText(i.txt); }catch(_){ } alert('Texto copiado. Cole no WhatsApp.'); }
