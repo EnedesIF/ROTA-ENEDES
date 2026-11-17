@@ -572,7 +572,7 @@ async function buscarParticipantePortalPorCPF(cpf){
     return data&&data.length>0?data[0]:null;
   }catch(e){ return null; }
 }
-const APP_VERSAO = '2026.11.17-email4';
+const APP_VERSAO = '2026.11.17-email6';
 const SB_HEADERS={'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'};
 
 // ===== CONFIG GLOBAL (API KEY salva no Supabase) =====
@@ -2099,7 +2099,7 @@ function emMoldura(titulo, conteudo){
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#eef2f6;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f6;padding:24px 0;"><tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
-<tr><td style="background:#1A6B3C;padding:22px 28px;"><div style="font-size:20px;font-weight:bold;color:#ffffff;">enedes</div>
+<tr><td style="background:#1A6B3C;padding:22px 28px;"><div style="font-size:24px;font-weight:bold;letter-spacing:.5px;color:#ffffff;">Enedes</div>
 <div style="font-size:12px;color:#d1fae5;margin-top:2px;">Rota Empreendedora · Escola de Negócios e Desenvolvimento Social · IFB</div></td></tr>
 <tr><td style="padding:26px 28px 8px;"><div style="font-size:21px;font-weight:bold;color:#1A6B3C;margin-bottom:12px;">${titulo}</div>${conteudo}</td></tr>
 <tr><td style="padding:18px 28px 24px;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b;line-height:1.5;">
@@ -2406,9 +2406,12 @@ function emRenderLista(){
       <div style="font-size:11.5px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_emEsc(d.negocio||'—')} · ${_emEsc(d.email)}</div>
       <div style="font-size:11px;color:#475569;">${ret}${d.consultor?' · '+_emEsc(d.consultor):''}${d.ctx?' · 🗂️ '+_emEsc((getContextos().find(c=>c.id===d.ctx)||{}).nome||d.ctx):''}</div></div></label>`;
   }).join('') : '<div style="padding:16px;font-size:13px;color:var(--muted);">Nenhum empreendedor com esses filtros.</div>';
-  const c=document.getElementById('em-cont'); if(c) c.textContent=`· ${EM.sel.size} selecionado(s)`;
+  const c=document.getElementById('em-cont');
+  if(c){ const vis=new Set(filtrados.map(d=>d.id)); const fora=[...EM.sel].filter(id=>!vis.has(id)).length;
+    c.innerHTML=`· ${EM.sel.size} selecionado(s)`+(fora?` <span style="color:#b45309;font-weight:700;">⚠️ ${fora} fora do filtro atual</span> <a href="#" onclick="emManterSoFiltrados();return false;" style="font-size:11px;color:#1d4ed8;">manter só os filtrados</a>`:''); }
   emRenderPrevia();
 }
+function emManterSoFiltrados(){ const vis=new Set(_emFiltrar(EM._lista||[]).map(d=>d.id)); EM.sel=new Set([...EM.sel].filter(id=>vis.has(id))); emRenderLista(); }
 function emToggle(id,on){ if(on) EM.sel.add(id); else EM.sel.delete(id); emRenderLista(); }
 function emSelTodos(on){ if(on) _emFiltrar(EM._lista||[]).forEach(d=>EM.sel.add(d.id)); else EM.sel.clear(); emRenderLista(); }
 
