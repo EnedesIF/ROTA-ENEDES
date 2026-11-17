@@ -599,7 +599,7 @@ async function buscarParticipantePortalPorCPF(cpf){
     return data&&data.length>0?data[0]:null;
   }catch(e){ return null; }
 }
-const APP_VERSAO = '2026.11.17-layout1';
+const APP_VERSAO = '2026.11.17-whats1';
 const SB_HEADERS={'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'};
 
 // ===== CONFIG GLOBAL (API KEY salva no Supabase) =====
@@ -2101,16 +2101,26 @@ function _emBaseDestinatarios(){
   const porEmail=new Map(); const semEmail=[];
   [...base].sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))).forEach(r=>{
     let email=String(r.email||'').trim();
-    if(!_emEmailOk(email) && r.empreendedor_usuario){
-      const u=users.find(x=>x.usuario===r.empreendedor_usuario); if(u&&_emEmailOk(u.email)) email=String(u.email).trim();
-    }
-    if(!_emEmailOk(email)){ semEmail.push(r); return; }
-    const k=email.toLowerCase(); if(porEmail.has(k)) return;
-    porEmail.set(k,{id:r.id, nome:r.nome||'', negocio:r.negocio||'', email, mentor:r.mentor||'', consultor:_emNomeConsultor(r.mentor),
+    const u=r.empreendedor_usuario ? users.find(x=>x.usuario===r.empreendedor_usuario) : null;
+    if(!_emEmailOk(email) && u && _emEmailOk(u.email)) email=String(u.email).trim();
+    const whats=_emWhatsNum(r.telefone) || (u ? _emWhatsNum(u.telefone) : '');
+    if(!_emEmailOk(email)) email='';
+    if(!email && !whats){ semEmail.push(r); return; }
+    const k=email ? email.toLowerCase() : 'tel:'+whats; if(porEmail.has(k)) return;
+    porEmail.set(k,{id:r.id, nome:r.nome||'', negocio:r.negocio||'', email, whats, telefone:r.telefone||'', mentor:r.mentor||'', consultor:_emNomeConsultor(r.mentor),
       retorno_data:r.retorno_data||'', retorno_hora:r.retorno_hora||'', retorno_canal:r.retorno_canal||'', retorno_obs:r.retorno_obs||'',
       prog:!!r.vinculado_programa, vinc:r.tipo_vinculo||'', est:r.estagio||'', ctx:r.acao_contexto||'', data:String(r.data_mentoria||'').slice(0,10)});
   });
   return {lista:[...porEmail.values()].sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')), semEmail};
+}
+// Número no formato do WhatsApp (55 + DDD + número). Sem DDD, assume 61 (DF).
+function _emWhatsNum(t){
+  let d=String(t||'').replace(/\D/g,'').replace(/^0+/,'');
+  if(!d) return '';
+  if(d.startsWith('55') && (d.length===12||d.length===13)) return d;
+  if(d.length===10||d.length===11) return '55'+d;
+  if(d.length===8||d.length===9) return '5561'+d;
+  return '';
 }
 function _emFiltrar(lista){
   const f=EM.filtros, hoje=new Date(); hoje.setHours(0,0,0,0); const em7=new Date(hoje); em7.setDate(em7.getDate()+7);
@@ -2417,7 +2427,7 @@ function emRenderNovo(){
           <button onclick="emSelTodos(false)" style="padding:6px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✕ Limpar seleção</button>
         </div>
         <div id="em-lista" style="max-height:360px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;"></div>
-        ${semEmail.length?`<div style="font-size:11.5px;color:#9a3412;margin-top:8px;">⚠️ ${semEmail.length} atendimento(s) sem e-mail válido não aparecem aqui. Corrija o e-mail no 1D do atendimento.</div>`:''}
+        ${semEmail.length?`<div style="font-size:11.5px;color:#9a3412;margin-top:8px;">⚠️ ${semEmail.length} atendimento(s) sem e-mail e sem telefone válidos não aparecem aqui. Corrija o contato no 1D do atendimento.</div>`:''}
       </div>
     </div>
     <div style="position:sticky;top:150px;">
@@ -2428,6 +2438,8 @@ function emRenderNovo(){
         <div id="em-avisos" style="margin-top:10px;"></div>
         <button id="em-btn-enviar" onclick="emEnviar()" style="margin-top:12px;width:100%;padding:13px;border:none;border-radius:11px;background:#1A6B3C;color:#fff;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;">✉️ Enviar</button>
         <div id="em-resultado" style="margin-top:12px;"></div>
+        <button id="em-btn-whats" onclick="emPrepararWhats()" style="margin-top:10px;width:100%;padding:12px;border:1.5px solid #25D366;border-radius:11px;background:#fff;color:#128C7E;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;">💬 Enviar pelo WhatsApp (um a um)</button>
+        <div id="em-whats" style="margin-top:12px;"></div>
       </div>
     </div>
   </div>
@@ -2443,7 +2455,7 @@ function emRenderLista(){
     return `<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;background:${on?'#f0fdf4':'#fff'};">
       <input type="checkbox" ${on?'checked':''} onchange="emToggle(${JSON.stringify(d.id).replace(/"/g,'&quot;')},this.checked)" style="margin-top:3px;">
       <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:#0f172a;">${_emEsc(d.nome)}${d.prog?' <span style="font-size:10px;background:#dbeafe;color:#1e40af;border-radius:6px;padding:1px 6px;">12M</span>':''}</div>
-      <div style="font-size:11.5px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_emEsc(d.negocio||'—')} · ${_emEsc(d.email)}</div>
+      <div style="font-size:11.5px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_emEsc(d.negocio||'—')} · ${d.email?_emEsc(d.email):'<span style="color:#b45309;">sem e-mail</span>'}${d.whats?' · 💬':''}</div>
       <div style="font-size:11px;color:#475569;">${ret}${d.consultor?' · '+_emEsc(d.consultor):''}${d.ctx?' · 🗂️ '+_emEsc((getContextos().find(c=>c.id===d.ctx)||{}).nome||d.ctx):''}</div></div></label>`;
   }).join('') : '<div style="padding:16px;font-size:13px;color:var(--muted);">Nenhum empreendedor com esses filtros.</div>';
   const c=document.getElementById('em-cont');
@@ -2458,7 +2470,8 @@ function emSelTodos(on){ if(on) _emFiltrar(EM._lista||[]).forEach(d=>EM.sel.add(
 function _emPreparar(){
   const dest=(EM._lista||[]).filter(d=>EM.sel.has(d.id));
   const ok=[], pulados=[];
-  dest.forEach(d=>{ const m=emMontar(EM.tipo,EM.campos,d); if(m.pular) pulados.push({d,motivo:m.pular}); else ok.push({d,...m}); });
+  dest.forEach(d=>{ if(!d.email){ pulados.push({d,motivo:'sem e-mail (use o WhatsApp)'}); return; }
+    const m=emMontar(EM.tipo,EM.campos,d); if(m.pular) pulados.push({d,motivo:m.pular}); else ok.push({d,...m}); });
   return {dest, ok, pulados};
 }
 function emRenderPrevia(){
@@ -2477,6 +2490,59 @@ function emRenderPrevia(){
   const btn=document.getElementById('em-btn-enviar');
   if(btn){ btn.textContent = ok.length ? `✉️ Enviar para ${ok.length} empreendedor${ok.length>1?'es':''}` : (dest.length ? '✉️ Complete os campos para enviar' : '✉️ Selecione destinatários'); btn.disabled=!ok.length; btn.style.opacity=ok.length?'1':'.5'; }
 }
+
+// ---------- WhatsApp: fila com um clique por pessoa ----------
+function emTextoWhats(tipo, c, d){
+  const S=t=>_emSubst(t,d);
+  const primeiro=String(d.nome||'').trim().split(/\s+/)[0]||'';
+  const ola=`Olá${primeiro?', '+primeiro:''}! 👋`;
+  const card=_emLink(c.imagem)?`\n🖼️ Veja o card: ${_emLink(c.imagem)}`:'';
+  const botao=(txt,link)=>_emLink(link)?`\n👉 ${txt}: ${_emLink(link)}`:'';
+  const ass='\n\n_Enedes · Rota Empreendedora · IFB_';
+  if(tipo==='lembrete'){
+    const enc=_emEncontro(c), art=_emArt(enc), encMin=enc.toLowerCase();
+    const ehAcomp=/^(Consultoria|Mentoria)$/.test(c.encontro||'Consultoria');
+    const usarAg=c.usarAgendada!==false && ehAcomp && !!d.retorno_data;
+    const data=usarAg?d.retorno_data:c.data; if(!data) return null;
+    const hora=usarAg?(d.retorno_hora||c.hora):c.hora, canal=usarAg?(d.retorno_canal||c.canal):c.canal, pauta=usarAg?(d.retorno_obs||c.pauta):c.pauta;
+    const sua=art==='a'?'sua':'seu', da=art==='a'?'da':'do';
+    return `${ola}\nEste é um lembrete ${da} ${sua} *${encMin}* com a Enedes.\n\n📅 ${_emDataExt(data)}${hora?`\n🕐 ${hora}`:''}${canal?`\n📍 ${canal}`:''}${(ehAcomp&&d.consultor)?`\n👤 ${d.consultor}`:''}${c.facilitador?`\n👤 ${c.facilitador}`:''}${pauta?`\n📝 ${ehAcomp?'Pauta':'Tema'}: ${pauta}`:''}${c.mensagem?`\n\n${S(c.mensagem)}`:''}${botao(c.botao||'Acesse',c.link)}${card}\n\nSe não puder comparecer, é só responder aqui. Até lá! 🌱${ass}`;
+  }
+  if(tipo==='curso'){
+    if(!c.titulo) return null;
+    return `${ola}\n${c.intro?S(c.intro):'Separamos uma oportunidade que combina com o momento do seu negócio:'}\n\n🎓 *${c.titulo}*${c.descricao?`\n${S(c.descricao)}`:''}${c.quando?`\n📅 ${c.quando}`:''}${c.formato?`\n📍 ${c.formato}`:''}${c.cargaHoraria?`\n⏱️ ${c.cargaHoraria}`:''}${botao(c.botao||'Inscreva-se',c.link)}${card}${ass}`;
+  }
+  if(tipo==='pendencia'){
+    const pend=c.pendencia==='Outra (descrever abaixo)'?(c.outra||''):(c.pendencia||''); if(!pend) return null;
+    return `${ola}\nNa sua Rota Empreendedora${d.negocio?` (${d.negocio})`:''} ficou pendente:\n\n⏰ *${pend}*${c.texto?`\n\n${S(c.texto)}`:''}${c.prazo?`\n📅 Prazo sugerido: ${_emDataExt(c.prazo)}`:''}\n\n👉 Acesse: ${ROTA_URL}${card}${ass}`;
+  }
+  if(!c.texto) return null;
+  return `${c.titulo||c.assunto?`*${S(c.titulo||c.assunto)}*\n\n`:''}${S(c.texto)}${botao(c.botao||'Saiba mais',c.link)}${card}${ass}`;
+}
+if(!EM.whatsFeitos) EM.whatsFeitos=new Set();
+function emPrepararWhats(){
+  const box=document.getElementById('em-whats'); if(!box) return;
+  const dest=(EM._lista||[]).filter(d=>EM.sel.has(d.id));
+  if(!dest.length){ box.innerHTML='<div style="font-size:12px;color:#9a3412;">Selecione os destinatários primeiro.</div>'; return; }
+  const itens=dest.map(d=>({d, txt: d.whats ? emTextoWhats(EM.tipo,EM.campos,d) : null}));
+  const prontos=itens.filter(i=>i.txt), fora=itens.filter(i=>!i.txt);
+  EM._whatsItens=prontos;
+  const feitos=prontos.filter(i=>EM.whatsFeitos.has(i.d.id)).length;
+  box.innerHTML=`<div style="border:1.5px solid #bbf7d0;background:#f0fdf4;border-radius:12px;padding:12px 14px;">
+    <div style="font-size:13px;font-weight:800;color:#14532d;">💬 Fila do WhatsApp · ${feitos} de ${prontos.length} abertos</div>
+    <div style="font-size:11.5px;color:#475569;margin:4px 0 10px;line-height:1.5;">Deixe o WhatsApp Web aberto com o número da Enedes. Clique em <strong>Abrir</strong>, confira a mensagem e aperte enviar no WhatsApp; depois volte aqui para o próximo.${_emLink(EM.campos.imagem)?' O card vai como link; se preferir a imagem, anexe no WhatsApp antes de enviar.':''}</div>
+    ${fora.length?`<div style="font-size:11.5px;color:#9a3412;margin-bottom:8px;">⚠️ ${fora.length} fora da fila: ${fora.slice(0,6).map(i=>_emEsc(i.d.nome)+(i.d.whats?' (preencha o conteúdo)':' (sem telefone)')).join(', ')}${fora.length>6?'…':''}</div>`:''}
+    <div style="max-height:380px;overflow:auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;">
+    ${prontos.map((i,k)=>{ const ok=EM.whatsFeitos.has(i.d.id);
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #f1f5f9;${ok?'opacity:.55;':''}">
+        <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:#0f172a;">${ok?'✓ ':''}${_emEsc(i.d.nome)}</div><div style="font-size:11px;color:#64748b;">${_emEsc(i.d.telefone||i.d.whats)}</div></div>
+        <button onclick="emCopiarWhats(${k})" title="Copiar o texto" style="padding:6px 10px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;font-size:12px;cursor:pointer;font-family:inherit;">📋</button>
+        <a href="https://wa.me/${i.d.whats}?text=${encodeURIComponent(i.txt)}" target="_blank" rel="noopener" onclick="emMarcarWhats(${JSON.stringify(i.d.id).replace(/"/g,'&quot;')})" style="padding:7px 14px;border-radius:8px;background:#25D366;color:#fff;font-size:12px;font-weight:800;text-decoration:none;white-space:nowrap;">${ok?'Abrir de novo':'Abrir'}</a>
+      </div>`; }).join('')}
+    </div></div>`;
+}
+function emMarcarWhats(id){ EM.whatsFeitos.add(id); setTimeout(emPrepararWhats,300); }
+function emCopiarWhats(k){ const i=(EM._whatsItens||[])[k]; if(!i) return; try{ navigator.clipboard.writeText(i.txt); }catch(_){ } alert('Texto copiado. Cole no WhatsApp.'); }
 
 async function emEnviar(){
   const {ok, pulados}=_emPreparar();
